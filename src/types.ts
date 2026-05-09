@@ -23,6 +23,7 @@ export interface Section {
 }
 
 export interface ConductorConfig {
+  show: boolean
   hasStand: boolean
 }
 
@@ -31,12 +32,13 @@ export interface ChartConfig {
   title: string
   layout: LayoutMode
   rows: Row[]
-  straightRows: number   // how many back rows are rendered straight (0 = all arcs)
+  straightRows: number
   conductor: ConductorConfig
   flipped: boolean
   showNumbers: boolean
   numberRestartPerRow: boolean
   showRowLabels: boolean
+  showArc: boolean
   notes: string
 }
 
@@ -46,6 +48,14 @@ export interface HitTarget {
   x: number
   y: number
   radius: number
+}
+
+// Separate hit rect for the conductor podium
+export interface ConductorHit {
+  x: number
+  y: number
+  w: number
+  h: number
 }
 
 export type Tool = 'select' | 'color' | 'enable' | 'label' | 'stand'

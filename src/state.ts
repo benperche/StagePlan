@@ -34,11 +34,12 @@ export function makeDefaultConfig(): ChartConfig {
       makeRow(12, 'C'),
     ],
     straightRows: 0,
-    conductor: { hasStand: true },
+    conductor: { show: true, hasStand: true },
     flipped: false,
     showNumbers: true,
     numberRestartPerRow: false,
     showRowLabels: false,
+    showArc: false,
     notes: '',
   }
 }

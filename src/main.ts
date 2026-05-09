@@ -22,6 +22,7 @@ const showNumbersCheck = document.getElementById('show-numbers') as HTMLInputEle
 const restartNumbersCheck = document.getElementById('restart-numbers') as HTMLInputElement
 const showRowLabelsCheck = document.getElementById('show-row-labels') as HTMLInputElement
 const conductorStandCheck = document.getElementById('conductor-stand') as HTMLInputElement
+const showArcCheck = document.getElementById('show-arc') as HTMLInputElement
 const flipCheck = document.getElementById('flip') as HTMLInputElement
 const straightRowsInput = document.getElementById('straight-rows') as HTMLInputElement
 const straightRowsLabel = document.getElementById('straight-rows-label') as HTMLElement
@@ -80,6 +81,7 @@ function readInputs() {
   config.showRowLabels = showRowLabelsCheck.checked
   config.conductor.hasStand = conductorStandCheck.checked
   config.flipped = flipCheck.checked
+  config.showArc = showArcCheck.checked
   config.straightRows = Math.max(0, Math.min(config.rows.length, Number(straightRowsInput.value) || 0))
 }
 
@@ -94,6 +96,7 @@ function updateAllInputs() {
   showRowLabelsCheck.checked = config.showRowLabels
   conductorStandCheck.checked = config.conductor.hasStand
   flipCheck.checked = config.flipped
+  showArcCheck.checked = config.showArc
   straightRowsInput.value = String(config.straightRows)
   straightRowsInput.max = String(config.rows.length)
   // Only show straight-rows control in semicircle mode
@@ -157,6 +160,15 @@ canvas.addEventListener('click', (e) => {
   const rect = canvas.getBoundingClientRect()
   const x = e.clientX - rect.left
   const y = e.clientY - rect.top
+
+  // Conductor toggle takes priority
+  if (renderer.conductorHitTest(x, y)) {
+    history.push(config)
+    config.conductor.show = !config.conductor.show
+    renderChart()
+    return
+  }
+
   const hit = renderer.hitTest(x, y)
   if (!hit) return
 
@@ -179,7 +191,7 @@ canvas.addEventListener('click', (e) => {
 function bindEvents() {
   for (const el of [titleInput, layoutSelect, notesArea, showNumbersCheck,
     restartNumbersCheck, showRowLabelsCheck, conductorStandCheck, flipCheck,
-    straightRowsInput]) {
+    straightRowsInput, showArcCheck]) {
     el.addEventListener('change', () => { readInputs(); updateAllInputs(); renderChart() })
   }
 
@@ -292,6 +304,14 @@ function bindEvents() {
 
   applyPresetBtn.addEventListener('click', () => {
     applyPreset(presetSelect.value)
+  })
+
+  // Pointer cursor when hovering the conductor
+  canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    canvas.style.cursor = renderer.conductorHitTest(x, y) ? 'pointer' : 'default'
   })
 
   window.addEventListener('resize', renderChart)

@@ -1,4 +1,4 @@
-import type { ChartConfig, Row, Chair, HitTarget } from './types'
+import type { ChartConfig, Row, Chair, HitTarget, ConductorHit } from './types'
 
 const CHAIR_SIZE = 30
 const CHAIR_HALF = CHAIR_SIZE / 2
@@ -8,8 +8,9 @@ const STAND_GAP = 6
 const ROW_SPACING = 52
 const BASE_RADIUS = 130
 const STRAIGHT_CHAIR_SPACING = 40
-// Approximate vertical extent of the conductor block (podium + stand)
 const CONDUCTOR_EXTENT = 56
+const COND_W = 52
+const COND_H = 36
 
 export interface RenderOptions {
   scale?: number
@@ -17,6 +18,7 @@ export interface RenderOptions {
 
 export class Renderer {
   private hitTargets: HitTarget[] = []
+  conductorHit: ConductorHit | null = null
 
   render(canvas: HTMLCanvasElement, config: ChartConfig, opts: RenderOptions = {}): void {
     const scale = opts.scale ?? 1
@@ -26,6 +28,7 @@ export class Renderer {
     ctx.scale(scale, scale)
 
     this.hitTargets = []
+    this.conductorHit = null
 
     const w = canvas.width / scale
     const h = canvas.height / scale
@@ -37,7 +40,6 @@ export class Renderer {
     }
 
     this.drawRowSummary(ctx, config, w, h)
-
     ctx.restore()
   }
 
@@ -50,20 +52,22 @@ export class Renderer {
     return null
   }
 
+  conductorHitTest(x: number, y: number): boolean {
+    if (!this.conductorHit) return false
+    const { x: cx, y: cy, w, h } = this.conductorHit
+    return x >= cx && x <= cx + w && y >= cy && y <= cy + h
+  }
+
   // ---------------------------------------------------------------------------
-  // Vertical centering helper
+  // Vertical centering
   // ---------------------------------------------------------------------------
 
-  // Compute the conductor origin (oy) so the chart is vertically centred.
-  // chartHeight = distance from conductor to topmost chair row.
   private computeOy(h: number, numRows: number, flipped: boolean): number {
     const chartHeight = BASE_RADIUS + Math.max(0, numRows - 1) * ROW_SPACING + CHAIR_HALF
     const padding = 16
     if (flipped) {
-      // conductor at top; chart extends downward
       return Math.max(padding + CONDUCTOR_EXTENT, (h - chartHeight + CONDUCTOR_EXTENT) / 2)
     } else {
-      // conductor at bottom; chart extends upward
       return Math.min(h - padding - CONDUCTOR_EXTENT, (h + chartHeight - CONDUCTOR_EXTENT) / 2)
     }
   }
@@ -78,12 +82,29 @@ export class Renderer {
     const oy = this.computeOy(h, numRows, config.flipped)
     const yDir = config.flipped ? 1 : -1
 
+    // Draw arcs first (behind chairs)
+    if (config.showArc) {
+      config.rows.forEach((_row, rowIndex) => {
+        const isStraight = rowIndex >= numRows - config.straightRows
+        if (isStraight) return
+        const r = BASE_RADIUS + rowIndex * ROW_SPACING
+        ctx.save()
+        ctx.beginPath()
+        ctx.arc(ox, oy, r, Math.PI, 0, yDir < 0)
+        ctx.strokeStyle = '#ccc'
+        ctx.lineWidth = 1
+        ctx.setLineDash([4, 4])
+        ctx.stroke()
+        ctx.setLineDash([])
+        ctx.restore()
+      })
+    }
+
     this.drawConductor(ctx, ox, oy, yDir, config)
 
     let seatNumber = 1
     config.rows.forEach((row, rowIndex) => {
       const r = BASE_RADIUS + rowIndex * ROW_SPACING
-      // Straight rows count from the back (highest index)
       const isStraight = rowIndex >= numRows - config.straightRows
       if (isStraight) {
         seatNumber = this.renderStraightRowInArc(ctx, row, rowIndex, r, ox, oy, yDir, config, seatNumber)
@@ -132,11 +153,10 @@ export class Renderer {
     })
 
     if (config.showRowLabels) {
-      // Fixed x aligned with the outermost row's left edge — gives a straight column
-      const outerR = BASE_RADIUS + (config.rows.length - 1) * ROW_SPACING
-      const lx = ox - outerR - CHAIR_HALF - 10
-      // y at the apex of this row's arc
-      const ly = oy + yDir * r
+      // Label near the leftmost chair (angle = π → x = ox - r, y = oy)
+      // placed just outside the arc on the conductor side
+      const lx = ox - r - CHAIR_HALF - 6
+      const ly = oy
       this.drawRowLabel(ctx, row.label, lx, ly)
     }
 
@@ -180,9 +200,7 @@ export class Renderer {
     })
 
     if (config.showRowLabels) {
-      const outerR = BASE_RADIUS + (config.rows.length - 1) * ROW_SPACING
-      const lx = ox - outerR - CHAIR_HALF - 10
-      this.drawRowLabel(ctx, row.label, lx, rowY)
+      this.drawRowLabel(ctx, row.label, startX - CHAIR_HALF - 8, rowY)
     }
     return seatNumber
   }
@@ -229,7 +247,7 @@ export class Renderer {
         seatNumber++
       })
 
-      if (config.showRowLabels) this.drawRowLabel(ctx, row.label, startX - CHAIR_HALF - 10, rowY)
+      if (config.showRowLabels) this.drawRowLabel(ctx, row.label, startX - CHAIR_HALF - 8, rowY)
     })
   }
 
@@ -285,7 +303,7 @@ export class Renderer {
     ctx.lineWidth = 1.5
     ctx.stroke()
 
-    // Back rail on the edge away from conductor
+    // Back rail on the outer edge (away from conductor)
     ctx.beginPath()
     ctx.moveTo(-CHAIR_HALF, CHAIR_HALF)
     ctx.lineTo(CHAIR_HALF, CHAIR_HALF)
@@ -375,13 +393,35 @@ export class Renderer {
     yDir: number,
     config: ChartConfig,
   ) {
-    const pw = 52, ph = 36
+    const rx = ox - COND_W / 2
+    const ry = oy - COND_H / 2
+
+    // Always store hit rect so clicking works whether shown or not
+    this.conductorHit = { x: rx, y: ry, w: COND_W, h: COND_H }
+
+    if (!config.conductor.show) {
+      // Draw a faint ghost so conductor is still clickable / discoverable
+      ctx.save()
+      ctx.strokeStyle = '#bbb'
+      ctx.lineWidth = 1.5
+      ctx.setLineDash([3, 3])
+      ctx.strokeRect(rx, ry, COND_W, COND_H)
+      ctx.fillStyle = '#bbb'
+      ctx.font = '9px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText('COND', ox, oy)
+      ctx.setLineDash([])
+      ctx.restore()
+      return
+    }
+
     ctx.save()
     ctx.fillStyle = '#555'
-    ctx.fillRect(ox - pw / 2, oy - ph / 2, pw, ph)
+    ctx.fillRect(rx, ry, COND_W, COND_H)
     ctx.strokeStyle = '#333'
     ctx.lineWidth = 2
-    ctx.strokeRect(ox - pw / 2, oy - ph / 2, pw, ph)
+    ctx.strokeRect(rx, ry, COND_W, COND_H)
     ctx.fillStyle = '#fff'
     ctx.font = 'bold 11px sans-serif'
     ctx.textAlign = 'center'
@@ -391,7 +431,7 @@ export class Renderer {
 
     if (config.conductor.hasStand) {
       const sw = 32, sh = 16
-      const sy = oy + yDir * (ph / 2 + 4)
+      const sy = oy + yDir * (COND_H / 2 + 4)
       ctx.save()
       ctx.fillStyle = '#aaa'
       ctx.fillRect(ox - sw / 2, sy, sw, yDir * sh)
