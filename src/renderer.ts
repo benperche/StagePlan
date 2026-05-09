@@ -123,33 +123,34 @@ export class Renderer {
     config: ChartConfig,
     seatNumber: number,
   ): number {
-    const enabledChairs = row.chairs.filter(c => c.enabled)
-    const total = enabledChairs.length
+    const total = row.chairs.length   // ALL chairs hold their arc position
     if (total === 0) return seatNumber
 
     const startAngle = Math.PI
     const endAngle = 0
     const angleStep = total > 1 ? (startAngle - endAngle) / (total - 1) : 0
 
-    let enabledIdx = 0
     row.chairs.forEach((chair, chairIndex) => {
-      if (!chair.enabled) return
-
-      const angle = startAngle - enabledIdx * angleStep
+      const angle = startAngle - chairIndex * angleStep
       const cx = ox + r * Math.cos(angle)
       const cy = oy + yDir * r * Math.sin(angle)
 
-      this.drawChair(ctx, chair, cx, cy, ox, oy, row.fontSize)
-      if (chair.hasStand) this.drawStand(ctx, cx, cy, ox, oy)
-
-      if (config.showNumbers) {
-        const num = config.numberRestartPerRow ? enabledIdx + 1 : seatNumber
-        this.drawSeatNumber(ctx, cx, cy, ox, oy, String(num), row.fontSize)
+      if (chair.enabled) {
+        this.drawChair(ctx, chair, cx, cy, ox, oy, row.fontSize)
+        if (chair.hasStand) this.drawStand(ctx, cx, cy, ox, oy)
+        if (config.showNumbers) {
+          const num = config.numberRestartPerRow
+            ? row.chairs.slice(0, chairIndex).filter(c => c.enabled).length + 1
+            : seatNumber
+          this.drawSeatNumber(ctx, cx, cy, ox, oy, String(num), row.fontSize)
+        }
+        seatNumber++
+      } else {
+        this.drawGhostChair(ctx, cx, cy, ox, oy)
       }
 
+      // Always store hit target so disabled chairs can be re-enabled
       this.hitTargets.push({ rowIndex, chairIndex, x: cx, y: cy, radius: CHAIR_HALF * 1.1 })
-      enabledIdx++
-      seatNumber++
     })
 
     if (config.showRowLabels) {
@@ -172,31 +173,31 @@ export class Renderer {
     config: ChartConfig,
     seatNumber: number,
   ): number {
-    const enabledChairs = row.chairs.filter(c => c.enabled)
-    const total = enabledChairs.length
+    const total = row.chairs.length
     if (total === 0) return seatNumber
 
     const rowY = oy + yDir * r
     const rowWidth = (total - 1) * STRAIGHT_CHAIR_SPACING
     const startX = ox - rowWidth / 2
 
-    let enabledIdx = 0
     row.chairs.forEach((chair, chairIndex) => {
-      if (!chair.enabled) return
+      const cx = startX + chairIndex * STRAIGHT_CHAIR_SPACING
 
-      const cx = startX + enabledIdx * STRAIGHT_CHAIR_SPACING
-
-      this.drawChair(ctx, chair, cx, rowY, cx, oy, row.fontSize)
-      if (chair.hasStand) this.drawStand(ctx, cx, rowY, cx, oy)
-
-      if (config.showNumbers) {
-        const num = config.numberRestartPerRow ? enabledIdx + 1 : seatNumber
-        this.drawSeatNumber(ctx, cx, rowY, cx, oy, String(num), row.fontSize)
+      if (chair.enabled) {
+        this.drawChair(ctx, chair, cx, rowY, cx, oy, row.fontSize)
+        if (chair.hasStand) this.drawStand(ctx, cx, rowY, cx, oy)
+        if (config.showNumbers) {
+          const num = config.numberRestartPerRow
+            ? row.chairs.slice(0, chairIndex).filter(c => c.enabled).length + 1
+            : seatNumber
+          this.drawSeatNumber(ctx, cx, rowY, cx, oy, String(num), row.fontSize)
+        }
+        seatNumber++
+      } else {
+        this.drawGhostChair(ctx, cx, rowY, cx, oy)
       }
 
       this.hitTargets.push({ rowIndex, chairIndex, x: cx, y: rowY, radius: CHAIR_HALF * 1.1 })
-      enabledIdx++
-      seatNumber++
     })
 
     if (config.showRowLabels) {
@@ -220,31 +221,31 @@ export class Renderer {
     let seatNumber = 1
 
     config.rows.forEach((row, rowIndex) => {
-      const enabledChairs = row.chairs.filter(c => c.enabled)
-      const total = enabledChairs.length
+      const total = row.chairs.length
       if (total === 0) return
 
       const rowY = oy + yDir * (BASE_RADIUS + rowIndex * ROW_SPACING)
       const rowWidth = (total - 1) * STRAIGHT_CHAIR_SPACING
       const startX = ox - rowWidth / 2
 
-      let enabledIdx = 0
       row.chairs.forEach((chair, chairIndex) => {
-        if (!chair.enabled) return
+        const cx = startX + chairIndex * STRAIGHT_CHAIR_SPACING
 
-        const cx = startX + enabledIdx * STRAIGHT_CHAIR_SPACING
-
-        this.drawChair(ctx, chair, cx, rowY, cx, oy, row.fontSize)
-        if (chair.hasStand) this.drawStand(ctx, cx, rowY, cx, oy)
-
-        if (config.showNumbers) {
-          const num = config.numberRestartPerRow ? enabledIdx + 1 : seatNumber
-          this.drawSeatNumber(ctx, cx, rowY, cx, oy, String(num), row.fontSize)
+        if (chair.enabled) {
+          this.drawChair(ctx, chair, cx, rowY, cx, oy, row.fontSize)
+          if (chair.hasStand) this.drawStand(ctx, cx, rowY, cx, oy)
+          if (config.showNumbers) {
+            const num = config.numberRestartPerRow
+              ? row.chairs.slice(0, chairIndex).filter(c => c.enabled).length + 1
+              : seatNumber
+            this.drawSeatNumber(ctx, cx, rowY, cx, oy, String(num), row.fontSize)
+          }
+          seatNumber++
+        } else {
+          this.drawGhostChair(ctx, cx, rowY, cx, oy)
         }
 
         this.hitTargets.push({ rowIndex, chairIndex, x: cx, y: rowY, radius: CHAIR_HALF * 1.1 })
-        enabledIdx++
-        seatNumber++
       })
 
       if (config.showRowLabels) this.drawRowLabel(ctx, row.label, startX - CHAIR_HALF - 8, rowY)
@@ -323,6 +324,25 @@ export class Renderer {
       ctx.fillText(chair.label, cx, cy, CHAIR_SIZE - 4)
       ctx.restore()
     }
+  }
+
+  private drawGhostChair(
+    ctx: CanvasRenderingContext2D,
+    cx: number, cy: number,
+    condX: number, condY: number,
+  ) {
+    const faceAngle = Math.atan2(condY - cy, condX - cx)
+    ctx.save()
+    ctx.translate(cx, cy)
+    ctx.rotate(faceAngle + Math.PI / 2)
+    ctx.beginPath()
+    ctx.rect(-CHAIR_HALF, -CHAIR_HALF, CHAIR_SIZE, CHAIR_SIZE)
+    ctx.setLineDash([3, 3])
+    ctx.strokeStyle = '#ccc'
+    ctx.lineWidth = 1
+    ctx.stroke()
+    ctx.setLineDash([])
+    ctx.restore()
   }
 
   private drawStand(
