@@ -11,7 +11,7 @@ const history = new History()
 const renderer = new Renderer()
 
 let activeColor = '#a8d8ea'
-let activeTool: 'color' | 'toggle' | 'stand' = 'color'
+let activeTool: 'color' | 'toggle' | 'stand' = 'toggle'
 
 // --- DOM refs ---
 const canvas = document.getElementById('chart-canvas') as HTMLCanvasElement
@@ -180,7 +180,18 @@ canvas.addEventListener('click', (e) => {
   } else if (activeTool === 'toggle') {
     chair.enabled = !chair.enabled
   } else if (activeTool === 'stand') {
-    chair.hasStand = !chair.hasStand
+    const isLast = hit.chairIndex === config.rows[hit.rowIndex].chairs.length - 1
+    if (!chair.hasStand && !chair.standAfter) {
+      // none → solo stand in front of this chair
+      chair.hasStand = true
+    } else if (chair.hasStand) {
+      // solo → shared stand with next chair (skip if last chair)
+      chair.hasStand = false
+      if (!isLast) chair.standAfter = true
+    } else {
+      // shared → none
+      chair.standAfter = false
+    }
   }
 
   renderChart()

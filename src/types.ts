@@ -5,7 +5,8 @@ export interface Chair {
   enabled: boolean
   color: string
   label: string
-  hasStand: boolean
+  hasStand: boolean      // solo stand in front of this chair
+  standAfter?: boolean   // shared stand between this chair and the next
 }
 
 export interface Row {

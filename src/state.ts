@@ -11,6 +11,7 @@ export function makeChair(): Chair {
     color: CHAIR_COLORS[0],
     label: '',
     hasStand: false,
+    standAfter: false,
   }
 }
 

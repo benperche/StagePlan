@@ -2,9 +2,8 @@ import type { ChartConfig, Row, Chair, HitTarget, ConductorHit } from './types'
 
 const CHAIR_SIZE = 30
 const CHAIR_HALF = CHAIR_SIZE / 2
-const STAND_W = 16
-const STAND_H = 10
 const STAND_GAP = 6
+const STAND_SIZE = 7   // half-arm of the X
 const ROW_SPACING = 52
 const BASE_RADIUS = 130
 const STRAIGHT_CHAIR_SPACING = 40
@@ -130,14 +129,17 @@ export class Renderer {
     const endAngle = 0
     const angleStep = total > 1 ? (startAngle - endAngle) / (total - 1) : 0
 
+    const positions: Array<{ cx: number; cy: number }> = []
+
     row.chairs.forEach((chair, chairIndex) => {
       const angle = startAngle - chairIndex * angleStep
       const cx = ox + r * Math.cos(angle)
       const cy = oy + yDir * r * Math.sin(angle)
+      positions.push({ cx, cy })
 
       if (chair.enabled) {
         this.drawChair(ctx, chair, cx, cy, ox, oy, row.fontSize)
-        if (chair.hasStand) this.drawStand(ctx, cx, cy, ox, oy)
+        if (chair.hasStand) this.drawStandX(ctx, cx, cy, ox, oy)
         if (config.showNumbers) {
           const num = config.numberRestartPerRow
             ? row.chairs.slice(0, chairIndex).filter(c => c.enabled).length + 1
@@ -151,6 +153,15 @@ export class Renderer {
 
       // Always store hit target so disabled chairs can be re-enabled
       this.hitTargets.push({ rowIndex, chairIndex, x: cx, y: cy, radius: CHAIR_HALF * 1.1 })
+    })
+
+    // Shared stands between adjacent chairs
+    row.chairs.forEach((chair, chairIndex) => {
+      if (chair.standAfter && chairIndex + 1 < positions.length) {
+        const a = positions[chairIndex]
+        const b = positions[chairIndex + 1]
+        this.drawStandX(ctx, (a.cx + b.cx) / 2, (a.cy + b.cy) / 2, ox, oy)
+      }
     })
 
     if (config.showRowLabels) {
@@ -180,12 +191,15 @@ export class Renderer {
     const rowWidth = (total - 1) * STRAIGHT_CHAIR_SPACING
     const startX = ox - rowWidth / 2
 
+    const positions: Array<{ cx: number; cy: number }> = []
+
     row.chairs.forEach((chair, chairIndex) => {
       const cx = startX + chairIndex * STRAIGHT_CHAIR_SPACING
+      positions.push({ cx, cy: rowY })
 
       if (chair.enabled) {
         this.drawChair(ctx, chair, cx, rowY, cx, oy, row.fontSize)
-        if (chair.hasStand) this.drawStand(ctx, cx, rowY, cx, oy)
+        if (chair.hasStand) this.drawStandX(ctx, cx, rowY, cx, oy)
         if (config.showNumbers) {
           const num = config.numberRestartPerRow
             ? row.chairs.slice(0, chairIndex).filter(c => c.enabled).length + 1
@@ -198,6 +212,15 @@ export class Renderer {
       }
 
       this.hitTargets.push({ rowIndex, chairIndex, x: cx, y: rowY, radius: CHAIR_HALF * 1.1 })
+    })
+
+    // Shared stands
+    row.chairs.forEach((chair, chairIndex) => {
+      if (chair.standAfter && chairIndex + 1 < positions.length) {
+        const a = positions[chairIndex]
+        const b = positions[chairIndex + 1]
+        this.drawStandX(ctx, (a.cx + b.cx) / 2, (a.cy + b.cy) / 2, a.cx, oy)
+      }
     })
 
     if (config.showRowLabels) {
@@ -228,12 +251,15 @@ export class Renderer {
       const rowWidth = (total - 1) * STRAIGHT_CHAIR_SPACING
       const startX = ox - rowWidth / 2
 
+      const positions: Array<{ cx: number; cy: number }> = []
+
       row.chairs.forEach((chair, chairIndex) => {
         const cx = startX + chairIndex * STRAIGHT_CHAIR_SPACING
+        positions.push({ cx, cy: rowY })
 
         if (chair.enabled) {
           this.drawChair(ctx, chair, cx, rowY, cx, oy, row.fontSize)
-          if (chair.hasStand) this.drawStand(ctx, cx, rowY, cx, oy)
+          if (chair.hasStand) this.drawStandX(ctx, cx, rowY, cx, oy)
           if (config.showNumbers) {
             const num = config.numberRestartPerRow
               ? row.chairs.slice(0, chairIndex).filter(c => c.enabled).length + 1
@@ -246,6 +272,15 @@ export class Renderer {
         }
 
         this.hitTargets.push({ rowIndex, chairIndex, x: cx, y: rowY, radius: CHAIR_HALF * 1.1 })
+      })
+
+      // Shared stands
+      row.chairs.forEach((chair, chairIndex) => {
+        if (chair.standAfter && chairIndex + 1 < positions.length) {
+          const a = positions[chairIndex]
+          const b = positions[chairIndex + 1]
+          this.drawStandX(ctx, (a.cx + b.cx) / 2, (a.cy + b.cy) / 2, a.cx, oy)
+        }
       })
 
       if (config.showRowLabels) this.drawRowLabel(ctx, row.label, startX - CHAIR_HALF - 8, rowY)
@@ -262,6 +297,12 @@ export class Renderer {
       const label = config.showRowLabels ? `Row ${row.label}` : `Row ${i + 1}`
       return `${label}: ${count} chair${count !== 1 ? 's' : ''}`
     })
+
+    // Add legend if any stands are present
+    const hasStands = config.rows.some(row =>
+      row.chairs.some(c => c.hasStand || c.standAfter)
+    )
+    if (hasStands) lines.push('× = music stand')
 
     const lineHeight = 15
     const x = w - 12
@@ -345,7 +386,12 @@ export class Renderer {
     ctx.restore()
   }
 
-  private drawStand(
+  /**
+   * Draw a music stand as an × symbol, positioned between the chair origin
+   * and the conductor.  For shared stands, pass the midpoint of the two chairs
+   * as (cx, cy).
+   */
+  private drawStandX(
     ctx: CanvasRenderingContext2D,
     cx: number, cy: number,
     condX: number, condY: number,
@@ -357,19 +403,26 @@ export class Renderer {
     const nx = dx / len
     const ny = dy / len
 
-    const dist = CHAIR_HALF + STAND_GAP + STAND_H / 2
+    // Place the × between the chair(s) and the conductor
+    const dist = CHAIR_HALF + STAND_GAP + STAND_SIZE
     const sx = cx + nx * dist
     const sy = cy + ny * dist
+
+    // Rotate the × so its arms align along/across the chair-conductor axis
     const angle = Math.atan2(ny, nx)
 
     ctx.save()
     ctx.translate(sx, sy)
-    ctx.rotate(angle + Math.PI / 2)
-    ctx.fillStyle = '#aaa'
-    ctx.fillRect(-STAND_W / 2, -STAND_H / 2, STAND_W, STAND_H)
-    ctx.strokeStyle = '#777'
-    ctx.lineWidth = 1
-    ctx.strokeRect(-STAND_W / 2, -STAND_H / 2, STAND_W, STAND_H)
+    ctx.rotate(angle + Math.PI / 4)   // 45° gives a symmetric ×
+    ctx.strokeStyle = '#555'
+    ctx.lineWidth = 2
+    ctx.lineCap = 'round'
+    ctx.beginPath()
+    ctx.moveTo(-STAND_SIZE, -STAND_SIZE)
+    ctx.lineTo(STAND_SIZE, STAND_SIZE)
+    ctx.moveTo(STAND_SIZE, -STAND_SIZE)
+    ctx.lineTo(-STAND_SIZE, STAND_SIZE)
+    ctx.stroke()
     ctx.restore()
   }
 
