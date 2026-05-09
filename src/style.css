@@ -9,7 +9,7 @@
   --text: #1a1a1a;
   --text-muted: #666;
   --panel-gap: 16px;
-  --sidebar-width: 280px;
+  --sidebar-width: 310px;
 }
 
 body {
@@ -188,7 +188,7 @@ button.secondary { border-style: dashed; }
   padding: 5px 8px;
 }
 
-.row-item .row-label {
+.row-item .row-id {
   font-size: 12px;
   color: var(--text-muted);
   min-width: 40px;
@@ -202,16 +202,6 @@ button.secondary { border-style: dashed; }
 }
 
 .row-item input[type="number"] { width: 48px; }
-
-.straight-label {
-  flex-direction: row !important;
-  align-items: center;
-  gap: 3px;
-  font-size: 11px;
-  color: var(--text-muted);
-  white-space: nowrap;
-  cursor: pointer;
-}
 .row-item input[type="text"]   { width: 40px; }
 
 .remove-row-btn {

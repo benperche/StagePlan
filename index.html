@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Band Seating Chart</title>
+  <title>StagePlan</title>
 </head>
 <body>
   <div id="app">
     <aside id="sidebar">
-      <h1>Seating Chart</h1>
+      <h1>StagePlan</h1>
 
       <section class="panel">
         <h2>Chart</h2>
@@ -21,12 +21,15 @@
             <option value="straight">Straight rows</option>
           </select>
         </label>
+        <label id="straight-rows-label">Straight rows from back
+          <input type="number" id="straight-rows" min="0" value="0" />
+        </label>
         <div class="checkbox-row">
           <label><input type="checkbox" id="show-numbers" checked /> Seat numbers</label>
           <label><input type="checkbox" id="restart-numbers" /> Restart per row</label>
-          <label><input type="checkbox" id="show-row-labels" checked /> Row labels</label>
         </div>
         <div class="checkbox-row">
+          <label><input type="checkbox" id="show-row-labels" /> Row labels</label>
           <label><input type="checkbox" id="flip" /> Flip layout</label>
           <label><input type="checkbox" id="conductor-stand" checked /> Conductor stand</label>
         </div>

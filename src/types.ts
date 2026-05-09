@@ -13,7 +13,6 @@ export interface Row {
   chairs: Chair[]
   label: string        // e.g. "A", "B", or custom
   fontSize: number
-  straight: boolean    // true = straight row even within a semicircle layout
 }
 
 export interface Section {
@@ -32,6 +31,7 @@ export interface ChartConfig {
   title: string
   layout: LayoutMode
   rows: Row[]
+  straightRows: number   // how many back rows are rendered straight (0 = all arcs)
   conductor: ConductorConfig
   flipped: boolean
   showNumbers: boolean

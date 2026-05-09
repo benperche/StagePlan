@@ -8,6 +8,8 @@ const STAND_GAP = 6
 const ROW_SPACING = 52
 const BASE_RADIUS = 130
 const STRAIGHT_CHAIR_SPACING = 40
+// Approximate vertical extent of the conductor block (podium + stand)
+const CONDUCTOR_EXTENT = 56
 
 export interface RenderOptions {
   scale?: number
@@ -34,6 +36,8 @@ export class Renderer {
       this.renderStraight(ctx, config, w, h)
     }
 
+    this.drawRowSummary(ctx, config, w, h)
+
     ctx.restore()
   }
 
@@ -47,16 +51,31 @@ export class Renderer {
   }
 
   // ---------------------------------------------------------------------------
+  // Vertical centering helper
+  // ---------------------------------------------------------------------------
+
+  // Compute the conductor origin (oy) so the chart is vertically centred.
+  // chartHeight = distance from conductor to topmost chair row.
+  private computeOy(h: number, numRows: number, flipped: boolean): number {
+    const chartHeight = BASE_RADIUS + Math.max(0, numRows - 1) * ROW_SPACING + CHAIR_HALF
+    const padding = 16
+    if (flipped) {
+      // conductor at top; chart extends downward
+      return Math.max(padding + CONDUCTOR_EXTENT, (h - chartHeight + CONDUCTOR_EXTENT) / 2)
+    } else {
+      // conductor at bottom; chart extends upward
+      return Math.min(h - padding - CONDUCTOR_EXTENT, (h + chartHeight - CONDUCTOR_EXTENT) / 2)
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Semicircle layout
   // ---------------------------------------------------------------------------
 
   private renderSemicircle(ctx: CanvasRenderingContext2D, config: ChartConfig, w: number, h: number) {
     const ox = w / 2
-    // flipped = conductor at top (musicians' view); normal = conductor at bottom
-    const oy = config.flipped ? 40 : h - 40
-    // yDir: direction from conductor toward musicians
-    //   normal:  -1 (musicians above, lower y)
-    //   flipped: +1 (musicians below, higher y)
+    const numRows = config.rows.length
+    const oy = this.computeOy(h, numRows, config.flipped)
     const yDir = config.flipped ? 1 : -1
 
     this.drawConductor(ctx, ox, oy, yDir, config)
@@ -64,7 +83,9 @@ export class Renderer {
     let seatNumber = 1
     config.rows.forEach((row, rowIndex) => {
       const r = BASE_RADIUS + rowIndex * ROW_SPACING
-      if (row.straight) {
+      // Straight rows count from the back (highest index)
+      const isStraight = rowIndex >= numRows - config.straightRows
+      if (isStraight) {
         seatNumber = this.renderStraightRowInArc(ctx, row, rowIndex, r, ox, oy, yDir, config, seatNumber)
       } else {
         seatNumber = this.renderArcRow(ctx, row, rowIndex, r, ox, oy, yDir, config, seatNumber)
@@ -85,7 +106,6 @@ export class Renderer {
     const total = enabledChairs.length
     if (total === 0) return seatNumber
 
-    // Arc spans 180° — left (π) to right (0), chairs curve away from conductor
     const startAngle = Math.PI
     const endAngle = 0
     const angleStep = total > 1 ? (startAngle - endAngle) / (total - 1) : 0
@@ -96,7 +116,6 @@ export class Renderer {
 
       const angle = startAngle - enabledIdx * angleStep
       const cx = ox + r * Math.cos(angle)
-      // yDir controls whether arc opens toward top or bottom
       const cy = oy + yDir * r * Math.sin(angle)
 
       this.drawChair(ctx, chair, cx, cy, ox, oy, row.fontSize)
@@ -112,7 +131,6 @@ export class Renderer {
       seatNumber++
     })
 
-    // Row label outside the left end of the arc
     if (config.showRowLabels) {
       const labelAngle = startAngle + 0.18
       const lx = ox + (r + CHAIR_HALF + 6) * Math.cos(labelAngle)
@@ -123,8 +141,6 @@ export class Renderer {
     return seatNumber
   }
 
-  // Straight row within a semicircle — positioned at the same depth as its arc
-  // equivalent. Chairs face straight toward the conductor (no horizontal tilt).
   private renderStraightRowInArc(
     ctx: CanvasRenderingContext2D,
     row: Row,
@@ -148,7 +164,6 @@ export class Renderer {
 
       const cx = startX + enabledIdx * STRAIGHT_CHAIR_SPACING
 
-      // Pass cx as the "conductor x" so the facing direction is purely vertical
       this.drawChair(ctx, chair, cx, rowY, cx, oy, row.fontSize)
       if (chair.hasStand) this.drawStand(ctx, cx, rowY, cx, oy)
 
@@ -172,7 +187,8 @@ export class Renderer {
 
   private renderStraight(ctx: CanvasRenderingContext2D, config: ChartConfig, w: number, h: number) {
     const ox = w / 2
-    const oy = config.flipped ? 40 : h - 40
+    const numRows = config.rows.length
+    const oy = this.computeOy(h, numRows, config.flipped)
     const yDir = config.flipped ? 1 : -1
 
     this.drawConductor(ctx, ox, oy, yDir, config)
@@ -194,7 +210,6 @@ export class Renderer {
 
         const cx = startX + enabledIdx * STRAIGHT_CHAIR_SPACING
 
-        // cx as conductor x → purely vertical facing (faces forward, not angled)
         this.drawChair(ctx, chair, cx, rowY, cx, oy, row.fontSize)
         if (chair.hasStand) this.drawStand(ctx, cx, rowY, cx, oy)
 
@@ -210,6 +225,33 @@ export class Renderer {
 
       if (config.showRowLabels) this.drawRowLabel(ctx, row.label, startX - CHAIR_HALF - 10, rowY)
     })
+  }
+
+  // ---------------------------------------------------------------------------
+  // Row summary — always rendered in bottom-right corner
+  // ---------------------------------------------------------------------------
+
+  private drawRowSummary(ctx: CanvasRenderingContext2D, config: ChartConfig, w: number, h: number) {
+    const lines = config.rows.map((row, i) => {
+      const count = row.chairs.filter(c => c.enabled).length
+      const label = config.showRowLabels ? `Row ${row.label}` : `Row ${i + 1}`
+      return `${label}: ${count} chair${count !== 1 ? 's' : ''}`
+    })
+
+    const lineHeight = 15
+    const x = w - 12
+    const bottomY = h - 12
+
+    ctx.save()
+    ctx.fillStyle = '#888'
+    ctx.font = '11px sans-serif'
+    ctx.textAlign = 'right'
+    ctx.textBaseline = 'bottom'
+
+    lines.forEach((line, i) => {
+      ctx.fillText(line, x, bottomY - (lines.length - 1 - i) * lineHeight)
+    })
+    ctx.restore()
   }
 
   // ---------------------------------------------------------------------------
@@ -237,7 +279,7 @@ export class Renderer {
     ctx.lineWidth = 1.5
     ctx.stroke()
 
-    // Back rail — thick line on the edge away from conductor
+    // Back rail on the edge away from conductor
     ctx.beginPath()
     ctx.moveTo(-CHAIR_HALF, -CHAIR_HALF)
     ctx.lineTo(CHAIR_HALF, -CHAIR_HALF)
@@ -321,7 +363,6 @@ export class Renderer {
     ctx.restore()
   }
 
-  // yDir: -1 = conductor at bottom (normal), +1 = conductor at top (flipped)
   private drawConductor(
     ctx: CanvasRenderingContext2D,
     ox: number, oy: number,

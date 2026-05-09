@@ -15,17 +15,6 @@ A browser-based seating chart generator for conductors. Create, customise, and e
 - **PNG export** — high-quality image for printing or sharing
 - **Shareable links** — encode the full chart state into a URL, no server required
 
-## Running locally
-
-Requires Node 20+.
-
-```bash
-npm install
-npm run dev
-```
-
-Then open [http://localhost:5173](http://localhost:5173).
-
 ## Built with
 
 - [Vite](https://vitejs.dev/) + TypeScript
@@ -34,7 +23,10 @@ Then open [http://localhost:5173](http://localhost:5173).
 
 ## Roadmap
 
+- Better music stand handling
 - Preset customisation — enter custom instrument counts before applying a layout
+- Upload custom background image (eg stage map), and customise location and size of rendered seat map
 - Musician names on chairs with drag-to-reorder
 - Section colour legend
 - Print stylesheet
+

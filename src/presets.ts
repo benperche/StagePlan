@@ -145,7 +145,6 @@ export function buildRowsFromSections(
       chairs: rowChairs,
       label: rowLabels[rows.length] ?? String(rows.length + 1),
       fontSize: 11,
-      straight: false,
     })
     i += maxPerRow
   }

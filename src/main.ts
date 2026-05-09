@@ -23,6 +23,8 @@ const restartNumbersCheck = document.getElementById('restart-numbers') as HTMLIn
 const showRowLabelsCheck = document.getElementById('show-row-labels') as HTMLInputElement
 const conductorStandCheck = document.getElementById('conductor-stand') as HTMLInputElement
 const flipCheck = document.getElementById('flip') as HTMLInputElement
+const straightRowsInput = document.getElementById('straight-rows') as HTMLInputElement
+const straightRowsLabel = document.getElementById('straight-rows-label') as HTMLElement
 const rowsContainer = document.getElementById('rows-container') as HTMLElement
 const colorPicker = document.getElementById('color-picker') as HTMLInputElement
 const undoBtn = document.getElementById('undo-btn') as HTMLButtonElement
@@ -40,7 +42,6 @@ const toolButtons = document.querySelectorAll<HTMLButtonElement>('[data-tool]')
 // --- Init ---
 
 function init() {
-  // Check URL hash for shared chart
   if (location.hash) {
     const loaded = decodeFromHash(location.hash)
     if (loaded) config = loaded
@@ -79,6 +80,7 @@ function readInputs() {
   config.showRowLabels = showRowLabelsCheck.checked
   config.conductor.hasStand = conductorStandCheck.checked
   config.flipped = flipCheck.checked
+  config.straightRows = Math.max(0, Math.min(config.rows.length, Number(straightRowsInput.value) || 0))
 }
 
 // --- Sync config → inputs ---
@@ -92,6 +94,10 @@ function updateAllInputs() {
   showRowLabelsCheck.checked = config.showRowLabels
   conductorStandCheck.checked = config.conductor.hasStand
   flipCheck.checked = config.flipped
+  straightRowsInput.value = String(config.straightRows)
+  straightRowsInput.max = String(config.rows.length)
+  // Only show straight-rows control in semicircle mode
+  straightRowsLabel.style.display = config.layout === 'semicircle' ? '' : 'none'
   renderRowList()
 }
 
@@ -103,16 +109,12 @@ function renderRowList() {
     const div = document.createElement('div')
     div.className = 'row-item'
     div.innerHTML = `
-      <span class="row-label">Row ${row.label}</span>
+      <span class="row-id">Row ${row.label}</span>
       <label>Chairs
         <input type="number" min="1" max="30" value="${row.chairs.length}" data-row="${i}" class="chair-count">
       </label>
       <label>Label
         <input type="text" maxlength="4" value="${row.label}" data-row="${i}" class="row-label-input">
-      </label>
-      <label class="straight-label" title="Straight row (from back)">
-        <input type="checkbox" data-row="${i}" class="row-straight" ${row.straight ? 'checked' : ''}>
-        Straight
       </label>
       <button data-row="${i}" class="remove-row-btn" ${config.rows.length <= 1 ? 'disabled' : ''}>✕</button>
     `
@@ -136,7 +138,6 @@ function applyPreset(presetId: string) {
   if (!preset) return
   history.push(config)
 
-  // Build editable section counts from the preset dialog
   const sections: PresetSection[] = preset.sections.map(s => ({ ...s }))
   const rows = buildRowsFromSections(sections)
 
@@ -176,10 +177,10 @@ canvas.addEventListener('click', (e) => {
 // --- Events ---
 
 function bindEvents() {
-  // Global settings
   for (const el of [titleInput, layoutSelect, notesArea, showNumbersCheck,
-    restartNumbersCheck, showRowLabelsCheck, conductorStandCheck, flipCheck]) {
-    el.addEventListener('change', () => { readInputs(); renderChart() })
+    restartNumbersCheck, showRowLabelsCheck, conductorStandCheck, flipCheck,
+    straightRowsInput]) {
+    el.addEventListener('change', () => { readInputs(); updateAllInputs(); renderChart() })
   }
 
   // Row list: chair count + label changes
@@ -201,8 +202,7 @@ function bindEvents() {
       }
     } else if (target.classList.contains('row-label-input')) {
       config.rows[rowIdx].label = target.value
-    } else if (target.classList.contains('row-straight')) {
-      config.rows[rowIdx].straight = target.checked
+      renderRowList()
     }
     renderChart()
   })
@@ -215,7 +215,9 @@ function bindEvents() {
     if (isNaN(rowIdx) || config.rows.length <= 1) return
     history.push(config)
     config.rows.splice(rowIdx, 1)
-    renderRowList()
+    // Clamp straightRows to new row count
+    config.straightRows = Math.min(config.straightRows, config.rows.length)
+    updateAllInputs()
     renderChart()
   })
 
@@ -224,7 +226,7 @@ function bindEvents() {
     const labels = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
     const label = labels[config.rows.length] ?? String(config.rows.length + 1)
     config.rows.push(makeRow(8, label))
-    renderRowList()
+    updateAllInputs()
     renderChart()
   })
 
@@ -278,10 +280,8 @@ function bindEvents() {
     loadInput.value = ''
   })
 
-  // Export PNG
   exportPngBtn.addEventListener('click', () => exportToPng(canvas, config.title))
 
-  // Share link
   shareLinkBtn.addEventListener('click', () => {
     const hash = encodeToHash(config)
     const url = location.origin + location.pathname + hash
@@ -290,12 +290,10 @@ function bindEvents() {
     shareUrlDisplay.style.display = 'block'
   })
 
-  // Preset
   applyPresetBtn.addEventListener('click', () => {
     applyPreset(presetSelect.value)
   })
 
-  // Resize
   window.addEventListener('resize', renderChart)
 }
 

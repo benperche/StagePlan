@@ -4,7 +4,7 @@ const CHAIR_COLORS = [
   '#e8e8e8', // default
 ]
 
-export function makeChair(_index?: number): Chair {
+export function makeChair(): Chair {
   return {
     id: crypto.randomUUID(),
     enabled: true,
@@ -17,10 +17,9 @@ export function makeChair(_index?: number): Chair {
 export function makeRow(chairCount: number, label: string): Row {
   return {
     id: crypto.randomUUID(),
-    chairs: Array.from({ length: chairCount }, (_, i) => makeChair(i)),
+    chairs: Array.from({ length: chairCount }, () => makeChair()),
     label,
     fontSize: 13,
-    straight: false,
   }
 }
 
@@ -34,11 +33,12 @@ export function makeDefaultConfig(): ChartConfig {
       makeRow(10, 'B'),
       makeRow(12, 'C'),
     ],
+    straightRows: 0,
     conductor: { hasStand: true },
     flipped: false,
     showNumbers: true,
     numberRestartPerRow: false,
-    showRowLabels: true,
+    showRowLabels: false,
     notes: '',
   }
 }

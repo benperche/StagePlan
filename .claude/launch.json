@@ -4,8 +4,8 @@
     {
       "name": "dev",
       "runtimeExecutable": "/usr/local/opt/node@20/bin/node",
-      "runtimeArgs": ["/Users/benperche/Documents/Programming/Seating Chart/node_modules/.bin/vite", "--port", "5173"],
-      "port": 5173
+      "runtimeArgs": ["/Users/benperche/Documents/Programming/Seating Chart/node_modules/.bin/vite", "--port", "5200"],
+      "port": 5200
     }
   ]
 }
