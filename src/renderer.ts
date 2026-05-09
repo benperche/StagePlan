@@ -281,8 +281,8 @@ export class Renderer {
 
     // Back rail on the edge away from conductor
     ctx.beginPath()
-    ctx.moveTo(-CHAIR_HALF, -CHAIR_HALF)
-    ctx.lineTo(CHAIR_HALF, -CHAIR_HALF)
+    ctx.moveTo(-CHAIR_HALF, CHAIR_HALF)
+    ctx.lineTo(CHAIR_HALF, CHAIR_HALF)
     ctx.strokeStyle = '#333'
     ctx.lineWidth = 4
     ctx.stroke()

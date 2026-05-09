@@ -46,6 +46,14 @@ body {
   color: var(--text);
 }
 
+.h1-sub {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+  display: block;
+  margin-top: 1px;
+}
+
 .panel {
   border: 1px solid var(--border);
   border-radius: 8px;
