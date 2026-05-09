@@ -89,7 +89,7 @@ export class Renderer {
         const r = BASE_RADIUS + rowIndex * ROW_SPACING
         ctx.save()
         ctx.beginPath()
-        ctx.arc(ox, oy, r, Math.PI, 0, yDir < 0)
+        ctx.arc(ox, oy, r, Math.PI, 0, yDir > 0)
         ctx.strokeStyle = '#ccc'
         ctx.lineWidth = 1
         ctx.setLineDash([4, 4])
