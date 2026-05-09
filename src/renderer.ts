@@ -132,9 +132,11 @@ export class Renderer {
     })
 
     if (config.showRowLabels) {
-      const labelAngle = startAngle + 0.18
-      const lx = ox + (r + CHAIR_HALF + 6) * Math.cos(labelAngle)
-      const ly = oy + yDir * (r + CHAIR_HALF + 6) * Math.sin(labelAngle)
+      // Fixed x aligned with the outermost row's left edge — gives a straight column
+      const outerR = BASE_RADIUS + (config.rows.length - 1) * ROW_SPACING
+      const lx = ox - outerR - CHAIR_HALF - 10
+      // y at the apex of this row's arc
+      const ly = oy + yDir * r
       this.drawRowLabel(ctx, row.label, lx, ly)
     }
 
@@ -177,7 +179,11 @@ export class Renderer {
       seatNumber++
     })
 
-    if (config.showRowLabels) this.drawRowLabel(ctx, row.label, startX - CHAIR_HALF - 10, rowY)
+    if (config.showRowLabels) {
+      const outerR = BASE_RADIUS + (config.rows.length - 1) * ROW_SPACING
+      const lx = ox - outerR - CHAIR_HALF - 10
+      this.drawRowLabel(ctx, row.label, lx, rowY)
+    }
     return seatNumber
   }
 
