@@ -4,7 +4,7 @@ const CHAIR_COLORS = [
   '#e8e8e8', // default
 ]
 
-export function makeChair(index: number): Chair {
+export function makeChair(_index?: number): Chair {
   return {
     id: crypto.randomUUID(),
     enabled: true,

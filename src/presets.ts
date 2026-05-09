@@ -1,4 +1,3 @@
-import { makeRow, makeChair } from './state'
 import type { ChartConfig, Row, Chair } from './types'
 
 export interface PresetSection {
@@ -146,6 +145,7 @@ export function buildRowsFromSections(
       chairs: rowChairs,
       label: rowLabels[rows.length] ?? String(rows.length + 1),
       fontSize: 11,
+      straight: false,
     })
     i += maxPerRow
   }
