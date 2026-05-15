@@ -352,8 +352,8 @@ export class Renderer {
       switch (inst.type) {
         case 'drumkit':    ({ hw, hh } = this.drawDrumkit(ctx, inst)); break
         case 'piano':      ({ hw, hh } = this.drawPiano(ctx, inst)); break
-        case 'guitar-amp': ({ hw, hh } = this.drawAmp(ctx, inst, 'Gtr', 28, 38)); break
-        case 'bass-amp':   ({ hw, hh } = this.drawAmp(ctx, inst, 'Bass', 36, 48)); break
+        case 'guitar-amp': ({ hw, hh } = this.drawAmp(ctx, inst, 'Gtr', 32, 34)); break
+        case 'bass-amp':   ({ hw, hh } = this.drawAmp(ctx, inst, 'Bass', 40, 42)); break
         case 'timpani':    ({ hw, hh } = this.drawTimpani(ctx, inst)); break
         case 'mallet':     ({ hw, hh } = this.drawMallet(ctx, inst)); break
       }
@@ -381,81 +381,89 @@ export class Renderer {
   // Each glyph returns its half-width / half-height for the hit box.
   // Glyphs draw centred at (0,0) in the current (already rotated) frame.
 
+  // All instrument glyphs are drawn in monochrome (black silhouettes with
+  // optional white inner detail) so the chart stays a clean black & white
+  // diagram.  Chair colours remain user-controlled.
+
   private drawDrumkit(ctx: CanvasRenderingContext2D, inst: FixedInstrument): { hw: number; hh: number } {
-    const r = 26
-    // Kick drum
-    ctx.fillStyle = '#d4d4d4'
-    ctx.strokeStyle = '#444'
-    ctx.lineWidth = 1.5
+    // Bass drum (large circle), two tom tops (tilted ovals) above it,
+    // and short hardware bars connecting the toms down to the bass drum.
+    const bassR = 19
+
+    ctx.fillStyle = '#1a1a1a'
+    ctx.strokeStyle = '#fff'
+    ctx.lineWidth = 1
+
+    // Hardware first so the drums sit on top of it
+    ctx.fillRect(-13, -14, 4, 22)
+    ctx.fillRect(9, -14, 4, 22)
+
+    // Bass drum
     ctx.beginPath()
-    ctx.arc(0, 0, r, 0, Math.PI * 2)
+    ctx.arc(0, 7, bassR, 0, Math.PI * 2)
     ctx.fill()
     ctx.stroke()
-    // Snare (small inner circle, slightly offset toward player)
-    ctx.beginPath()
-    ctx.arc(0, 8, 8, 0, Math.PI * 2)
-    ctx.fillStyle = '#bdbdbd'
-    ctx.fill()
-    ctx.stroke()
-    // Two cymbals at top corners
-    ctx.fillStyle = '#e5d28a'
-    ctx.strokeStyle = '#9a7e2e'
-    ctx.beginPath()
-    ctx.arc(-18, -16, 7, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.stroke()
-    ctx.beginPath()
-    ctx.arc(18, -16, 7, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.stroke()
-    // Label below
-    this.glyphLabel(ctx, inst.label ?? 'Drums', 0, r + 10)
-    return { hw: 26, hh: 28 }
+
+    // Two angled tom tops (smaller filled ellipses, tilted toward the centre)
+    const drawTom = (cx: number, cy: number, tilt: number) => {
+      ctx.save()
+      ctx.translate(cx, cy)
+      ctx.rotate(tilt)
+      ctx.beginPath()
+      ctx.ellipse(0, 0, 10, 6, 0, 0, Math.PI * 2)
+      ctx.fillStyle = '#1a1a1a'
+      ctx.fill()
+      ctx.strokeStyle = '#fff'
+      ctx.stroke()
+      ctx.restore()
+    }
+    drawTom(-12, -13, -0.28)
+    drawTom(12, -13, 0.28)
+
+    this.glyphLabel(ctx, inst.label ?? 'Drum Kit', 0, bassR + 7 + 11)
+    return { hw: 22, hh: 28 }
   }
 
   private drawPiano(ctx: CanvasRenderingContext2D, inst: FixedInstrument): { hw: number; hh: number } {
-    // Grand piano top-down: keyboard on the left, curved body on the right.
-    // Local frame: keyboard occupies x = -42..-15, body extends x = -15..42.
-    ctx.fillStyle = '#1f1f1f'
-    ctx.strokeStyle = '#000'
-    ctx.lineWidth = 1.5
+    // Grand piano top-down silhouette: straight left edge (keyboard end),
+    // gentle bass curve along the bottom, rounded tail on the right.
+    // Pure black silhouette — no keyboard detail.
+    const halfW = 48
+    const halfH = 28
+
+    ctx.fillStyle = '#1a1a1a'
     ctx.beginPath()
-    ctx.moveTo(-42, -25)
-    ctx.lineTo(-15, -25)
-    // Top curve of body
-    ctx.bezierCurveTo(28, -25, 42, -14, 42, 0)
-    // Bottom curve of body
-    ctx.bezierCurveTo(42, 14, 28, 25, -15, 25)
-    ctx.lineTo(-42, 25)
+    // Top-left (keyboard top corner)
+    ctx.moveTo(-halfW, -halfH)
+    // Top edge: mostly straight, gently easing down toward the rounded tail
+    ctx.bezierCurveTo(
+      halfW * 0.55, -halfH,
+      halfW, -halfH * 0.85,
+      halfW, 0,
+    )
+    // Right end: rounded tail back to the bass curve start
+    ctx.bezierCurveTo(
+      halfW, halfH * 0.7,
+      halfW * 0.65, halfH + 2,
+      -halfW + 4, halfH + 2,
+    )
+    // Bass swoop along the bottom — gentle outward curve back to bottom-left
+    ctx.quadraticCurveTo(-halfW, halfH + 1, -halfW, halfH)
+    // Straight left edge back to start
+    ctx.lineTo(-halfW, -halfH)
     ctx.closePath()
     ctx.fill()
-    ctx.stroke()
 
-    // Keyboard (white) section
-    ctx.fillStyle = '#f8f8f8'
-    ctx.fillRect(-42, -25, 27, 50)
-    ctx.strokeRect(-42, -25, 27, 50)
-    // Key separators
-    ctx.strokeStyle = '#888'
-    ctx.lineWidth = 0.5
-    for (let i = 1; i < 7; i++) {
-      const ky = -25 + (50 / 7) * i
-      ctx.beginPath()
-      ctx.moveTo(-42, ky)
-      ctx.lineTo(-15, ky)
-      ctx.stroke()
-    }
-
-    // Label inside the body
+    // Label inside the body, offset toward the wider centre
     ctx.save()
     ctx.fillStyle = '#fff'
     ctx.font = 'bold 11px sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(inst.label ?? 'Piano', 12, 0)
+    ctx.fillText(inst.label ?? 'Piano', 6, 0)
     ctx.restore()
 
-    return { hw: 42, hh: 25 }
+    return { hw: halfW, hh: halfH + 2 }
   }
 
   private drawAmp(
@@ -464,65 +472,94 @@ export class Renderer {
     defaultLabel: string,
     w: number, h: number,
   ): { hw: number; hh: number } {
+    // Square-ish black cabinet with a white control strip + tiny knobs at the top.
+    // No handle, no grille pattern — just the simplified silhouette.
     const hw = w / 2, hh = h / 2
-    // Cabinet
-    ctx.fillStyle = '#2a2a2a'
-    ctx.strokeStyle = '#000'
-    ctx.lineWidth = 1.5
-    this.roundRect(ctx, -hw, -hh, w, h, 3)
+
+    ctx.fillStyle = '#1a1a1a'
+    this.roundRect(ctx, -hw, -hh, w, h, 2)
     ctx.fill()
-    ctx.stroke()
-    // Speaker grille
-    const sr = Math.min(hw, hh) - 5
-    ctx.fillStyle = '#555'
-    ctx.beginPath()
-    ctx.arc(0, -2, sr * 0.7, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.strokeStyle = '#222'
-    ctx.lineWidth = 1
-    ctx.stroke()
-    // Label below
+
+    // Control panel strip near the top
+    const stripPad = 3
+    const stripH = 5
+    const stripY = -hh + stripPad
+    ctx.fillStyle = '#fff'
+    ctx.fillRect(-hw + stripPad, stripY, w - stripPad * 2, stripH)
+
+    // Tiny black knobs along the strip
+    ctx.fillStyle = '#1a1a1a'
+    const knobs = 4
+    const knobY = stripY + stripH / 2
+    const usableW = w - stripPad * 2 - 4
+    for (let i = 0; i < knobs; i++) {
+      const t = (i + 0.5) / knobs
+      const knobX = -hw + stripPad + 2 + t * usableW
+      ctx.beginPath()
+      ctx.arc(knobX, knobY, 1, 0, Math.PI * 2)
+      ctx.fill()
+    }
+
     this.glyphLabel(ctx, inst.label ?? defaultLabel, 0, hh + 10)
     return { hw, hh }
   }
 
   private drawTimpani(ctx: CanvasRenderingContext2D, inst: FixedInstrument): { hw: number; hh: number } {
+    // N drums (2-6) arranged on an arc whose centre is below the cluster,
+    // so the player at the bottom can reach all drums.  Drums almost touch.
     const count = Math.max(2, Math.min(6, inst.count ?? 4))
     const drumR = 18
-    const spacing = drumR * 2 + 6
-    const totalW = (count - 1) * spacing
-    const startX = -totalW / 2
+    const chord = drumR * 2 + 2          // centre-to-centre — nearly touching
+    const arcR = 100                     // radius of the player-centred arc
+    const angleStep = 2 * Math.asin(chord / (2 * arcR))
+    const totalAngle = (count - 1) * angleStep
+    const startAngle = -Math.PI / 2 - totalAngle / 2
 
-    ctx.fillStyle = '#c8a96a'   // copper-ish
-    ctx.strokeStyle = '#5a4520'
-    ctx.lineWidth = 1.5
+    // Compute drum centres on the arc (arc centre at (0, arcR) → drums above it)
+    const positions: Array<{ x: number; y: number }> = []
     for (let i = 0; i < count; i++) {
-      const x = startX + i * spacing
-      ctx.beginPath()
-      ctx.arc(x, 0, drumR, 0, Math.PI * 2)
-      ctx.fill()
-      ctx.stroke()
-      // Inner head ring
-      ctx.beginPath()
-      ctx.arc(x, 0, drumR - 4, 0, Math.PI * 2)
-      ctx.strokeStyle = '#8a6a30'
-      ctx.lineWidth = 0.8
-      ctx.stroke()
-      ctx.strokeStyle = '#5a4520'
-      ctx.lineWidth = 1.5
+      const a = startAngle + i * angleStep
+      positions.push({
+        x: arcR * Math.cos(a),
+        y: arcR + arcR * Math.sin(a),
+      })
     }
 
-    this.glyphLabel(ctx, inst.label ?? `Timpani (${count})`, 0, drumR + 10)
-    return { hw: totalW / 2 + drumR, hh: drumR + 4 }
+    // Re-centre vertically so the cluster sits around y=0
+    const minY = Math.min(...positions.map(p => p.y))
+    const maxY = Math.max(...positions.map(p => p.y))
+    const offsetY = -(minY + maxY) / 2
+    positions.forEach(p => { p.y += offsetY })
+
+    ctx.fillStyle = '#1a1a1a'
+    ctx.strokeStyle = '#fff'
+    ctx.lineWidth = 1
+    positions.forEach(p => {
+      ctx.beginPath()
+      ctx.arc(p.x, p.y, drumR, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.stroke()
+      // Inner head ring (thin white) — gives the drum some depth detail
+      ctx.beginPath()
+      ctx.arc(p.x, p.y, drumR - 4, 0, Math.PI * 2)
+      ctx.stroke()
+    })
+
+    const minX = Math.min(...positions.map(p => p.x))
+    const maxX = Math.max(...positions.map(p => p.x))
+    const hw = Math.max(-(minX - drumR), maxX + drumR)
+    const hh = (maxY - minY) / 2 + drumR
+
+    this.glyphLabel(ctx, inst.label ?? `Timpani (${count})`, 0, hh + 11)
+    return { hw, hh }
   }
 
   private drawMallet(ctx: CanvasRenderingContext2D, inst: FixedInstrument): { hw: number; hh: number } {
-    // Trapezoid: wider on the left (low end), narrower on the right (high end).
-    const w = 120, leftH = 38, rightH = 26
+    // Shorter trapezoid (wider low end on the left, narrower high end on the right).
+    const w = 90, leftH = 36, rightH = 24
     const hw = w / 2
-    ctx.fillStyle = '#c08a55'
-    ctx.strokeStyle = '#6b4520'
-    ctx.lineWidth = 1.5
+
+    ctx.fillStyle = '#1a1a1a'
     ctx.beginPath()
     ctx.moveTo(-hw, -leftH / 2)
     ctx.lineTo(hw, -rightH / 2)
@@ -530,9 +567,9 @@ export class Renderer {
     ctx.lineTo(-hw, leftH / 2)
     ctx.closePath()
     ctx.fill()
-    ctx.stroke()
-    // A few bar separators to suggest keys
-    ctx.strokeStyle = '#8c6238'
+
+    // Thin white bar separators to suggest keys
+    ctx.strokeStyle = '#fff'
     ctx.lineWidth = 0.8
     for (let i = 1; i < 5; i++) {
       const t = i / 5
@@ -545,16 +582,13 @@ export class Renderer {
       ctx.stroke()
     }
 
+    // White label centred (with a thin dark stroke for contrast on key separators)
     ctx.save()
     ctx.fillStyle = '#fff'
     ctx.font = 'bold 11px sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.strokeStyle = 'rgba(0,0,0,0.6)'
-    ctx.lineWidth = 2.5
-    const txt = inst.label ?? 'Mallets'
-    ctx.strokeText(txt, 0, 0)
-    ctx.fillText(txt, 0, 0)
+    ctx.fillText(inst.label ?? 'Mallets', 0, 0)
     ctx.restore()
 
     return { hw, hh: leftH / 2 }
