@@ -3,7 +3,7 @@ import { makeDefaultConfig, makeRow, makeInstrument, History } from './state'
 import { Renderer } from './renderer'
 import { PRESETS, buildRowsFromSections, type PresetSection } from './presets'
 import { saveToJson, loadFromJson, encodeToHash, decodeFromHash, exportToPng } from './serializer'
-import type { ChartConfig, InstrumentType } from './types'
+import type { ChartConfig, InstrumentType, FixedInstrument, Row } from './types'
 
 // --- App state ---
 let config: ChartConfig = makeDefaultConfig()
@@ -243,16 +243,52 @@ function applyPreset(presetId: string) {
   if (!preset) return
   history.push(config)
 
-  const sections: PresetSection[] = preset.sections.map(s => ({ ...s }))
-  const rows = buildRowsFromSections(sections)
+  // Rows: customRows (explicit per-chair labels) take precedence over the
+  // generic auto-packing of `sections`.
+  let rows: Row[]
+  if (preset.customRows && preset.customRows.length > 0) {
+    const rowLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    rows = preset.customRows.map((row, i) => ({
+      id: crypto.randomUUID(),
+      chairs: row.chairs.map(c => ({
+        id: crypto.randomUUID(),
+        enabled: true,
+        color: c.color,
+        label: c.label,
+        hasStand: false,
+        standAfter: false,
+      })),
+      label: row.label || rowLetters[i] || String(i + 1),
+      fontSize: 11,
+    }))
+  } else {
+    const sections: PresetSection[] = preset.sections.map(s => ({ ...s }))
+    rows = buildRowsFromSections(sections)
+  }
+
+  // Always clear existing fixed instruments on preset apply, then add any
+  // the preset wants pre-placed.
+  const instruments: FixedInstrument[] = (preset.instruments ?? []).map(i => ({
+    id: crypto.randomUUID(),
+    type: i.type,
+    angle: i.angle,
+    distance: i.distance,
+    rotation: i.rotation ?? 0,
+    ...(i.count !== undefined ? { count: i.count } : {}),
+    ...(i.label !== undefined ? { label: i.label } : {}),
+  }))
 
   config.rows = rows
   config.layout = preset.layout
   config.title = preset.name
+  config.straightRows = preset.straightRows ?? 0
+  config.instruments = instruments
+
   layoutSelect.value = preset.layout
   titleInput.value = preset.name
 
   expandedRows.clear()
+  setSelectedInstrument(null)
   updateAllInputs()
   renderChart()
 }

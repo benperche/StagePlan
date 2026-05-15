@@ -1,4 +1,4 @@
-import type { ChartConfig, Row, Chair } from './types'
+import type { ChartConfig, Row, Chair, InstrumentType } from './types'
 
 export interface PresetSection {
   name: string
@@ -7,11 +7,39 @@ export interface PresetSection {
   color: string
 }
 
+// Explicit row composition — used when a preset needs specific chair labels
+// per seat (e.g. "Tnr 1", "Alto 2") rather than a generic packed layout.
+export interface PresetCustomChair {
+  label: string
+  color: string
+}
+export interface PresetCustomRow {
+  label: string
+  chairs: PresetCustomChair[]
+}
+
+// Pre-placed fixed instrument in polar coords relative to the conductor.
+export interface PresetInstrument {
+  type: InstrumentType
+  angle: number       // canvas radians: 0 right, π/2 down, π left, -π/2 up
+  distance: number    // pixels from conductor
+  rotation?: number   // default 0
+  count?: number      // for timpani
+  label?: string
+}
+
 export interface Preset {
   id: string
   name: string
   layout: ChartConfig['layout']
   sections: PresetSection[]
+  // Optional: when set, these explicit rows override `sections` packing.
+  customRows?: PresetCustomRow[]
+  // Optional: number of straight rows from the back (semicircle layouts).
+  straightRows?: number
+  // Optional: pre-placed fixed instruments. When omitted, instruments are
+  // simply cleared on apply (which is the default for every preset).
+  instruments?: PresetInstrument[]
 }
 
 // Colors are visually distinct and print-friendly
@@ -28,17 +56,49 @@ export const PRESETS: Preset[] = [
   {
     id: 'big-band',
     name: 'Big Band',
-    layout: 'semicircle',
-    sections: [
-      { name: 'Rhythm – Drums',    instrument: 'Drums',       count: 1,  color: COLORS.rhythm },
-      { name: 'Rhythm – Guitar',   instrument: 'Guitar',      count: 1,  color: COLORS.rhythm },
-      { name: 'Rhythm – Piano',    instrument: 'Piano',       count: 1,  color: COLORS.rhythm },
-      { name: 'Rhythm – Bass',     instrument: 'Bass',        count: 1,  color: COLORS.rhythm },
-      { name: 'Trumpets',          instrument: 'Trumpet',     count: 4,  color: COLORS.brass },
-      { name: 'Trombones',         instrument: 'Trombone',    count: 4,  color: COLORS.brass },
-      { name: 'Alto Saxophones',   instrument: 'Alto Sax',    count: 2,  color: COLORS.woodwind },
-      { name: 'Tenor Saxophones',  instrument: 'Tenor Sax',   count: 2,  color: COLORS.woodwind },
-      { name: 'Baritone Saxophone',instrument: 'Baritone Sax',count: 1,  color: COLORS.woodwind },
+    layout: 'straight',
+    sections: [],
+    // Three straight rows: saxes (front, 5) → trombones (mid, 4) → trumpets (back, 4).
+    // Standard big-band lead-in-the-middle ordering within each section.
+    customRows: [
+      {
+        label: 'A',
+        chairs: [
+          { label: 'Tnr 2',  color: COLORS.woodwind },
+          { label: 'Alto 2', color: COLORS.woodwind },
+          { label: 'Alto 1', color: COLORS.woodwind },
+          { label: 'Tnr 1',  color: COLORS.woodwind },
+          { label: 'Bari',   color: COLORS.woodwind },
+        ],
+      },
+      {
+        label: 'B',
+        chairs: [
+          { label: 'Tbn 4', color: COLORS.brass },
+          { label: 'Tbn 2', color: COLORS.brass },
+          { label: 'Tbn 1', color: COLORS.brass },
+          { label: 'Tbn 3', color: COLORS.brass },
+        ],
+      },
+      {
+        label: 'C',
+        chairs: [
+          { label: 'Tpt 4', color: '#f4a261' },
+          { label: 'Tpt 2', color: '#f4a261' },
+          { label: 'Tpt 1', color: '#f4a261' },
+          { label: 'Tpt 3', color: '#f4a261' },
+        ],
+      },
+    ],
+    // Rhythm section to the LEFT of the horns, in a rough 2x2 grid.
+    // Polar coords are angle (canvas radians, -π/2 ≈ above conductor) and
+    // distance in pixels.  These are starting positions; the user can drag
+    // any of them to fine-tune the layout for their actual stage.
+    instruments: [
+      { type: 'bass-amp',   angle: -2.25, distance: 245 },  // top-left, behind everything
+      { type: 'drumkit',    angle: -2.05, distance: 235 },  // top, between bass and chairs
+      { type: 'piano',      angle: -2.55, distance: 215 },  // mid-left, in front of bass
+      { type: 'guitar-amp', angle: -2.25, distance: 170 },  // mid, in front of drums
     ],
   },
   {
