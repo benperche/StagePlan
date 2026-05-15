@@ -50,7 +50,6 @@ function init() {
 
   populatePresets()
   updateAllInputs()
-  renderChart()
   bindEvents()
 }
 
@@ -325,7 +324,10 @@ function bindEvents() {
     canvas.style.cursor = renderer.conductorHitTest(x, y) ? 'pointer' : 'default'
   })
 
-  window.addEventListener('resize', renderChart)
+  // ResizeObserver fires once the container actually has pixel dimensions
+  // (fixes the first-load squish where clientWidth is 0 before CSS layout),
+  // and handles subsequent window resizes — replacing the old 'resize' listener.
+  new ResizeObserver(() => renderChart()).observe(canvas.parentElement!)
 }
 
 init()
