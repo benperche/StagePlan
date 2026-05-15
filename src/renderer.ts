@@ -3,7 +3,7 @@ import type { ChartConfig, Row, Chair, HitTarget, ConductorHit } from './types'
 const CHAIR_SIZE = 30
 const CHAIR_HALF = CHAIR_SIZE / 2
 const STAND_GAP = 6
-const STAND_SIZE = 7   // half-arm of the X
+const STAND_SIZE = 7   // half-arm of the ×
 const ROW_SPACING = 52
 const BASE_RADIUS = 130
 const STRAIGHT_CHAIR_SPACING = 40
@@ -31,6 +31,9 @@ export class Renderer {
 
     const w = canvas.width / scale
     const h = canvas.height / scale
+
+    this.drawTitle(ctx, config.title, w)
+    this.drawNotes(ctx, config.notes, h)
 
     if (config.layout === 'semicircle') {
       this.renderSemicircle(ctx, config, w, h)
@@ -101,12 +104,18 @@ export class Renderer {
 
     this.drawConductor(ctx, ox, oy, yDir, config)
 
+    // Consistent label x for straight-in-arc rows
+    const straightStart = numRows - config.straightRows
+    const maxStraightWidth = config.rows.slice(straightStart).reduce((mx, r) =>
+      Math.max(mx, (r.chairs.length - 1) * STRAIGHT_CHAIR_SPACING), 0)
+    const straightLabelX = ox - maxStraightWidth / 2 - CHAIR_HALF - 18
+
     let seatNumber = 1
     config.rows.forEach((row, rowIndex) => {
       const r = BASE_RADIUS + rowIndex * ROW_SPACING
       const isStraight = rowIndex >= numRows - config.straightRows
       if (isStraight) {
-        seatNumber = this.renderStraightRowInArc(ctx, row, rowIndex, r, ox, oy, yDir, config, seatNumber)
+        seatNumber = this.renderStraightRowInArc(ctx, row, rowIndex, r, ox, oy, yDir, config, seatNumber, straightLabelX)
       } else {
         seatNumber = this.renderArcRow(ctx, row, rowIndex, r, ox, oy, yDir, config, seatNumber)
       }
@@ -165,10 +174,10 @@ export class Renderer {
     })
 
     if (config.showRowLabels) {
-      // Label near the leftmost chair (angle = π → x = ox - r, y = oy)
-      // placed just outside the arc on the conductor side
+      // Label to the left of the leftmost chair position, pushed past the
+      // conductor line so it sits "behind" the row rather than beside it.
       const lx = ox - r - CHAIR_HALF - 6
-      const ly = oy
+      const ly = oy - yDir * (CHAIR_HALF + 8)
       this.drawRowLabel(ctx, row.label, lx, ly)
     }
 
@@ -183,6 +192,7 @@ export class Renderer {
     ox: number, oy: number, yDir: number,
     config: ChartConfig,
     seatNumber: number,
+    labelX: number,
   ): number {
     const total = row.chairs.length
     if (total === 0) return seatNumber
@@ -224,7 +234,7 @@ export class Renderer {
     })
 
     if (config.showRowLabels) {
-      this.drawRowLabel(ctx, row.label, startX - CHAIR_HALF - 8, rowY)
+      this.drawRowLabel(ctx, row.label, labelX, rowY)
     }
     return seatNumber
   }
@@ -240,6 +250,11 @@ export class Renderer {
     const yDir = config.flipped ? 1 : -1
 
     this.drawConductor(ctx, ox, oy, yDir, config)
+
+    // Consistent label x: align all labels to left edge of widest row
+    const maxRowWidth = config.rows.reduce((mx, r) =>
+      Math.max(mx, (r.chairs.length - 1) * STRAIGHT_CHAIR_SPACING), 0)
+    const labelX = ox - maxRowWidth / 2 - CHAIR_HALF - 18
 
     let seatNumber = 1
 
@@ -283,8 +298,43 @@ export class Renderer {
         }
       })
 
-      if (config.showRowLabels) this.drawRowLabel(ctx, row.label, startX - CHAIR_HALF - 8, rowY)
+      if (config.showRowLabels) this.drawRowLabel(ctx, row.label, labelX, rowY)
     })
+  }
+
+  // ---------------------------------------------------------------------------
+  // Title + Notes — always rendered, WYSIWYG
+  // ---------------------------------------------------------------------------
+
+  private drawTitle(ctx: CanvasRenderingContext2D, title: string, w: number) {
+    if (!title) return
+    ctx.save()
+    ctx.fillStyle = '#111'
+    ctx.font = 'bold 18px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'top'
+    ctx.fillText(title, w / 2, 14)
+    ctx.restore()
+  }
+
+  private drawNotes(ctx: CanvasRenderingContext2D, notes: string, h: number) {
+    if (!notes) return
+    const lines = notes.split('\n').filter(l => l.trim())
+    if (lines.length === 0) return
+
+    const lineHeight = 14
+    const x = 12
+    const bottomY = h - 12
+
+    ctx.save()
+    ctx.fillStyle = '#888'
+    ctx.font = '11px sans-serif'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'bottom'
+    lines.forEach((line, i) => {
+      ctx.fillText(line, x, bottomY - (lines.length - 1 - i) * lineHeight)
+    })
+    ctx.restore()
   }
 
   // ---------------------------------------------------------------------------
@@ -355,14 +405,21 @@ export class Renderer {
 
     ctx.restore()
 
-    // Label drawn upright regardless of chair rotation
+    // Label drawn upright, supports % as a line-break within the label
     if (chair.label) {
+      const fs = Math.max(8, fontSize - 2)
+      const lh = fs + 3
+      const lines = chair.label.split('%')
+      const totalH = lines.length * lh
       ctx.save()
       ctx.fillStyle = '#222'
-      ctx.font = `bold ${Math.max(8, fontSize - 2)}px sans-serif`
+      ctx.font = `bold ${fs}px sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.fillText(chair.label, cx, cy, CHAIR_SIZE - 4)
+      lines.forEach((line, i) => {
+        const ly = cy - totalH / 2 + i * lh + lh / 2
+        ctx.fillText(line, cx, ly, CHAIR_SIZE - 4)
+      })
       ctx.restore()
     }
   }
@@ -403,17 +460,15 @@ export class Renderer {
     const nx = dx / len
     const ny = dy / len
 
-    // Place the × between the chair(s) and the conductor
     const dist = CHAIR_HALF + STAND_GAP + STAND_SIZE
     const sx = cx + nx * dist
     const sy = cy + ny * dist
 
-    // Rotate the × so its arms align along/across the chair-conductor axis
     const angle = Math.atan2(ny, nx)
 
     ctx.save()
     ctx.translate(sx, sy)
-    ctx.rotate(angle + Math.PI / 4)   // 45° gives a symmetric ×
+    ctx.rotate(angle + Math.PI / 4)
     ctx.strokeStyle = '#555'
     ctx.lineWidth = 2
     ctx.lineCap = 'round'
@@ -454,7 +509,7 @@ export class Renderer {
     ctx.save()
     ctx.fillStyle = '#333'
     ctx.font = 'bold 13px sans-serif'
-    ctx.textAlign = 'center'
+    ctx.textAlign = 'right'
     ctx.textBaseline = 'middle'
     ctx.fillText(label, x, y)
     ctx.restore()
@@ -473,7 +528,6 @@ export class Renderer {
     this.conductorHit = { x: rx, y: ry, w: COND_W, h: COND_H }
 
     if (!config.conductor.show) {
-      // Draw a faint ghost so conductor is still clickable / discoverable
       ctx.save()
       ctx.strokeStyle = '#bbb'
       ctx.lineWidth = 1.5

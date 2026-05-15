@@ -182,24 +182,41 @@ button.secondary { border-style: dashed; }
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 220px;
+  max-height: 380px;
   overflow-y: auto;
 }
 
 .row-item {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 6px;
+  overflow: hidden;
+}
+
+.row-item-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 5px 8px;
 }
 
-.row-item .row-id {
+.row-edit-toggle {
   font-size: 12px;
+  font-weight: 600;
   color: var(--text-muted);
-  min-width: 40px;
+  min-width: 46px;
+  padding: 2px 6px;
+  border-color: transparent;
+  background: transparent;
+  text-align: left;
+}
+.row-edit-toggle:hover { background: #f0f0f0; color: var(--text); }
+.row-edit-toggle.active {
+  background: #eff6ff;
+  color: var(--accent);
+  border-color: #bfdbfe;
 }
 
 .row-item label {
@@ -220,6 +237,37 @@ button.secondary { border-style: dashed; }
   border-color: transparent;
 }
 .remove-row-btn:hover { color: #c00; background: #fff0f0; }
+
+/* Inline label editor */
+.row-item-labels {
+  border-top: 1px solid var(--border);
+  padding: 8px;
+  background: #fafafa;
+}
+
+.label-editor-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+  line-height: 1.4;
+}
+
+.chair-labels-ta {
+  width: 100%;
+  font: 12px/1.6 ui-monospace, 'Cascadia Code', 'Fira Mono', monospace;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  resize: vertical;
+  min-height: 52px;
+  color: var(--text);
+  background: #fff;
+}
+.chair-labels-ta:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px #2563eb22;
+}
 
 /* Save/export buttons */
 #save-btn, #export-png-btn, #share-link-btn, .file-label {
