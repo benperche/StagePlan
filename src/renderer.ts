@@ -100,12 +100,24 @@ export class Renderer {
   // ---------------------------------------------------------------------------
 
   private computeOy(h: number, numRows: number, flipped: boolean): number {
+    // Default conductor position sits in the lower (or upper, when flipped)
+    // third of the canvas — the conductor is at the FRONT of the stage, with
+    // chairs working backwards from there.  Falls back to clamping when the
+    // chart is too tall to fit at the preferred position.
     const chartHeight = BASE_RADIUS + Math.max(0, numRows - 1) * ROW_SPACING + CHAIR_HALF
     const padding = 16
     if (flipped) {
-      return Math.max(padding + CONDUCTOR_EXTENT, (h - chartHeight + CONDUCTOR_EXTENT) / 2)
+      // Conductor near the top, chairs extend down from it.
+      const target = h / 3
+      const minOy = padding + CONDUCTOR_EXTENT
+      const maxOy = h - padding - chartHeight
+      return Math.max(minOy, Math.min(target, maxOy))
     } else {
-      return Math.min(h - padding - CONDUCTOR_EXTENT, (h + chartHeight - CONDUCTOR_EXTENT) / 2)
+      // Conductor near the bottom (2/3 down the canvas), chairs extend up.
+      const target = (h * 2) / 3
+      const minOy = chartHeight + padding
+      const maxOy = h - padding - CONDUCTOR_EXTENT
+      return Math.min(maxOy, Math.max(target, minOy))
     }
   }
 
@@ -114,9 +126,11 @@ export class Renderer {
   // ---------------------------------------------------------------------------
 
   private renderSemicircle(ctx: CanvasRenderingContext2D, config: ChartConfig, w: number, h: number) {
-    const ox = w / 2
     const numRows = config.rows.length
-    const oy = this.computeOy(h, numRows, config.flipped)
+    const offX = config.conductor.offsetX ?? 0
+    const offY = config.conductor.offsetY ?? 0
+    const ox = w / 2 + offX
+    const oy = this.computeOy(h, numRows, config.flipped) + offY
     const yDir = config.flipped ? 1 : -1
     this.conductorOrigin = { ox, oy, yDir }
 
@@ -280,9 +294,11 @@ export class Renderer {
   // ---------------------------------------------------------------------------
 
   private renderStraight(ctx: CanvasRenderingContext2D, config: ChartConfig, w: number, h: number) {
-    const ox = w / 2
     const numRows = config.rows.length
-    const oy = this.computeOy(h, numRows, config.flipped)
+    const offX = config.conductor.offsetX ?? 0
+    const offY = config.conductor.offsetY ?? 0
+    const ox = w / 2 + offX
+    const oy = this.computeOy(h, numRows, config.flipped) + offY
     const yDir = config.flipped ? 1 : -1
     this.conductorOrigin = { ox, oy, yDir }
 

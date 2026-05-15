@@ -35,7 +35,7 @@ export function makeDefaultConfig(): ChartConfig {
       makeRow(12, 'C'),
     ],
     straightRows: 0,
-    conductor: { show: true, hasStand: true },
+    conductor: { show: true, hasStand: true, offsetX: 0, offsetY: 0 },
     flipped: false,
     showNumbers: true,
     numberRestartPerRow: false,

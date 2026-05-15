@@ -26,6 +26,12 @@ export interface Section {
 export interface ConductorConfig {
   show: boolean
   hasStand: boolean
+  // Manual offset from the auto-computed conductor position.  Set when the
+  // user drags the podium; (0, 0) means use the auto position.  Stored as
+  // an offset rather than absolute coords so that resizing the window still
+  // rebalances the chart sensibly.
+  offsetX: number
+  offsetY: number
 }
 
 export type InstrumentType =

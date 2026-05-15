@@ -46,6 +46,25 @@ interface RotateState {
 }
 let rotateState: RotateState | null = null
 
+// Conductor drag — moves the conductor podium, which everything else (chairs
+// and fixed instruments) is positioned relative to, so the entire chart
+// translates as one unit.  We store the pointer position at mousedown so we
+// can compute the delta on each move.
+interface ConductorDragState {
+  startX: number
+  startY: number
+  initialOffsetX: number
+  initialOffsetY: number
+  preDragConfig: ChartConfig
+  moved: boolean
+}
+let conductorDragState: ConductorDragState | null = null
+
+// Set true on mouseup if a conductor drag actually moved.  The next click
+// event consumes (and clears) this so we don't toggle conductor visibility
+// at the end of a drag.
+let suppressConductorClick = false
+
 // --- DOM refs ---
 const canvas = document.getElementById('chart-canvas') as HTMLCanvasElement
 const titleInput = document.getElementById('title') as HTMLInputElement
@@ -89,13 +108,19 @@ function init() {
     const loaded = decodeFromHash(location.hash)
     if (loaded) config = loaded
   }
-  // Migration: older saved configs may not have `instruments`.
-  if (!Array.isArray(config.instruments)) config.instruments = []
+  migrateConfig(config)
 
   populatePresets()
   updateAllInputs()
   renderInspector()
   bindEvents()
+}
+
+// Make older saved configs forward-compatible with newer schema fields.
+function migrateConfig(c: ChartConfig) {
+  if (!Array.isArray(c.instruments)) c.instruments = []
+  if (typeof c.conductor.offsetX !== 'number') c.conductor.offsetX = 0
+  if (typeof c.conductor.offsetY !== 'number') c.conductor.offsetY = 0
 }
 
 // --- Render ---
@@ -335,7 +360,25 @@ canvas.addEventListener('mousedown', (e) => {
     return
   }
 
-  // Click on empty canvas / chair / conductor deselects any instrument.
+  // Conductor: prepare for potential drag.  If the pointer never moves
+  // beyond the threshold, the click handler will fire and toggle visibility.
+  if (renderer.conductorHitTest(x, y)) {
+    conductorDragState = {
+      startX: x,
+      startY: y,
+      initialOffsetX: config.conductor.offsetX,
+      initialOffsetY: config.conductor.offsetY,
+      preDragConfig: JSON.parse(JSON.stringify(config)),
+      moved: false,
+    }
+    if (selectedInstrumentId) {
+      setSelectedInstrument(null)
+      renderChart()
+    }
+    return
+  }
+
+  // Click on empty canvas / chair deselects any instrument.
   if (selectedInstrumentId) {
     setSelectedInstrument(null)
     renderChart()
@@ -344,6 +387,23 @@ canvas.addEventListener('mousedown', (e) => {
 
 window.addEventListener('mousemove', (e) => {
   const { x, y } = pointerCanvasCoords(e)
+
+  // Conductor drag — moves the whole chart (chairs and instruments are all
+  // positioned relative to the conductor, so they translate as one unit).
+  const cdrag = conductorDragState
+  if (cdrag) {
+    const dx = x - cdrag.startX
+    const dy = y - cdrag.startY
+    if (!cdrag.moved) {
+      if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return
+      history.push(cdrag.preDragConfig)
+      cdrag.moved = true
+    }
+    config.conductor.offsetX = cdrag.initialOffsetX + dx
+    config.conductor.offsetY = cdrag.initialOffsetY + dy
+    renderChart()
+    return
+  }
 
   // Rotation drag — pointer angle around instrument centre drives rotation
   const rot = rotateState
@@ -395,8 +455,10 @@ window.addEventListener('mousemove', (e) => {
 })
 
 window.addEventListener('mouseup', () => {
+  if (conductorDragState?.moved) suppressConductorClick = true
   dragState = null
   rotateState = null
+  conductorDragState = null
 })
 
 // Click handler runs after mouseup. Skip if the click landed on an instrument
@@ -407,8 +469,13 @@ canvas.addEventListener('click', (e) => {
   if (renderer.rotateHandleHitTest(x, y)) return
   if (renderer.instrumentHitTest(x, y)) return
 
-  // Conductor toggle takes priority
+  // Conductor toggle takes priority — but if the user just finished
+  // dragging the podium, skip the toggle (consume the suppression flag).
   if (renderer.conductorHitTest(x, y)) {
+    if (suppressConductorClick) {
+      suppressConductorClick = false
+      return
+    }
     history.push(config)
     config.conductor.show = !config.conductor.show
     renderChart()
@@ -624,7 +691,7 @@ function bindEvents() {
     const prev = history.undo(config)
     if (prev) {
       config = prev
-      if (!Array.isArray(config.instruments)) config.instruments = []
+      migrateConfig(config)
       setSelectedInstrument(null)
       updateAllInputs(); renderChart()
     }
@@ -633,7 +700,7 @@ function bindEvents() {
     const next = history.redo(config)
     if (next) {
       config = next
-      if (!Array.isArray(config.instruments)) config.instruments = []
+      migrateConfig(config)
       setSelectedInstrument(null)
       updateAllInputs(); renderChart()
     }
@@ -642,12 +709,12 @@ function bindEvents() {
     if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
       e.preventDefault()
       const prev = history.undo(config)
-      if (prev) { config = prev; if (!Array.isArray(config.instruments)) config.instruments = []; setSelectedInstrument(null); updateAllInputs(); renderChart() }
+      if (prev) { config = prev; migrateConfig(config); setSelectedInstrument(null); updateAllInputs(); renderChart() }
     }
     if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
       e.preventDefault()
       const next = history.redo(config)
-      if (next) { config = next; if (!Array.isArray(config.instruments)) config.instruments = []; setSelectedInstrument(null); updateAllInputs(); renderChart() }
+      if (next) { config = next; migrateConfig(config); setSelectedInstrument(null); updateAllInputs(); renderChart() }
     }
 
     // Delete selected instrument (Delete or Backspace) — but only when not
@@ -670,7 +737,7 @@ function bindEvents() {
     if (!file) return
     try {
       config = await loadFromJson(file)
-      if (!Array.isArray(config.instruments)) config.instruments = []
+      migrateConfig(config)
       expandedRows.clear()
       setSelectedInstrument(null)
       updateAllInputs()
@@ -695,12 +762,13 @@ function bindEvents() {
     applyPreset(presetSelect.value)
   })
 
-  // Hover cursor: grab over rotate handle / instrument body, pointer over conductor
+  // Hover cursor reflects what's under the pointer.  Conductor uses 'move'
+  // since dragging it now translates the entire chart.
   canvas.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
-    if (rotateState || dragState) {
+    if (rotateState || dragState || conductorDragState) {
       canvas.style.cursor = 'grabbing'
       return
     }
@@ -709,7 +777,7 @@ function bindEvents() {
     } else if (renderer.instrumentHitTest(x, y)) {
       canvas.style.cursor = 'move'
     } else if (renderer.conductorHitTest(x, y)) {
-      canvas.style.cursor = 'pointer'
+      canvas.style.cursor = 'move'
     } else {
       canvas.style.cursor = 'default'
     }
