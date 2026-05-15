@@ -1,9 +1,9 @@
 import './style.css'
-import { makeDefaultConfig, makeRow, History } from './state'
+import { makeDefaultConfig, makeRow, makeInstrument, History } from './state'
 import { Renderer } from './renderer'
 import { PRESETS, buildRowsFromSections, type PresetSection } from './presets'
 import { saveToJson, loadFromJson, encodeToHash, decodeFromHash, exportToPng } from './serializer'
-import type { ChartConfig } from './types'
+import type { ChartConfig, InstrumentType } from './types'
 
 // --- App state ---
 let config: ChartConfig = makeDefaultConfig()
@@ -15,6 +15,22 @@ let activeTool: 'color' | 'toggle' | 'stand' = 'toggle'
 
 // Track which rows have their label editor open
 const expandedRows = new Set<number>()
+
+// Currently selected fixed instrument (for drag/inspector/delete)
+let selectedInstrumentId: string | null = null
+
+// Drag state for instruments. Created on mousedown over an instrument and
+// torn down on mouseup. The pre-drag config snapshot is pushed to history
+// only if the pointer actually moves, so a pure click-to-select doesn't
+// pollute the undo stack.
+interface DragState {
+  instrumentId: string
+  offsetX: number      // pointer x minus instrument centre x at drag start
+  offsetY: number
+  preDragConfig: ChartConfig
+  moved: boolean
+}
+let dragState: DragState | null = null
 
 // --- DOM refs ---
 const canvas = document.getElementById('chart-canvas') as HTMLCanvasElement
@@ -42,6 +58,15 @@ const shareUrlDisplay = document.getElementById('share-url-display') as HTMLElem
 const presetSelect = document.getElementById('preset-select') as HTMLSelectElement
 const applyPresetBtn = document.getElementById('apply-preset-btn') as HTMLButtonElement
 const toolButtons = document.querySelectorAll<HTMLButtonElement>('[data-tool]')
+const addInstrumentButtons = document.querySelectorAll<HTMLButtonElement>('[data-add-instrument]')
+const inspector = document.getElementById('instrument-inspector') as HTMLElement
+const inspectorType = document.getElementById('inspector-type') as HTMLElement
+const inspectorLabel = document.getElementById('inspector-label') as HTMLInputElement
+const inspectorCountLabel = document.getElementById('inspector-count-label') as HTMLElement
+const inspectorCount = document.getElementById('inspector-count') as HTMLInputElement
+const inspectorRotateLeft = document.getElementById('inspector-rotate-left') as HTMLButtonElement
+const inspectorRotateRight = document.getElementById('inspector-rotate-right') as HTMLButtonElement
+const inspectorDelete = document.getElementById('inspector-delete') as HTMLButtonElement
 
 // --- Init ---
 
@@ -50,9 +75,12 @@ function init() {
     const loaded = decodeFromHash(location.hash)
     if (loaded) config = loaded
   }
+  // Migration: older saved configs may not have `instruments`.
+  if (!Array.isArray(config.instruments)) config.instruments = []
 
   populatePresets()
   updateAllInputs()
+  renderInspector()
   bindEvents()
 }
 
@@ -144,6 +172,47 @@ function renderRowList() {
   rowsContainer.scrollTop = scrollTop
 }
 
+// --- Instrument inspector ---
+
+const INSTRUMENT_LABEL: Record<InstrumentType, string> = {
+  'drumkit': 'Drum Kit',
+  'piano': 'Grand Piano',
+  'guitar-amp': 'Guitar Amp',
+  'bass-amp': 'Bass Amp',
+  'timpani': 'Timpani',
+  'mallet': 'Mallets',
+}
+
+function renderInspector() {
+  const inst = config.instruments.find(i => i.id === selectedInstrumentId)
+  if (!inst) {
+    inspector.style.display = 'none'
+    return
+  }
+  inspector.style.display = 'block'
+  inspectorType.textContent = INSTRUMENT_LABEL[inst.type]
+  inspectorLabel.value = inst.label ?? ''
+  inspectorLabel.placeholder = INSTRUMENT_LABEL[inst.type]
+
+  if (inst.type === 'timpani') {
+    inspectorCountLabel.style.display = ''
+    inspectorCount.value = String(inst.count ?? 4)
+  } else {
+    inspectorCountLabel.style.display = 'none'
+  }
+}
+
+function setSelectedInstrument(id: string | null) {
+  selectedInstrumentId = id
+  renderer.selectedInstrumentId = id
+  renderInspector()
+}
+
+function pointerCanvasCoords(e: MouseEvent): { x: number; y: number } {
+  const rect = canvas.getBoundingClientRect()
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top }
+}
+
 // --- Presets ---
 
 function populatePresets() {
@@ -176,10 +245,72 @@ function applyPreset(presetId: string) {
 
 // --- Canvas interaction ---
 
+const DRAG_THRESHOLD = 4   // pixels before a mousedown is treated as a drag
+
+canvas.addEventListener('mousedown', (e) => {
+  const { x, y } = pointerCanvasCoords(e)
+
+  // Instrument hit takes priority (it's drawn on top)
+  const instHit = renderer.instrumentHitTest(x, y)
+  if (instHit) {
+    setSelectedInstrument(instHit.id)
+    dragState = {
+      instrumentId: instHit.id,
+      offsetX: x - instHit.cx,
+      offsetY: y - instHit.cy,
+      preDragConfig: JSON.parse(JSON.stringify(config)),
+      moved: false,
+    }
+    renderChart()
+    return
+  }
+
+  // Click on empty canvas / chair / conductor deselects any instrument.
+  if (selectedInstrumentId) {
+    setSelectedInstrument(null)
+    renderChart()
+  }
+})
+
+window.addEventListener('mousemove', (e) => {
+  const drag = dragState
+  if (!drag) return
+  const { x, y } = pointerCanvasCoords(e)
+
+  const inst = config.instruments.find(i => i.id === drag.instrumentId)
+  if (!inst) return
+
+  // New instrument centre = pointer minus the grab offset
+  const newCx = x - drag.offsetX
+  const newCy = y - drag.offsetY
+  const { ox, oy } = renderer.conductorOrigin
+
+  // Threshold check: only treat as drag (and push history) once we've
+  // moved meaningfully from the original instrument centre.
+  if (!drag.moved) {
+    const oldCx = ox + inst.distance * Math.cos(inst.angle)
+    const oldCy = oy + inst.distance * Math.sin(inst.angle)
+    if (Math.hypot(newCx - oldCx, newCy - oldCy) < DRAG_THRESHOLD) return
+    history.push(drag.preDragConfig)
+    drag.moved = true
+  }
+
+  const dx = newCx - ox
+  const dy = newCy - oy
+  inst.angle = Math.atan2(dy, dx)
+  inst.distance = Math.hypot(dx, dy)
+  renderChart()
+})
+
+window.addEventListener('mouseup', () => {
+  dragState = null
+})
+
+// Click handler runs after mouseup. Skip if the click landed on an instrument
+// (already handled in mousedown) so chair/conductor logic doesn't fire on top.
 canvas.addEventListener('click', (e) => {
-  const rect = canvas.getBoundingClientRect()
-  const x = e.clientX - rect.left
-  const y = e.clientY - rect.top
+  const { x, y } = pointerCanvasCoords(e)
+  if (renderer.instrumentHitTest(x, y)) return
 
   // Conductor toggle takes priority
   if (renderer.conductorHitTest(x, y)) {
@@ -320,6 +451,57 @@ function bindEvents() {
     nextTa?.focus()
   })
 
+  // Add fixed instrument
+  addInstrumentButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const type = btn.dataset['addInstrument'] as InstrumentType
+      history.push(config)
+      const sameTypeCount = config.instruments.filter(i => i.type === type).length
+      const inst = makeInstrument(type, config.flipped, sameTypeCount)
+      config.instruments.push(inst)
+      setSelectedInstrument(inst.id)
+      renderChart()
+    })
+  })
+
+  // Inspector — label edit
+  inspectorLabel.addEventListener('input', () => {
+    const inst = config.instruments.find(i => i.id === selectedInstrumentId)
+    if (!inst) return
+    inst.label = inspectorLabel.value || undefined
+    renderChart()
+  })
+  inspectorLabel.addEventListener('focus', () => { history.push(config) })
+
+  // Inspector — timpani drum count
+  inspectorCount.addEventListener('input', () => {
+    const inst = config.instruments.find(i => i.id === selectedInstrumentId)
+    if (!inst || inst.type !== 'timpani') return
+    history.push(config)
+    inst.count = Math.max(2, Math.min(6, Number(inspectorCount.value) || 4))
+    renderChart()
+  })
+
+  // Inspector — rotate buttons (15° increments)
+  const rotateBy = (delta: number) => {
+    const inst = config.instruments.find(i => i.id === selectedInstrumentId)
+    if (!inst) return
+    history.push(config)
+    inst.rotation = (inst.rotation + delta) % (Math.PI * 2)
+    renderChart()
+  }
+  inspectorRotateLeft.addEventListener('click', () => rotateBy(-Math.PI / 12))
+  inspectorRotateRight.addEventListener('click', () => rotateBy(Math.PI / 12))
+
+  // Inspector — delete
+  inspectorDelete.addEventListener('click', () => {
+    if (!selectedInstrumentId) return
+    history.push(config)
+    config.instruments = config.instruments.filter(i => i.id !== selectedInstrumentId)
+    setSelectedInstrument(null)
+    renderChart()
+  })
+
   addRowBtn.addEventListener('click', () => {
     history.push(config)
     const labels = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
@@ -345,22 +527,44 @@ function bindEvents() {
   // Undo / redo
   undoBtn.addEventListener('click', () => {
     const prev = history.undo(config)
-    if (prev) { config = prev; updateAllInputs(); renderChart() }
+    if (prev) {
+      config = prev
+      if (!Array.isArray(config.instruments)) config.instruments = []
+      setSelectedInstrument(null)
+      updateAllInputs(); renderChart()
+    }
   })
   redoBtn.addEventListener('click', () => {
     const next = history.redo(config)
-    if (next) { config = next; updateAllInputs(); renderChart() }
+    if (next) {
+      config = next
+      if (!Array.isArray(config.instruments)) config.instruments = []
+      setSelectedInstrument(null)
+      updateAllInputs(); renderChart()
+    }
   })
   document.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
       e.preventDefault()
       const prev = history.undo(config)
-      if (prev) { config = prev; updateAllInputs(); renderChart() }
+      if (prev) { config = prev; if (!Array.isArray(config.instruments)) config.instruments = []; setSelectedInstrument(null); updateAllInputs(); renderChart() }
     }
     if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
       e.preventDefault()
       const next = history.redo(config)
-      if (next) { config = next; updateAllInputs(); renderChart() }
+      if (next) { config = next; if (!Array.isArray(config.instruments)) config.instruments = []; setSelectedInstrument(null); updateAllInputs(); renderChart() }
+    }
+
+    // Delete selected instrument (Delete or Backspace) — but only when not
+    // typing into an input/textarea, so users can still backspace text.
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedInstrumentId) {
+      const t = e.target as HTMLElement
+      if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return
+      e.preventDefault()
+      history.push(config)
+      config.instruments = config.instruments.filter(i => i.id !== selectedInstrumentId)
+      setSelectedInstrument(null)
+      renderChart()
     }
   })
 
@@ -371,7 +575,9 @@ function bindEvents() {
     if (!file) return
     try {
       config = await loadFromJson(file)
+      if (!Array.isArray(config.instruments)) config.instruments = []
       expandedRows.clear()
+      setSelectedInstrument(null)
       updateAllInputs()
       renderChart()
     } catch {

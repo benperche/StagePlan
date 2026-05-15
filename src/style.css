@@ -269,6 +269,33 @@ button.secondary { border-style: dashed; }
   box-shadow: 0 0 0 2px #2563eb22;
 }
 
+/* Fixed instruments panel */
+.instrument-add-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+.instrument-add-grid button {
+  font-size: 12px;
+  padding: 5px 6px;
+}
+
+.inspector {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.inspector-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.inspector .row-controls button { flex: 1; }
+button.danger { color: #c00; border-color: #f5b5b5; }
+button.danger:hover { background: #fff0f0; }
+
 /* Save/export buttons */
 #save-btn, #export-png-btn, #share-link-btn, .file-label {
   display: block;

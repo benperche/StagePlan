@@ -69,6 +69,33 @@
       </section>
 
       <section class="panel">
+        <h2>Large / Fixed Instruments</h2>
+        <div class="instrument-add-grid">
+          <button data-add-instrument="drumkit">+ Drum Kit</button>
+          <button data-add-instrument="piano">+ Grand Piano</button>
+          <button data-add-instrument="guitar-amp">+ Guitar Amp</button>
+          <button data-add-instrument="bass-amp">+ Bass Amp</button>
+          <button data-add-instrument="timpani">+ Timpani</button>
+          <button data-add-instrument="mallet">+ Mallets</button>
+        </div>
+        <p class="hint">Click an instrument on the canvas to select it, then drag to move. Press Delete or Backspace to remove.</p>
+        <div id="instrument-inspector" class="inspector" style="display:none">
+          <div class="inspector-header"><span id="inspector-type"></span></div>
+          <label>Label
+            <input type="text" id="inspector-label" maxlength="20">
+          </label>
+          <label id="inspector-count-label" style="display:none">Drums (2–6)
+            <input type="number" id="inspector-count" min="2" max="6">
+          </label>
+          <div class="row-controls">
+            <button id="inspector-rotate-left" title="Rotate -15°">↺</button>
+            <button id="inspector-rotate-right" title="Rotate +15°">↻</button>
+            <button id="inspector-delete" class="danger">✕ Delete</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
         <h2>Notes</h2>
         <textarea id="notes" rows="3" placeholder="Notes for this chart…"></textarea>
       </section>

@@ -1,4 +1,7 @@
-import type { ChartConfig, Row, Chair, HitTarget, ConductorHit } from './types'
+import type {
+  ChartConfig, Row, Chair, FixedInstrument,
+  HitTarget, ConductorHit, InstrumentHit, ConductorOrigin,
+} from './types'
 
 const CHAIR_SIZE = 30
 const CHAIR_HALF = CHAIR_SIZE / 2
@@ -17,7 +20,10 @@ export interface RenderOptions {
 
 export class Renderer {
   private hitTargets: HitTarget[] = []
+  private instrumentHits: InstrumentHit[] = []
   conductorHit: ConductorHit | null = null
+  conductorOrigin: ConductorOrigin = { ox: 0, oy: 0, yDir: -1 }
+  selectedInstrumentId: string | null = null
 
   render(canvas: HTMLCanvasElement, config: ChartConfig, opts: RenderOptions = {}): void {
     const scale = opts.scale ?? 1
@@ -27,6 +33,7 @@ export class Renderer {
     ctx.scale(scale, scale)
 
     this.hitTargets = []
+    this.instrumentHits = []
     this.conductorHit = null
 
     const w = canvas.width / scale
@@ -41,8 +48,27 @@ export class Renderer {
       this.renderStraight(ctx, config, w, h)
     }
 
+    // Instruments draw on top so they're always visible & selectable
+    this.renderInstruments(ctx, config)
+
     this.drawRowSummary(ctx, config, w, h)
     ctx.restore()
+  }
+
+  instrumentHitTest(x: number, y: number): InstrumentHit | null {
+    // Iterate in reverse so top-drawn instruments win when overlapping
+    for (let i = this.instrumentHits.length - 1; i >= 0; i--) {
+      const h = this.instrumentHits[i]
+      const dx = x - h.cx
+      const dy = y - h.cy
+      // Rotate point into the instrument's local frame
+      const cos = Math.cos(-h.rotation)
+      const sin = Math.sin(-h.rotation)
+      const lx = dx * cos - dy * sin
+      const ly = dx * sin + dy * cos
+      if (Math.abs(lx) <= h.hw && Math.abs(ly) <= h.hh) return h
+    }
+    return null
   }
 
   hitTest(x: number, y: number): HitTarget | null {
@@ -83,6 +109,7 @@ export class Renderer {
     const numRows = config.rows.length
     const oy = this.computeOy(h, numRows, config.flipped)
     const yDir = config.flipped ? 1 : -1
+    this.conductorOrigin = { ox, oy, yDir }
 
     // Draw arcs first (behind chairs)
     if (config.showArc) {
@@ -248,6 +275,7 @@ export class Renderer {
     const numRows = config.rows.length
     const oy = this.computeOy(h, numRows, config.flipped)
     const yDir = config.flipped ? 1 : -1
+    this.conductorOrigin = { ox, oy, yDir }
 
     this.drawConductor(ctx, ox, oy, yDir, config)
 
@@ -300,6 +328,259 @@ export class Renderer {
 
       if (config.showRowLabels) this.drawRowLabel(ctx, row.label, labelX, rowY)
     })
+  }
+
+  // ---------------------------------------------------------------------------
+  // Fixed instruments (rhythm section, timpani, mallets, etc.)
+  // ---------------------------------------------------------------------------
+
+  private renderInstruments(ctx: CanvasRenderingContext2D, config: ChartConfig) {
+    const instruments = config.instruments ?? []
+    if (instruments.length === 0) return
+    const { ox, oy } = this.conductorOrigin
+
+    instruments.forEach(inst => {
+      const cx = ox + inst.distance * Math.cos(inst.angle)
+      const cy = oy + inst.distance * Math.sin(inst.angle)
+      const isSelected = inst.id === this.selectedInstrumentId
+
+      ctx.save()
+      ctx.translate(cx, cy)
+      ctx.rotate(inst.rotation)
+
+      let hw = 0, hh = 0
+      switch (inst.type) {
+        case 'drumkit':    ({ hw, hh } = this.drawDrumkit(ctx, inst)); break
+        case 'piano':      ({ hw, hh } = this.drawPiano(ctx, inst)); break
+        case 'guitar-amp': ({ hw, hh } = this.drawAmp(ctx, inst, 'Gtr', 28, 38)); break
+        case 'bass-amp':   ({ hw, hh } = this.drawAmp(ctx, inst, 'Bass', 36, 48)); break
+        case 'timpani':    ({ hw, hh } = this.drawTimpani(ctx, inst)); break
+        case 'mallet':     ({ hw, hh } = this.drawMallet(ctx, inst)); break
+      }
+
+      // Selection highlight: dashed rectangle just outside the bounds
+      if (isSelected) {
+        const pad = 6
+        ctx.strokeStyle = '#2563eb'
+        ctx.lineWidth = 1.5
+        ctx.setLineDash([4, 3])
+        ctx.strokeRect(-hw - pad, -hh - pad, (hw + pad) * 2, (hh + pad) * 2)
+        ctx.setLineDash([])
+      }
+
+      ctx.restore()
+
+      this.instrumentHits.push({
+        id: inst.id,
+        cx, cy, hw, hh,
+        rotation: inst.rotation,
+      })
+    })
+  }
+
+  // Each glyph returns its half-width / half-height for the hit box.
+  // Glyphs draw centred at (0,0) in the current (already rotated) frame.
+
+  private drawDrumkit(ctx: CanvasRenderingContext2D, inst: FixedInstrument): { hw: number; hh: number } {
+    const r = 26
+    // Kick drum
+    ctx.fillStyle = '#d4d4d4'
+    ctx.strokeStyle = '#444'
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.arc(0, 0, r, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.stroke()
+    // Snare (small inner circle, slightly offset toward player)
+    ctx.beginPath()
+    ctx.arc(0, 8, 8, 0, Math.PI * 2)
+    ctx.fillStyle = '#bdbdbd'
+    ctx.fill()
+    ctx.stroke()
+    // Two cymbals at top corners
+    ctx.fillStyle = '#e5d28a'
+    ctx.strokeStyle = '#9a7e2e'
+    ctx.beginPath()
+    ctx.arc(-18, -16, 7, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.arc(18, -16, 7, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.stroke()
+    // Label below
+    this.glyphLabel(ctx, inst.label ?? 'Drums', 0, r + 10)
+    return { hw: 26, hh: 28 }
+  }
+
+  private drawPiano(ctx: CanvasRenderingContext2D, inst: FixedInstrument): { hw: number; hh: number } {
+    // Grand piano top-down: keyboard on the left, curved body on the right.
+    // Local frame: keyboard occupies x = -42..-15, body extends x = -15..42.
+    ctx.fillStyle = '#1f1f1f'
+    ctx.strokeStyle = '#000'
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.moveTo(-42, -25)
+    ctx.lineTo(-15, -25)
+    // Top curve of body
+    ctx.bezierCurveTo(28, -25, 42, -14, 42, 0)
+    // Bottom curve of body
+    ctx.bezierCurveTo(42, 14, 28, 25, -15, 25)
+    ctx.lineTo(-42, 25)
+    ctx.closePath()
+    ctx.fill()
+    ctx.stroke()
+
+    // Keyboard (white) section
+    ctx.fillStyle = '#f8f8f8'
+    ctx.fillRect(-42, -25, 27, 50)
+    ctx.strokeRect(-42, -25, 27, 50)
+    // Key separators
+    ctx.strokeStyle = '#888'
+    ctx.lineWidth = 0.5
+    for (let i = 1; i < 7; i++) {
+      const ky = -25 + (50 / 7) * i
+      ctx.beginPath()
+      ctx.moveTo(-42, ky)
+      ctx.lineTo(-15, ky)
+      ctx.stroke()
+    }
+
+    // Label inside the body
+    ctx.save()
+    ctx.fillStyle = '#fff'
+    ctx.font = 'bold 11px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(inst.label ?? 'Piano', 12, 0)
+    ctx.restore()
+
+    return { hw: 42, hh: 25 }
+  }
+
+  private drawAmp(
+    ctx: CanvasRenderingContext2D,
+    inst: FixedInstrument,
+    defaultLabel: string,
+    w: number, h: number,
+  ): { hw: number; hh: number } {
+    const hw = w / 2, hh = h / 2
+    // Cabinet
+    ctx.fillStyle = '#2a2a2a'
+    ctx.strokeStyle = '#000'
+    ctx.lineWidth = 1.5
+    this.roundRect(ctx, -hw, -hh, w, h, 3)
+    ctx.fill()
+    ctx.stroke()
+    // Speaker grille
+    const sr = Math.min(hw, hh) - 5
+    ctx.fillStyle = '#555'
+    ctx.beginPath()
+    ctx.arc(0, -2, sr * 0.7, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.strokeStyle = '#222'
+    ctx.lineWidth = 1
+    ctx.stroke()
+    // Label below
+    this.glyphLabel(ctx, inst.label ?? defaultLabel, 0, hh + 10)
+    return { hw, hh }
+  }
+
+  private drawTimpani(ctx: CanvasRenderingContext2D, inst: FixedInstrument): { hw: number; hh: number } {
+    const count = Math.max(2, Math.min(6, inst.count ?? 4))
+    const drumR = 18
+    const spacing = drumR * 2 + 6
+    const totalW = (count - 1) * spacing
+    const startX = -totalW / 2
+
+    ctx.fillStyle = '#c8a96a'   // copper-ish
+    ctx.strokeStyle = '#5a4520'
+    ctx.lineWidth = 1.5
+    for (let i = 0; i < count; i++) {
+      const x = startX + i * spacing
+      ctx.beginPath()
+      ctx.arc(x, 0, drumR, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.stroke()
+      // Inner head ring
+      ctx.beginPath()
+      ctx.arc(x, 0, drumR - 4, 0, Math.PI * 2)
+      ctx.strokeStyle = '#8a6a30'
+      ctx.lineWidth = 0.8
+      ctx.stroke()
+      ctx.strokeStyle = '#5a4520'
+      ctx.lineWidth = 1.5
+    }
+
+    this.glyphLabel(ctx, inst.label ?? `Timpani (${count})`, 0, drumR + 10)
+    return { hw: totalW / 2 + drumR, hh: drumR + 4 }
+  }
+
+  private drawMallet(ctx: CanvasRenderingContext2D, inst: FixedInstrument): { hw: number; hh: number } {
+    // Trapezoid: wider on the left (low end), narrower on the right (high end).
+    const w = 120, leftH = 38, rightH = 26
+    const hw = w / 2
+    ctx.fillStyle = '#c08a55'
+    ctx.strokeStyle = '#6b4520'
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.moveTo(-hw, -leftH / 2)
+    ctx.lineTo(hw, -rightH / 2)
+    ctx.lineTo(hw, rightH / 2)
+    ctx.lineTo(-hw, leftH / 2)
+    ctx.closePath()
+    ctx.fill()
+    ctx.stroke()
+    // A few bar separators to suggest keys
+    ctx.strokeStyle = '#8c6238'
+    ctx.lineWidth = 0.8
+    for (let i = 1; i < 5; i++) {
+      const t = i / 5
+      const x = -hw + t * w
+      const yTop = -leftH / 2 + t * (-rightH / 2 - -leftH / 2)
+      const yBot = leftH / 2 + t * (rightH / 2 - leftH / 2)
+      ctx.beginPath()
+      ctx.moveTo(x, yTop)
+      ctx.lineTo(x, yBot)
+      ctx.stroke()
+    }
+
+    ctx.save()
+    ctx.fillStyle = '#fff'
+    ctx.font = 'bold 11px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)'
+    ctx.lineWidth = 2.5
+    const txt = inst.label ?? 'Mallets'
+    ctx.strokeText(txt, 0, 0)
+    ctx.fillText(txt, 0, 0)
+    ctx.restore()
+
+    return { hw, hh: leftH / 2 }
+  }
+
+  private glyphLabel(ctx: CanvasRenderingContext2D, text: string, x: number, y: number) {
+    ctx.save()
+    ctx.fillStyle = '#222'
+    ctx.font = 'bold 11px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(text, x, y)
+    ctx.restore()
+  }
+
+  private roundRect(
+    ctx: CanvasRenderingContext2D,
+    x: number, y: number, w: number, h: number, r: number,
+  ) {
+    ctx.beginPath()
+    ctx.moveTo(x + r, y)
+    ctx.arcTo(x + w, y, x + w, y + h, r)
+    ctx.arcTo(x + w, y + h, x, y + h, r)
+    ctx.arcTo(x, y + h, x, y, r)
+    ctx.arcTo(x, y, x + w, y, r)
+    ctx.closePath()
   }
 
   // ---------------------------------------------------------------------------

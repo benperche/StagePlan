@@ -1,4 +1,4 @@
-import type { ChartConfig, Row, Chair } from './types'
+import type { ChartConfig, Row, Chair, FixedInstrument, InstrumentType } from './types'
 
 const CHAIR_COLORS = [
   '#e8e8e8', // default
@@ -42,6 +42,24 @@ export function makeDefaultConfig(): ChartConfig {
     showRowLabels: false,
     showArc: false,
     notes: '',
+    instruments: [],
+  }
+}
+
+// Default polar position is "behind the conductor" — opposite the chairs.
+export function makeInstrument(type: InstrumentType, flipped: boolean, existing: number): FixedInstrument {
+  // -yDir is the direction away from the chairs in canvas y.
+  const yDir = flipped ? 1 : -1
+  const angleAway = -yDir > 0 ? Math.PI / 2 : -Math.PI / 2
+  // Tiny stagger so each new add is visible rather than stacked exactly.
+  const stagger = (existing % 4) * 14
+  return {
+    id: crypto.randomUUID(),
+    type,
+    angle: angleAway,
+    distance: 110 + stagger,
+    rotation: 0,
+    ...(type === 'timpani' ? { count: 4 } : {}),
   }
 }
 
