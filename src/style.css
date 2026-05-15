@@ -282,15 +282,24 @@ button.secondary { border-style: dashed; }
 
 .inspector {
   border-top: 1px solid var(--border);
-  padding-top: 8px;
+  margin-top: 4px;
+  padding-top: 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
 }
 .inspector-header {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   color: var(--accent);
+  letter-spacing: 0.02em;
+}
+.inspector label {
+  gap: 4px;
+}
+.inspector .row-controls {
+  gap: 6px;
+  margin-top: 2px;
 }
 .inspector .row-controls button { flex: 1; }
 button.danger { color: #c00; border-color: #f5b5b5; }

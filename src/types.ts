@@ -92,6 +92,15 @@ export interface InstrumentHit {
   rotation: number // total rotation applied when drawing
 }
 
+// Hit target for the rotate handle (a green disc above the selected
+// instrument, MS-Office style).
+export interface RotateHandleHit {
+  id: string
+  cx: number       // world centre x of the handle
+  cy: number
+  radius: number   // hit radius (slightly larger than visual radius)
+}
+
 export interface ConductorOrigin {
   ox: number
   oy: number

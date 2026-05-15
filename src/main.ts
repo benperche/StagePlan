@@ -32,6 +32,20 @@ interface DragState {
 }
 let dragState: DragState | null = null
 
+// Rotation drag (when user grabs the green rotate handle).  Records the
+// instrument centre and the offset between the initial pointer angle and
+// the instrument's rotation, so the handle stays under the cursor as you drag.
+interface RotateState {
+  instrumentId: string
+  centerX: number
+  centerY: number
+  initialPointerAngle: number   // atan2 from centre to pointer at mousedown
+  initialRotation: number       // instrument.rotation at mousedown
+  preDragConfig: ChartConfig
+  moved: boolean
+}
+let rotateState: RotateState | null = null
+
 // --- DOM refs ---
 const canvas = document.getElementById('chart-canvas') as HTMLCanvasElement
 const titleInput = document.getElementById('title') as HTMLInputElement
@@ -250,7 +264,27 @@ const DRAG_THRESHOLD = 4   // pixels before a mousedown is treated as a drag
 canvas.addEventListener('mousedown', (e) => {
   const { x, y } = pointerCanvasCoords(e)
 
-  // Instrument hit takes priority (it's drawn on top)
+  // Rotate handle (only present for the selected instrument) takes priority
+  if (renderer.rotateHandleHitTest(x, y)) {
+    const inst = config.instruments.find(i => i.id === selectedInstrumentId)
+    if (inst) {
+      const { ox, oy } = renderer.conductorOrigin
+      const cx = ox + inst.distance * Math.cos(inst.angle)
+      const cy = oy + inst.distance * Math.sin(inst.angle)
+      rotateState = {
+        instrumentId: inst.id,
+        centerX: cx,
+        centerY: cy,
+        initialPointerAngle: Math.atan2(y - cy, x - cx),
+        initialRotation: inst.rotation,
+        preDragConfig: JSON.parse(JSON.stringify(config)),
+        moved: false,
+      }
+      return
+    }
+  }
+
+  // Instrument body hit takes priority over chairs (drawn on top)
   const instHit = renderer.instrumentHitTest(x, y)
   if (instHit) {
     setSelectedInstrument(instHit.id)
@@ -273,9 +307,31 @@ canvas.addEventListener('mousedown', (e) => {
 })
 
 window.addEventListener('mousemove', (e) => {
+  const { x, y } = pointerCanvasCoords(e)
+
+  // Rotation drag — pointer angle around instrument centre drives rotation
+  const rot = rotateState
+  if (rot) {
+    const inst = config.instruments.find(i => i.id === rot.instrumentId)
+    if (!inst) return
+    const pointerAngle = Math.atan2(y - rot.centerY, x - rot.centerX)
+    const delta = pointerAngle - rot.initialPointerAngle
+    const newRotation = rot.initialRotation + delta
+
+    if (!rot.moved) {
+      // Push history once the rotation has actually moved a few degrees
+      if (Math.abs(delta) < 0.04) return
+      history.push(rot.preDragConfig)
+      rot.moved = true
+    }
+    inst.rotation = newRotation
+    renderChart()
+    return
+  }
+
+  // Translation drag — pointer drags the instrument across the chart
   const drag = dragState
   if (!drag) return
-  const { x, y } = pointerCanvasCoords(e)
 
   const inst = config.instruments.find(i => i.id === drag.instrumentId)
   if (!inst) return
@@ -304,12 +360,15 @@ window.addEventListener('mousemove', (e) => {
 
 window.addEventListener('mouseup', () => {
   dragState = null
+  rotateState = null
 })
 
 // Click handler runs after mouseup. Skip if the click landed on an instrument
-// (already handled in mousedown) so chair/conductor logic doesn't fire on top.
+// or its rotate handle (already handled in mousedown) so chair/conductor logic
+// doesn't fire on top.
 canvas.addEventListener('click', (e) => {
   const { x, y } = pointerCanvasCoords(e)
+  if (renderer.rotateHandleHitTest(x, y)) return
   if (renderer.instrumentHitTest(x, y)) return
 
   // Conductor toggle takes priority
@@ -600,12 +659,24 @@ function bindEvents() {
     applyPreset(presetSelect.value)
   })
 
-  // Pointer cursor when hovering the conductor
+  // Hover cursor: grab over rotate handle / instrument body, pointer over conductor
   canvas.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
-    canvas.style.cursor = renderer.conductorHitTest(x, y) ? 'pointer' : 'default'
+    if (rotateState || dragState) {
+      canvas.style.cursor = 'grabbing'
+      return
+    }
+    if (renderer.rotateHandleHitTest(x, y)) {
+      canvas.style.cursor = 'grab'
+    } else if (renderer.instrumentHitTest(x, y)) {
+      canvas.style.cursor = 'move'
+    } else if (renderer.conductorHitTest(x, y)) {
+      canvas.style.cursor = 'pointer'
+    } else {
+      canvas.style.cursor = 'default'
+    }
   })
 
   // ResizeObserver fires once the container actually has pixel dimensions
