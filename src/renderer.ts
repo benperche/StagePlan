@@ -426,44 +426,37 @@ export class Renderer {
 
   private drawPiano(ctx: CanvasRenderingContext2D, inst: FixedInstrument): { hw: number; hh: number } {
     // Grand piano top-down silhouette: straight left edge (keyboard end),
-    // gentle bass curve along the bottom, rounded tail on the right.
-    // Pure black silhouette — no keyboard detail.
-    const halfW = 48
+    // straight top and bottom, with a single convex curve on the right end
+    // (the tail).  No bass curve along the bottom — pure stadium-like shape.
+    const halfW = 44
     const halfH = 28
+    const tailRX = halfH   // semicircle tail
 
     ctx.fillStyle = '#1a1a1a'
     ctx.beginPath()
-    // Top-left (keyboard top corner)
+    // Start top-left corner
     ctx.moveTo(-halfW, -halfH)
-    // Top edge: mostly straight, gently easing down toward the rounded tail
-    ctx.bezierCurveTo(
-      halfW * 0.55, -halfH,
-      halfW, -halfH * 0.85,
-      halfW, 0,
-    )
-    // Right end: rounded tail back to the bass curve start
-    ctx.bezierCurveTo(
-      halfW, halfH * 0.7,
-      halfW * 0.65, halfH + 2,
-      -halfW + 4, halfH + 2,
-    )
-    // Bass swoop along the bottom — gentle outward curve back to bottom-left
-    ctx.quadraticCurveTo(-halfW, halfH + 1, -halfW, halfH)
-    // Straight left edge back to start
-    ctx.lineTo(-halfW, -halfH)
+    // Straight top edge to where the tail curve starts
+    ctx.lineTo(halfW - tailRX, -halfH)
+    // Right tail: half-circle from top to bottom, bulging right
+    ctx.arc(halfW - tailRX, 0, tailRX, -Math.PI / 2, Math.PI / 2)
+    // Straight bottom edge back to bottom-left
+    ctx.lineTo(-halfW, halfH)
+    // Straight left edge closes the path back to start
     ctx.closePath()
     ctx.fill()
 
-    // Label inside the body, offset toward the wider centre
+    // Label inside the body, slightly offset so it visually centres
+    // accounting for the curved right end adding mass on that side.
     ctx.save()
     ctx.fillStyle = '#fff'
     ctx.font = 'bold 11px sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(inst.label ?? 'Piano', 6, 0)
+    ctx.fillText(inst.label ?? 'Piano', 0, 0)
     ctx.restore()
 
-    return { hw: halfW, hh: halfH + 2 }
+    return { hw: halfW, hh: halfH }
   }
 
   private drawAmp(
@@ -505,23 +498,26 @@ export class Renderer {
   }
 
   private drawTimpani(ctx: CanvasRenderingContext2D, inst: FixedInstrument): { hw: number; hh: number } {
-    // N drums (2-6) arranged on an arc whose centre is below the cluster,
-    // so the player at the bottom can reach all drums.  Drums almost touch.
+    // N drums (2-6) arranged on a tight arc that curves UPWARD (smile / ∪),
+    // i.e. the curve opens up toward the implied player above the drums.
+    // This is the reverse of the chair semicircle which curves around the
+    // conductor — here the drums curve around the single timpanist.
     const count = Math.max(2, Math.min(6, inst.count ?? 4))
     const drumR = 18
-    const chord = drumR * 2 + 2          // centre-to-centre — nearly touching
-    const arcR = 100                     // radius of the player-centred arc
+    const chord = drumR * 2 + 1          // centre-to-centre — touching with a hair of gap
+    const arcR = 75                      // smaller = tighter curve
     const angleStep = 2 * Math.asin(chord / (2 * arcR))
     const totalAngle = (count - 1) * angleStep
-    const startAngle = -Math.PI / 2 - totalAngle / 2
+    const startAngle = Math.PI / 2 - totalAngle / 2
 
-    // Compute drum centres on the arc (arc centre at (0, arcR) → drums above it)
+    // Arc centre is ABOVE the drums (at (0, -arcR)) so the cluster forms
+    // a smile shape with the centre drum at the bottom.
     const positions: Array<{ x: number; y: number }> = []
     for (let i = 0; i < count; i++) {
       const a = startAngle + i * angleStep
       positions.push({
         x: arcR * Math.cos(a),
-        y: arcR + arcR * Math.sin(a),
+        y: -arcR + arcR * Math.sin(a),
       })
     }
 
