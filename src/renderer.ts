@@ -382,6 +382,8 @@ export class Renderer {
         case 'bass-amp':   ({ hw, hh, labelInside } = this.drawAmp(ctx, 40, 42)); break
         case 'timpani':    ({ hw, hh, labelInside } = this.drawTimpani(ctx, inst)); break
         case 'mallet':     ({ hw, hh, labelInside } = this.drawMallet(ctx)); break
+        case 'square':     ({ hw, hh, labelInside } = this.drawGenericRect(ctx, 28, 28)); break
+        case 'rectangle':  ({ hw, hh, labelInside } = this.drawGenericRect(ctx, 42, 26)); break
       }
 
       // Selection highlight (still in rotated frame so it tracks the glyph)
@@ -442,6 +444,8 @@ export class Renderer {
       case 'bass-amp':   return 'Bass'
       case 'timpani':    return `Timpani (${inst.count ?? 4})`
       case 'mallet':     return 'Mallets'
+      case 'square':     return 'Square'
+      case 'rectangle':  return 'Rectangle'
     }
   }
 
@@ -685,6 +689,20 @@ export class Renderer {
     }
 
     return { hw, hh: leftH / 2, labelInside: true }
+  }
+
+  private drawGenericRect(
+    ctx: CanvasRenderingContext2D,
+    hw: number, hh: number,
+  ): { hw: number; hh: number; labelInside: boolean } {
+    ctx.fillStyle = '#3a3a3a'
+    ctx.strokeStyle = '#fff'
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.rect(-hw, -hh, hw * 2, hh * 2)
+    ctx.fill()
+    ctx.stroke()
+    return { hw, hh, labelInside: true }
   }
 
   private roundRect(

@@ -82,6 +82,7 @@ const rowsContainer = document.getElementById('rows-container') as HTMLElement
 const colorPicker = document.getElementById('color-picker') as HTMLInputElement
 const undoBtn = document.getElementById('undo-btn') as HTMLButtonElement
 const redoBtn = document.getElementById('redo-btn') as HTMLButtonElement
+const resetPositionBtn = document.getElementById('reset-position-btn') as HTMLButtonElement
 const addRowBtn = document.getElementById('add-row-btn') as HTMLButtonElement
 const saveBtn = document.getElementById('save-btn') as HTMLButtonElement
 const loadInput = document.getElementById('load-input') as HTMLInputElement
@@ -220,6 +221,8 @@ const INSTRUMENT_LABEL: Record<InstrumentType, string> = {
   'bass-amp': 'Bass Amp',
   'timpani': 'Timpani',
   'mallet': 'Mallets',
+  'square': 'Square',
+  'rectangle': 'Rectangle',
 }
 
 function renderInspector() {
@@ -704,6 +707,13 @@ function bindEvents() {
       setSelectedInstrument(null)
       updateAllInputs(); renderChart()
     }
+  })
+  resetPositionBtn.addEventListener('click', () => {
+    if (config.conductor.offsetX === 0 && config.conductor.offsetY === 0) return
+    history.push(config)
+    config.conductor.offsetX = 0
+    config.conductor.offsetY = 0
+    renderChart()
   })
   document.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {

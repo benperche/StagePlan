@@ -41,6 +41,8 @@ export type InstrumentType =
   | 'bass-amp'
   | 'timpani'
   | 'mallet'
+  | 'square'
+  | 'rectangle'
 
 export interface FixedInstrument {
   id: string
