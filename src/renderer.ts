@@ -181,27 +181,63 @@ export class Renderer {
     config: ChartConfig,
     seatNumber: number,
   ): number {
-    const total = row.chairs.length   // ALL chairs hold their arc position
-    if (total === 0) return seatNumber
+    const chairs = row.chairs
+    if (chairs.length === 0) return seatNumber
+
+    // Group chairs into slots. A slot is one "position" along the arc and
+    // holds either a single chair or a tight desk pair. Pairs come from
+    //   (a) chair.standAfter on the first chair (a real desk), or
+    //   (b) two adjacent disabled chairs (a ghost desk used to keep the row
+    //       shape consistent when a string section runs out of players).
+    // This means every section column produces exactly one slot per row, so
+    // columns align cleanly across rows regardless of how many players are
+    // actually present.
+    type Slot = { idx0: number; idx1?: number }
+    const slots: Slot[] = []
+    for (let i = 0; i < chairs.length; ) {
+      const c = chairs[i]
+      const next = i + 1 < chairs.length ? chairs[i + 1] : null
+      const isPair = !!next && (c.standAfter || (!c.enabled && !next.enabled))
+      if (isPair) {
+        slots.push({ idx0: i, idx1: i + 1 })
+        i += 2
+      } else {
+        slots.push({ idx0: i })
+        i += 1
+      }
+    }
 
     const startAngle = Math.PI
     const endAngle = 0
-    const angleStep = total > 1 ? (startAngle - endAngle) / (total - 1) : 0
+    const totalSlots = slots.length
+    const slotStep = totalSlots > 1 ? (startAngle - endAngle) / (totalSlots - 1) : 0
+    // Pair offset = angle that places the two chairs ~32px apart (centre-to-
+    // centre) at this radius. Capped at 35% of the slot span so adjacent
+    // desks can't overlap in tight rows.
+    const desiredOffset = (CHAIR_SIZE + 2) / 2 / r
+    const pairAngleOffset = Math.min(desiredOffset, slotStep * 0.35)
 
-    const positions: Array<{ cx: number; cy: number }> = []
+    const positions: Array<{ cx: number; cy: number }> = new Array(chairs.length)
+    slots.forEach((slot, slotIdx) => {
+      const slotAngle = startAngle - slotIdx * slotStep
+      if (slot.idx1 !== undefined) {
+        const a1 = slotAngle + pairAngleOffset
+        const a2 = slotAngle - pairAngleOffset
+        positions[slot.idx0] = { cx: ox + r * Math.cos(a1), cy: oy + yDir * r * Math.sin(a1) }
+        positions[slot.idx1] = { cx: ox + r * Math.cos(a2), cy: oy + yDir * r * Math.sin(a2) }
+      } else {
+        positions[slot.idx0] = { cx: ox + r * Math.cos(slotAngle), cy: oy + yDir * r * Math.sin(slotAngle) }
+      }
+    })
 
-    row.chairs.forEach((chair, chairIndex) => {
-      const angle = startAngle - chairIndex * angleStep
-      const cx = ox + r * Math.cos(angle)
-      const cy = oy + yDir * r * Math.sin(angle)
-      positions.push({ cx, cy })
-
+    chairs.forEach((chair, chairIndex) => {
+      const { cx, cy } = positions[chairIndex]
       if (chair.enabled) {
         this.drawChair(ctx, chair, cx, cy, ox, oy, row.fontSize)
         if (chair.hasStand) this.drawStandX(ctx, cx, cy, ox, oy)
         if (config.showNumbers) {
           const num = config.numberRestartPerRow
-            ? row.chairs.slice(0, chairIndex).filter(c => c.enabled).length + 1
+            ? chairs.slice(0, chairIndex).filter(c => c.enabled).length + 1
             : seatNumber
           this.drawSeatNumber(ctx, cx, cy, ox, oy, String(num), row.fontSize)
         }
@@ -209,18 +245,18 @@ export class Renderer {
       } else {
         this.drawGhostChair(ctx, cx, cy, ox, oy)
       }
-
-      // Always store hit target so disabled chairs can be re-enabled
       this.hitTargets.push({ rowIndex, chairIndex, x: cx, y: cy, radius: CHAIR_HALF * 1.1 })
     })
 
-    // Shared stands between adjacent chairs
-    row.chairs.forEach((chair, chairIndex) => {
-      if (chair.standAfter && chairIndex + 1 < positions.length) {
-        const a = positions[chairIndex]
-        const b = positions[chairIndex + 1]
-        this.drawStandX(ctx, (a.cx + b.cx) / 2, (a.cy + b.cy) / 2, ox, oy)
-      }
+    // Shared stand between desk-paired chairs (only when at least one is
+    // enabled — pure placeholder pairs don't need a stand).
+    chairs.forEach((chair, chairIndex) => {
+      if (!chair.standAfter || chairIndex + 1 >= positions.length) return
+      const next = chairs[chairIndex + 1]
+      if (!chair.enabled && !next.enabled) return
+      const a = positions[chairIndex]
+      const b = positions[chairIndex + 1]
+      this.drawStandX(ctx, (a.cx + b.cx) / 2, (a.cy + b.cy) / 2, ox, oy)
     })
 
     if (config.showRowLabels) {

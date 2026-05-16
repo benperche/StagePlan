@@ -437,15 +437,18 @@ export function buildOrchestraRows(comp: OrchestraComposition): OrchestraRowsRes
     if (r) pushRow(r.chairs, false)
   }
 
-  // ---- Strings: integrated semicircle rows ----
-  // Layout: each row is one desk per active string column, in left-to-right
-  // order V1 | V2 | Va | (Vc → Cb). The rightmost column is shared between
-  // Vc and Cb: Vc fills the front rows, then Cb fills the rest behind it,
-  // putting the basses naturally behind the cellos. Disabled placeholders
-  // fill any "exhausted" slots so the semicircle keeps the same shape across
-  // every back row. A single placeholder is also inserted between adjacent
-  // section columns so the desk pairs stay visually compact instead of
-  // drifting apart on the wider back arcs.
+  // ---- Strings: integrated semicircle rows, slot-aware ----
+  // Each row has one slot per active string column in left-to-right order
+  // V1 | V2 | Va | (Vc → Cb). A slot holds either a desk pair (2 chairs
+  // sharing a stand), a lone single chair, or — when a section has run out
+  // of players — a placeholder desk pair to preserve the row shape. The
+  // renderer treats each slot as one position on the arc and draws the
+  // paired chairs tightly together, so desk pairs stay compact even on the
+  // wider back rows.
+  //
+  // The rightmost column is shared between Vc and Cb: cellos fill the
+  // front rows of that column, then basses take over for the back rows,
+  // putting them directly behind the cellos.
   const v1 = comp.strings[0], v2 = comp.strings[1], va = comp.strings[2], vc = comp.strings[3], cb = comp.strings[4]
   const v1Desks = v1?.parsed.count ? Math.ceil(v1.parsed.count / 2) : 0
   const v2Desks = v2?.parsed.count ? Math.ceil(v2.parsed.count / 2) : 0
@@ -456,10 +459,10 @@ export function buildOrchestraRows(comp: OrchestraComposition): OrchestraRowsRes
   const numStringRows = Math.max(v1Desks, v2Desks, vaDesks, rightColumnRows)
 
   if (numStringRows > 0) {
-    // Returns the 2 chairs for one desk slot of `slot` at the given desk index.
-    // remaining >= 2 → shared desk, remaining === 1 → solo + placeholder,
-    // remaining === 0 → 2 placeholders.
-    const deskChairs = (slot: ParsedSlot, deskIdx: number): Chair[] => {
+    // Returns the chairs that fill one column slot for `slot` at the given
+    // desk index. Either 2 chairs (full desk or placeholder pair) or 1 chair
+    // (lone last seat in an odd-count section).
+    const slotChairs = (slot: ParsedSlot, deskIdx: number): Chair[] => {
       const startIdx = deskIdx * 2
       const remaining = slot.parsed.count - startIdx
       if (remaining >= 2) {
@@ -469,10 +472,7 @@ export function buildOrchestraRows(comp: OrchestraComposition): OrchestraRowsRes
         return [c1, c2]
       }
       if (remaining === 1) {
-        return [
-          makeChairFromSlot(slot, startIdx, COLORS.strings, 'solo'),
-          makePlaceholderChair(COLORS.strings),
-        ]
+        return [makeChairFromSlot(slot, startIdx, COLORS.strings, 'solo')]
       }
       return [makePlaceholderChair(COLORS.strings), makePlaceholderChair(COLORS.strings)]
     }
@@ -481,17 +481,18 @@ export function buildOrchestraRows(comp: OrchestraComposition): OrchestraRowsRes
       makePlaceholderChair(COLORS.strings),
     ]
 
-    // Ordered column getters. Each returns the 2 chairs for that column at row r.
+    // Ordered column getters. Each returns the chairs for that column's slot
+    // at the given row index.
     const columns: Array<(r: number) => Chair[]> = []
-    if (v1Desks > 0) columns.push(r => r < v1Desks ? deskChairs(v1!, r) : placeholderPair())
-    if (v2Desks > 0) columns.push(r => r < v2Desks ? deskChairs(v2!, r) : placeholderPair())
-    if (vaDesks > 0) columns.push(r => r < vaDesks ? deskChairs(va!, r) : placeholderPair())
+    if (v1Desks > 0) columns.push(r => r < v1Desks ? slotChairs(v1!, r) : placeholderPair())
+    if (v2Desks > 0) columns.push(r => r < v2Desks ? slotChairs(v2!, r) : placeholderPair())
+    if (vaDesks > 0) columns.push(r => r < vaDesks ? slotChairs(va!, r) : placeholderPair())
     if (rightColumnRows > 0) {
       columns.push(r => {
-        if (vc && r < vcDesks) return deskChairs(vc, r)
+        if (vc && r < vcDesks) return slotChairs(vc, r)
         if (cb) {
           const cbRow = r - vcDesks
-          if (cbRow >= 0 && cbRow < cbDesks) return deskChairs(cb, cbRow)
+          if (cbRow >= 0 && cbRow < cbDesks) return slotChairs(cb, cbRow)
         }
         return placeholderPair()
       })
@@ -499,13 +500,7 @@ export function buildOrchestraRows(comp: OrchestraComposition): OrchestraRowsRes
 
     for (let r = 0; r < numStringRows; r++) {
       const rowChairs: Chair[] = []
-      for (let c = 0; c < columns.length; c++) {
-        rowChairs.push(...columns[c](r))
-        // Separator placeholder between adjacent columns (not after the last)
-        if (c < columns.length - 1) {
-          rowChairs.push(makePlaceholderChair(COLORS.strings))
-        }
-      }
+      for (const col of columns) rowChairs.push(...col(r))
       pushRow(rowChairs, true)
     }
   }
