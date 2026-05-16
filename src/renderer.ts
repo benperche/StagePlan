@@ -7,11 +7,12 @@ const CHAIR_SIZE = 30
 const CHAIR_HALF = CHAIR_SIZE / 2
 const STAND_GAP = 6
 const STAND_SIZE = 7   // half-arm of the ×
-// Distance between adjacent arc rows. Sized so the seat number drawn behind
-// one row doesn't clash with the shared stand drawn in front of the row
-// behind it (stand reaches ~35px forward of its chair, number ~28px behind,
-// so 65px is the floor — 70px gives a small breathing gap).
-const ROW_SPACING = 70
+// Default distance between adjacent arc rows. Configurable per chart via
+// ChartConfig.rowSpacing. Sized so the seat number drawn behind one row
+// doesn't clash with the shared stand drawn in front of the row behind it
+// (stand reaches ~35px forward of its chair, number ~28px behind, so 65px
+// is the floor — 70px gives a small breathing gap).
+const ROW_SPACING_DEFAULT = 70
 const BASE_RADIUS = 130
 const STRAIGHT_CHAIR_SPACING = 40
 // Centre-to-centre distance between the two chairs of a desk pair when the
@@ -108,24 +109,44 @@ export class Renderer {
   // Vertical centering
   // ---------------------------------------------------------------------------
 
-  private computeOy(h: number, numRows: number, flipped: boolean): number {
+  // Use the user's preferred row spacing as the upper bound. If the chart
+  // would overflow at that spacing, shrink to whatever fits. Floored at 40
+  // so extremely tall charts still render legibly. The user is in charge
+  // when their value is feasible; we only step in when it isn't.
+  private effectiveRowSpacing(h: number, numRows: number, userRowSpacing: number): number {
+    if (numRows <= 1) return userRowSpacing
+    const titlePad = 50
+    const farPad = 30
+    const available = h - titlePad - farPad - CONDUCTOR_EXTENT - BASE_RADIUS - CHAIR_HALF
+    const fitting = available / (numRows - 1)
+    return Math.max(40, Math.min(userRowSpacing, fitting))
+  }
+
+  private computeOy(h: number, numRows: number, flipped: boolean, rowSpacing: number): number {
     // Default conductor position sits in the lower (or upper, when flipped)
     // third of the canvas — the conductor is at the FRONT of the stage, with
-    // chairs working backwards from there.  Falls back to clamping when the
+    // chairs working backwards from there. Falls back to clamping when the
     // chart is too tall to fit at the preferred position.
-    const chartHeight = BASE_RADIUS + Math.max(0, numRows - 1) * ROW_SPACING + CHAIR_HALF
-    const padding = 16
+    const chartHeight = BASE_RADIUS + Math.max(0, numRows - 1) * rowSpacing + CHAIR_HALF
+    // The chart-title side needs extra padding so the title (drawn at y≈14,
+    // text ~18px tall) doesn't get tangled with the back-row seat numbers
+    // (drawn ~12px above the back chair top). 50px covers both with a
+    // small gap. The opposite side just needs a normal margin.
+    const titleSidePadding = 50
+    const farSidePadding = 30
     if (flipped) {
-      // Conductor near the top, chairs extend down from it.
+      // Conductor near the top — title is above the conductor, chairs and
+      // their seat numbers extend down toward the bottom of the canvas.
       const target = h / 3
-      const minOy = padding + CONDUCTOR_EXTENT
-      const maxOy = h - padding - chartHeight
+      const minOy = titleSidePadding + CONDUCTOR_EXTENT
+      const maxOy = h - farSidePadding - chartHeight
       return Math.max(minOy, Math.min(target, maxOy))
     } else {
-      // Conductor near the bottom (2/3 down the canvas), chairs extend up.
+      // Conductor near the bottom — chairs and their seat numbers extend
+      // up toward the title at the top of the canvas.
       const target = (h * 2) / 3
-      const minOy = chartHeight + padding
-      const maxOy = h - padding - CONDUCTOR_EXTENT
+      const minOy = chartHeight + titleSidePadding
+      const maxOy = h - farSidePadding - CONDUCTOR_EXTENT
       return Math.min(maxOy, Math.max(target, minOy))
     }
   }
@@ -136,22 +157,26 @@ export class Renderer {
 
   private renderSemicircle(ctx: CanvasRenderingContext2D, config: ChartConfig, w: number, h: number) {
     const numRows = config.rows.length
+    const rowSpacing = this.effectiveRowSpacing(h, numRows, config.rowSpacing ?? ROW_SPACING_DEFAULT)
     const offX = config.conductor.offsetX ?? 0
     const offY = config.conductor.offsetY ?? 0
     const ox = w / 2 + offX
-    const oy = this.computeOy(h, numRows, config.flipped) + offY
+    const oy = this.computeOy(h, numRows, config.flipped, rowSpacing) + offY
     const yDir = config.flipped ? 1 : -1
     this.conductorOrigin = { ox, oy, yDir }
 
     // Draw arcs first (behind chairs)
     if (config.showArc) {
+      const arcRange = config.arcRange ?? Math.PI
+      const arcStart = Math.PI / 2 + arcRange / 2
+      const arcEnd = Math.PI / 2 - arcRange / 2
       config.rows.forEach((_row, rowIndex) => {
         const isStraight = rowIndex >= numRows - config.straightRows
         if (isStraight) return
-        const r = BASE_RADIUS + rowIndex * ROW_SPACING
+        const r = BASE_RADIUS + rowIndex * rowSpacing
         ctx.save()
         ctx.beginPath()
-        ctx.arc(ox, oy, r, Math.PI, 0, yDir > 0)
+        ctx.arc(ox, oy, r, arcStart, arcEnd, yDir > 0)
         ctx.strokeStyle = '#ccc'
         ctx.lineWidth = 1
         ctx.setLineDash([4, 4])
@@ -171,7 +196,7 @@ export class Renderer {
 
     let seatNumber = 1
     config.rows.forEach((row, rowIndex) => {
-      const r = BASE_RADIUS + rowIndex * ROW_SPACING
+      const r = BASE_RADIUS + rowIndex * rowSpacing
       const isStraight = rowIndex >= numRows - config.straightRows
       if (isStraight) {
         seatNumber = this.renderStraightRowInArc(ctx, row, rowIndex, r, ox, oy, yDir, config, seatNumber, straightLabelX)
@@ -343,10 +368,11 @@ export class Renderer {
 
   private renderStraight(ctx: CanvasRenderingContext2D, config: ChartConfig, w: number, h: number) {
     const numRows = config.rows.length
+    const rowSpacing = this.effectiveRowSpacing(h, numRows, config.rowSpacing ?? ROW_SPACING_DEFAULT)
     const offX = config.conductor.offsetX ?? 0
     const offY = config.conductor.offsetY ?? 0
     const ox = w / 2 + offX
-    const oy = this.computeOy(h, numRows, config.flipped) + offY
+    const oy = this.computeOy(h, numRows, config.flipped, rowSpacing) + offY
     const yDir = config.flipped ? 1 : -1
     this.conductorOrigin = { ox, oy, yDir }
 
@@ -363,7 +389,7 @@ export class Renderer {
       const total = row.chairs.length
       if (total === 0) return
 
-      const rowY = oy + yDir * (BASE_RADIUS + rowIndex * ROW_SPACING)
+      const rowY = oy + yDir * (BASE_RADIUS + rowIndex * rowSpacing)
       const rowWidth = (total - 1) * STRAIGHT_CHAIR_SPACING
       const startX = ox - rowWidth / 2
 

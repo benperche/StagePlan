@@ -24,9 +24,6 @@
         <label id="straight-rows-label">Straight rows from back
           <input type="number" id="straight-rows" min="0" value="0" />
         </label>
-        <label id="arc-range-label">Arc range (°)
-          <input type="number" id="arc-range" min="60" max="180" step="5" value="180" />
-        </label>
         <div class="checkbox-row">
           <label><input type="checkbox" id="show-numbers" checked /> Seat numbers</label>
           <label><input type="checkbox" id="restart-numbers" /> Restart per row</label>
@@ -37,8 +34,8 @@
         </div>
         <div class="checkbox-row">
           <label><input type="checkbox" id="conductor-stand" checked /> Conductor stand</label>
-          <label><input type="checkbox" id="show-arc" /> Show arc</label>
         </div>
+        <button id="advanced-btn" class="secondary">⚙ Advanced layout…</button>
       </section>
 
       <section class="panel">
@@ -131,6 +128,25 @@
     <main id="canvas-area">
       <canvas id="chart-canvas"></canvas>
     </main>
+  </div>
+
+  <div id="advanced-modal" class="modal-overlay" style="display:none">
+    <div class="modal-card">
+      <h2>Advanced Layout</h2>
+      <p class="hint">Fine controls for chart dimensions. Changes apply live.</p>
+      <label id="row-spacing-label">Row spacing (px)
+        <input type="number" id="row-spacing" min="50" max="120" step="5" value="70" />
+      </label>
+      <label id="arc-range-label">Arc range (°)
+        <input type="number" id="arc-range" min="60" max="180" step="5" value="180" />
+      </label>
+      <div class="checkbox-row">
+        <label><input type="checkbox" id="show-arc" /> Show arc guides</label>
+      </div>
+      <div class="row-controls modal-actions">
+        <button id="advanced-close" class="primary">Done</button>
+      </div>
+    </div>
   </div>
 
   <div id="custom-orchestra-modal" class="modal-overlay" style="display:none">

@@ -74,6 +74,10 @@ export interface ChartConfig {
   // i.e. a full semicircle. Smaller values draw a narrower arc, useful for
   // ensembles that don't need to span the full front of the stage.
   arcRange: number
+  // Distance between adjacent concentric rows in pixels. Default 70.
+  // Larger values give more breathing room between rows; smaller values
+  // pack more rows into a tight chart at the cost of stand/number clash.
+  rowSpacing: number
 }
 
 export interface HitTarget {

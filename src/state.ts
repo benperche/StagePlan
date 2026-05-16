@@ -44,6 +44,7 @@ export function makeDefaultConfig(): ChartConfig {
     notes: '',
     instruments: [],
     arcRange: Math.PI,
+    rowSpacing: 70,
   }
 }
 

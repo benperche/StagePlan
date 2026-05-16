@@ -84,6 +84,10 @@ const straightRowsInput = document.getElementById('straight-rows') as HTMLInputE
 const straightRowsLabel = document.getElementById('straight-rows-label') as HTMLElement
 const arcRangeInput = document.getElementById('arc-range') as HTMLInputElement
 const arcRangeLabel = document.getElementById('arc-range-label') as HTMLElement
+const rowSpacingInput = document.getElementById('row-spacing') as HTMLInputElement
+const advancedBtn = document.getElementById('advanced-btn') as HTMLButtonElement
+const advancedModal = document.getElementById('advanced-modal') as HTMLElement
+const advancedCloseBtn = document.getElementById('advanced-close') as HTMLButtonElement
 const rowsContainer = document.getElementById('rows-container') as HTMLElement
 const colorPicker = document.getElementById('color-picker') as HTMLInputElement
 const undoBtn = document.getElementById('undo-btn') as HTMLButtonElement
@@ -136,6 +140,7 @@ function migrateConfig(c: ChartConfig) {
   if (typeof c.conductor.offsetX !== 'number') c.conductor.offsetX = 0
   if (typeof c.conductor.offsetY !== 'number') c.conductor.offsetY = 0
   if (typeof c.arcRange !== 'number') c.arcRange = Math.PI
+  if (typeof c.rowSpacing !== 'number') c.rowSpacing = 70
 }
 
 // --- Render ---
@@ -169,6 +174,7 @@ function readInputs() {
   config.straightRows = Math.max(0, Math.min(config.rows.length, Number(straightRowsInput.value) || 0))
   const arcDeg = Math.max(60, Math.min(180, Number(arcRangeInput.value) || 180))
   config.arcRange = (arcDeg * Math.PI) / 180
+  config.rowSpacing = Math.max(50, Math.min(120, Number(rowSpacingInput.value) || 70))
 }
 
 // --- Sync config → inputs ---
@@ -189,6 +195,7 @@ function updateAllInputs() {
   straightRowsLabel.style.display = config.layout === 'semicircle' ? '' : 'none'
   arcRangeLabel.style.display = config.layout === 'semicircle' ? '' : 'none'
   arcRangeInput.value = String(Math.round((config.arcRange * 180) / Math.PI))
+  rowSpacingInput.value = String(config.rowSpacing)
   renderRowList()
 }
 
@@ -543,7 +550,7 @@ canvas.addEventListener('click', (e) => {
 function bindEvents() {
   for (const el of [titleInput, layoutSelect, notesArea, showNumbersCheck,
     restartNumbersCheck, showRowLabelsCheck, conductorStandCheck, flipCheck,
-    straightRowsInput, showArcCheck, arcRangeInput]) {
+    straightRowsInput, showArcCheck, arcRangeInput, rowSpacingInput]) {
     el.addEventListener('change', () => { readInputs(); updateAllInputs(); renderChart() })
   }
 
@@ -744,10 +751,16 @@ function bindEvents() {
     renderChart()
   })
   document.addEventListener('keydown', (e) => {
-    // Close the custom orchestra modal on Escape
-    if (e.key === 'Escape' && customOrchestraModal.style.display !== 'none') {
-      customOrchestraModal.style.display = 'none'
-      return
+    // Close any open modal on Escape
+    if (e.key === 'Escape') {
+      if (customOrchestraModal.style.display !== 'none') {
+        customOrchestraModal.style.display = 'none'
+        return
+      }
+      if (advancedModal.style.display !== 'none') {
+        advancedModal.style.display = 'none'
+        return
+      }
     }
 
     if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
@@ -805,6 +818,14 @@ function bindEvents() {
   applyPresetBtn.addEventListener('click', () => {
     const preset = PRESETS.find(p => p.id === presetSelect.value)
     if (preset) applyPreset(preset)
+  })
+
+  // --- Advanced layout modal ---
+  // Inputs inside live-update via the existing change listener loop.
+  advancedBtn.addEventListener('click', () => { advancedModal.style.display = 'flex' })
+  advancedCloseBtn.addEventListener('click', () => { advancedModal.style.display = 'none' })
+  advancedModal.addEventListener('click', (e) => {
+    if (e.target === advancedModal) advancedModal.style.display = 'none'
   })
 
   // --- Custom orchestra modal ---
