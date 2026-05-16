@@ -764,11 +764,22 @@ export class Renderer {
       return `${label}: ${count} chair${count !== 1 ? 's' : ''}`
     })
 
-    // Add legend if any stands are present
-    const hasStands = config.rows.some(row =>
-      row.chairs.some(c => c.hasStand || c.standAfter)
-    )
-    if (hasStands) lines.push('× = music stand')
+    let totalChairs = 0
+    let totalStands = 0
+    for (const row of config.rows) {
+      for (const chair of row.chairs) {
+        if (!chair.enabled) continue
+        totalChairs++
+        if (chair.hasStand) totalStands++
+        if (chair.standAfter) totalStands++
+      }
+    }
+    if (config.rows.length > 1) {
+      lines.push(totalStands > 0
+        ? `Total: ${totalChairs} chairs · ${totalStands} stands`
+        : `Total: ${totalChairs} chairs`)
+    }
+    if (totalStands > 0) lines.push('× = music stand')
 
     const lineHeight = 15
     const x = w - 12

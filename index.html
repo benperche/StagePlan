@@ -46,6 +46,7 @@
           </select>
           <button id="apply-preset-btn">Apply</button>
         </div>
+        <button id="custom-orchestra-btn" class="secondary">+ Custom orchestra…</button>
         <p class="hint">Applies a standard layout — you can edit it after.</p>
       </section>
 
@@ -127,6 +128,33 @@
     <main id="canvas-area">
       <canvas id="chart-canvas"></canvas>
     </main>
+  </div>
+
+  <div id="custom-orchestra-modal" class="modal-overlay" style="display:none">
+    <div class="modal-card">
+      <h2>Custom Orchestra</h2>
+      <p class="hint">
+        Boosey &amp; Hawkes shorthand: <code>Ww − Br [− Perc] − Str</code>.
+        Each block is dot-separated counts (Ww: Fl.Ob.Cl.Bn, Br: Hn.Tp.Tb.Tu,
+        Perc: Timp.Perc, Str: V1.V2.Va.Vc.Cb).
+        Doublings in parens, e.g. <code>3(III=Bass Clarinet)</code>.
+      </p>
+      <label>Title
+        <input type="text" id="custom-orchestra-title" placeholder="Custom Orchestra" />
+      </label>
+      <label>Notation
+        <input type="text" id="custom-orchestra-notation"
+               placeholder="2.2.2.2 - 4.2.3.1 - 1.2 - 12.10.8.8.6"
+               autocomplete="off" spellcheck="false" />
+      </label>
+      <div id="custom-orchestra-preview" class="preview-box">
+        Type a notation above to see a preview.
+      </div>
+      <div class="row-controls modal-actions">
+        <button id="custom-orchestra-cancel">Cancel</button>
+        <button id="custom-orchestra-apply" class="primary">Apply</button>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="/src/main.ts"></script>

@@ -1,7 +1,11 @@
 import './style.css'
 import { makeDefaultConfig, makeRow, makeInstrument, History } from './state'
 import { Renderer } from './renderer'
-import { PRESETS, buildRowsFromSections, type PresetSection } from './presets'
+import {
+  PRESETS, buildRowsFromSections, parseOrchestraNotation,
+  buildOrchestraRows, describeComposition,
+  type Preset, type PresetSection,
+} from './presets'
 import { saveToJson, loadFromJson, encodeToHash, decodeFromHash, exportToPng } from './serializer'
 import type { ChartConfig, InstrumentType, FixedInstrument, Row } from './types'
 
@@ -91,6 +95,13 @@ const shareLinkBtn = document.getElementById('share-link-btn') as HTMLButtonElem
 const shareUrlDisplay = document.getElementById('share-url-display') as HTMLElement
 const presetSelect = document.getElementById('preset-select') as HTMLSelectElement
 const applyPresetBtn = document.getElementById('apply-preset-btn') as HTMLButtonElement
+const customOrchestraBtn = document.getElementById('custom-orchestra-btn') as HTMLButtonElement
+const customOrchestraModal = document.getElementById('custom-orchestra-modal') as HTMLElement
+const customOrchestraTitle = document.getElementById('custom-orchestra-title') as HTMLInputElement
+const customOrchestraNotation = document.getElementById('custom-orchestra-notation') as HTMLInputElement
+const customOrchestraPreview = document.getElementById('custom-orchestra-preview') as HTMLElement
+const customOrchestraApply = document.getElementById('custom-orchestra-apply') as HTMLButtonElement
+const customOrchestraCancel = document.getElementById('custom-orchestra-cancel') as HTMLButtonElement
 const toolButtons = document.querySelectorAll<HTMLButtonElement>('[data-tool]')
 const addInstrumentButtons = document.querySelectorAll<HTMLButtonElement>('[data-add-instrument]')
 const inspector = document.getElementById('instrument-inspector') as HTMLElement
@@ -266,15 +277,25 @@ function populatePresets() {
   })
 }
 
-function applyPreset(presetId: string) {
-  const preset = PRESETS.find(p => p.id === presetId)
-  if (!preset) return
+function applyPreset(preset: Preset) {
   history.push(config)
 
-  // Rows: customRows (explicit per-chair labels) take precedence over the
-  // generic auto-packing of `sections`.
+  // Row source priority: notation > customRows > sections.
   let rows: Row[]
-  if (preset.customRows && preset.customRows.length > 0) {
+  // For orchestra notation, the row builder also tells us how many of the
+  // back rows should render straight (winds/brass/perc) so a small section
+  // doesn't get stretched across the full back arc.
+  let straightRowsOverride: number | null = null
+  if (preset.notation) {
+    const comp = parseOrchestraNotation(preset.notation)
+    if (!comp) {
+      alert(`Invalid orchestra notation: "${preset.notation}"`)
+      return
+    }
+    const built = buildOrchestraRows(comp)
+    rows = built.rows
+    straightRowsOverride = built.straightRows
+  } else if (preset.customRows && preset.customRows.length > 0) {
     const rowLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
     rows = preset.customRows.map((row, i) => ({
       id: crypto.randomUUID(),
@@ -283,8 +304,8 @@ function applyPreset(presetId: string) {
         enabled: true,
         color: c.color,
         label: c.label,
-        hasStand: false,
-        standAfter: false,
+        hasStand: c.hasStand ?? false,
+        standAfter: c.standAfter ?? false,
       })),
       label: row.label || rowLetters[i] || String(i + 1),
       fontSize: 11,
@@ -309,7 +330,7 @@ function applyPreset(presetId: string) {
   config.rows = rows
   config.layout = preset.layout
   config.title = preset.name
-  config.straightRows = preset.straightRows ?? 0
+  config.straightRows = straightRowsOverride ?? preset.straightRows ?? 0
   config.instruments = instruments
 
   layoutSelect.value = preset.layout
@@ -716,6 +737,12 @@ function bindEvents() {
     renderChart()
   })
   document.addEventListener('keydown', (e) => {
+    // Close the custom orchestra modal on Escape
+    if (e.key === 'Escape' && customOrchestraModal.style.display !== 'none') {
+      customOrchestraModal.style.display = 'none'
+      return
+    }
+
     if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
       e.preventDefault()
       const prev = history.undo(config)
@@ -769,7 +796,62 @@ function bindEvents() {
   })
 
   applyPresetBtn.addEventListener('click', () => {
-    applyPreset(presetSelect.value)
+    const preset = PRESETS.find(p => p.id === presetSelect.value)
+    if (preset) applyPreset(preset)
+  })
+
+  // --- Custom orchestra modal ---
+  const openCustomModal = () => {
+    customOrchestraTitle.value = ''
+    customOrchestraNotation.value = ''
+    customOrchestraPreview.textContent = 'Type a notation above to see a preview.'
+    customOrchestraPreview.classList.remove('error')
+    customOrchestraModal.style.display = 'flex'
+    setTimeout(() => customOrchestraNotation.focus(), 0)
+  }
+  const closeCustomModal = () => { customOrchestraModal.style.display = 'none' }
+
+  const refreshCustomPreview = () => {
+    const text = customOrchestraNotation.value.trim()
+    if (!text) {
+      customOrchestraPreview.textContent = 'Type a notation above to see a preview.'
+      customOrchestraPreview.classList.remove('error')
+      return
+    }
+    const comp = parseOrchestraNotation(text)
+    if (!comp) {
+      customOrchestraPreview.textContent =
+        'Could not parse. Expected 3 or 4 dot-separated blocks joined by " - ".\nExample: 2.2.2.2 - 4.2.3.1 - 1.2 - 12.10.8.8.6'
+      customOrchestraPreview.classList.add('error')
+      return
+    }
+    customOrchestraPreview.textContent = describeComposition(comp)
+    customOrchestraPreview.classList.remove('error')
+  }
+
+  customOrchestraBtn.addEventListener('click', openCustomModal)
+  customOrchestraCancel.addEventListener('click', closeCustomModal)
+  // Click on the backdrop (but not the card) closes
+  customOrchestraModal.addEventListener('click', (e) => {
+    if (e.target === customOrchestraModal) closeCustomModal()
+  })
+  customOrchestraNotation.addEventListener('input', refreshCustomPreview)
+  customOrchestraApply.addEventListener('click', () => {
+    const notation = customOrchestraNotation.value.trim()
+    if (!notation) return
+    if (!parseOrchestraNotation(notation)) {
+      refreshCustomPreview()
+      return
+    }
+    const title = customOrchestraTitle.value.trim() || 'Custom Orchestra'
+    applyPreset({
+      id: 'custom-orchestra',
+      name: title,
+      layout: 'semicircle',
+      sections: [],
+      notation,
+    })
+    closeCustomModal()
   })
 
   // Hover cursor reflects what's under the pointer.  Conductor uses 'move'
