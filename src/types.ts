@@ -70,6 +70,10 @@ export interface ChartConfig {
   showArc: boolean
   notes: string
   instruments: FixedInstrument[]
+  // Angular range of the chair arc in radians. Default Math.PI (180°),
+  // i.e. a full semicircle. Smaller values draw a narrower arc, useful for
+  // ensembles that don't need to span the full front of the stage.
+  arcRange: number
 }
 
 export interface HitTarget {

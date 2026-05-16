@@ -43,6 +43,7 @@ export function makeDefaultConfig(): ChartConfig {
     showArc: false,
     notes: '',
     instruments: [],
+    arcRange: Math.PI,
   }
 }
 

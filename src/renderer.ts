@@ -7,9 +7,18 @@ const CHAIR_SIZE = 30
 const CHAIR_HALF = CHAIR_SIZE / 2
 const STAND_GAP = 6
 const STAND_SIZE = 7   // half-arm of the ×
-const ROW_SPACING = 52
+// Distance between adjacent arc rows. Sized so the seat number drawn behind
+// one row doesn't clash with the shared stand drawn in front of the row
+// behind it (stand reaches ~35px forward of its chair, number ~28px behind,
+// so 65px is the floor — 70px gives a small breathing gap).
+const ROW_SPACING = 70
 const BASE_RADIUS = 130
 const STRAIGHT_CHAIR_SPACING = 40
+// Centre-to-centre distance between the two chairs of a desk pair when the
+// renderer compresses them into a single arc slot. Chair size is 30, so 56
+// gives a ~26px visual gap — enough that the stand × sits comfortably
+// between the chairs instead of looking glued to either one.
+const DESK_PAIR_SPACING = 56
 const CONDUCTOR_EXTENT = 56
 const COND_W = 52
 const COND_H = 36
@@ -207,15 +216,18 @@ export class Renderer {
       }
     }
 
-    const startAngle = Math.PI
-    const endAngle = 0
+    // Arc range — by default the full 180° semicircle, but configurable so
+    // tighter ensembles can be drawn with a narrower spread.
+    const arcRange = config.arcRange ?? Math.PI
+    const startAngle = Math.PI / 2 + arcRange / 2
+    const endAngle = Math.PI / 2 - arcRange / 2
     const totalSlots = slots.length
     const slotStep = totalSlots > 1 ? (startAngle - endAngle) / (totalSlots - 1) : 0
-    // Pair offset = angle that places the two chairs ~32px apart (centre-to-
-    // centre) at this radius. Capped at 35% of the slot span so adjacent
-    // desks can't overlap in tight rows.
-    const desiredOffset = (CHAIR_SIZE + 2) / 2 / r
-    const pairAngleOffset = Math.min(desiredOffset, slotStep * 0.35)
+    // Pair offset = angle that places the two chairs DESK_PAIR_SPACING apart
+    // (centre-to-centre) at this radius. Capped at 45% of the slot span so
+    // adjacent desks can't overlap when slots get tight.
+    const desiredOffset = DESK_PAIR_SPACING / 2 / r
+    const pairAngleOffset = Math.min(desiredOffset, slotStep * 0.45)
 
     const positions: Array<{ cx: number; cy: number }> = new Array(chairs.length)
     slots.forEach((slot, slotIdx) => {

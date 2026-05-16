@@ -82,6 +82,8 @@ const showArcCheck = document.getElementById('show-arc') as HTMLInputElement
 const flipCheck = document.getElementById('flip') as HTMLInputElement
 const straightRowsInput = document.getElementById('straight-rows') as HTMLInputElement
 const straightRowsLabel = document.getElementById('straight-rows-label') as HTMLElement
+const arcRangeInput = document.getElementById('arc-range') as HTMLInputElement
+const arcRangeLabel = document.getElementById('arc-range-label') as HTMLElement
 const rowsContainer = document.getElementById('rows-container') as HTMLElement
 const colorPicker = document.getElementById('color-picker') as HTMLInputElement
 const undoBtn = document.getElementById('undo-btn') as HTMLButtonElement
@@ -133,6 +135,7 @@ function migrateConfig(c: ChartConfig) {
   if (!Array.isArray(c.instruments)) c.instruments = []
   if (typeof c.conductor.offsetX !== 'number') c.conductor.offsetX = 0
   if (typeof c.conductor.offsetY !== 'number') c.conductor.offsetY = 0
+  if (typeof c.arcRange !== 'number') c.arcRange = Math.PI
 }
 
 // --- Render ---
@@ -164,6 +167,8 @@ function readInputs() {
   config.flipped = flipCheck.checked
   config.showArc = showArcCheck.checked
   config.straightRows = Math.max(0, Math.min(config.rows.length, Number(straightRowsInput.value) || 0))
+  const arcDeg = Math.max(60, Math.min(180, Number(arcRangeInput.value) || 180))
+  config.arcRange = (arcDeg * Math.PI) / 180
 }
 
 // --- Sync config → inputs ---
@@ -180,8 +185,10 @@ function updateAllInputs() {
   showArcCheck.checked = config.showArc
   straightRowsInput.value = String(config.straightRows)
   straightRowsInput.max = String(config.rows.length)
-  // Only show straight-rows control in semicircle mode
+  // Only show semicircle-specific controls in semicircle mode
   straightRowsLabel.style.display = config.layout === 'semicircle' ? '' : 'none'
+  arcRangeLabel.style.display = config.layout === 'semicircle' ? '' : 'none'
+  arcRangeInput.value = String(Math.round((config.arcRange * 180) / Math.PI))
   renderRowList()
 }
 
@@ -536,7 +543,7 @@ canvas.addEventListener('click', (e) => {
 function bindEvents() {
   for (const el of [titleInput, layoutSelect, notesArea, showNumbersCheck,
     restartNumbersCheck, showRowLabelsCheck, conductorStandCheck, flipCheck,
-    straightRowsInput, showArcCheck]) {
+    straightRowsInput, showArcCheck, arcRangeInput]) {
     el.addEventListener('change', () => { readInputs(); updateAllInputs(); renderChart() })
   }
 

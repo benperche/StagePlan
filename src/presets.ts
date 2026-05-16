@@ -437,32 +437,30 @@ export function buildOrchestraRows(comp: OrchestraComposition): OrchestraRowsRes
     if (r) pushRow(r.chairs, false)
   }
 
-  // ---- Strings: integrated semicircle rows, slot-aware ----
-  // Each row has one slot per active string column in left-to-right order
-  // V1 | V2 | Va | (Vc → Cb). A slot holds either a desk pair (2 chairs
-  // sharing a stand), a lone single chair, or — when a section has run out
-  // of players — a placeholder desk pair to preserve the row shape. The
-  // renderer treats each slot as one position on the arc and draws the
-  // paired chairs tightly together, so desk pairs stay compact even on the
-  // wider back rows.
-  //
-  // The rightmost column is shared between Vc and Cb: cellos fill the
-  // front rows of that column, then basses take over for the back rows,
-  // putting them directly behind the cellos.
+  // ---- Strings: integrated semicircle rows, slot-aware, with back-row doubling ----
+  // Layout rules:
+  //   * Each row has one column per active string section, in left-to-right
+  //     order V1 | V2 | Va | (Vc → Cb). The rightmost column is shared:
+  //     cellos fill the front of that column, basses take over behind them.
+  //   * Rows 0–3 get 1 desk per section (a tight front for the principals).
+  //   * Rows 4+ get 2 desks per section (the section spreads back faster,
+  //     matching real orchestra seating).
+  //   * Exhausted sections in a row get placeholder desks so the slot count
+  //     and column structure stay consistent across the row.
+  //   * Within a section, an odd lone last chair gets its own solo stand
+  //     instead of a half-desk.
   const v1 = comp.strings[0], v2 = comp.strings[1], va = comp.strings[2], vc = comp.strings[3], cb = comp.strings[4]
   const v1Desks = v1?.parsed.count ? Math.ceil(v1.parsed.count / 2) : 0
   const v2Desks = v2?.parsed.count ? Math.ceil(v2.parsed.count / 2) : 0
   const vaDesks = va?.parsed.count ? Math.ceil(va.parsed.count / 2) : 0
   const vcDesks = vc?.parsed.count ? Math.ceil(vc.parsed.count / 2) : 0
   const cbDesks = cb?.parsed.count ? Math.ceil(cb.parsed.count / 2) : 0
-  const rightColumnRows = vcDesks + cbDesks
-  const numStringRows = Math.max(v1Desks, v2Desks, vaDesks, rightColumnRows)
+  const rightTotal = vcDesks + cbDesks
 
-  if (numStringRows > 0) {
-    // Returns the chairs that fill one column slot for `slot` at the given
-    // desk index. Either 2 chairs (full desk or placeholder pair) or 1 chair
-    // (lone last seat in an odd-count section).
-    const slotChairs = (slot: ParsedSlot, deskIdx: number): Chair[] => {
+  if (v1Desks + v2Desks + vaDesks + rightTotal > 0) {
+    // Returns the chairs for one desk position. Full desk (2 paired chairs),
+    // lone last chair (1 chair, solo stand), or placeholder pair (2 disabled).
+    const oneDesk = (slot: ParsedSlot, deskIdx: number): Chair[] => {
       const startIdx = deskIdx * 2
       const remaining = slot.parsed.count - startIdx
       if (remaining >= 2) {
@@ -476,32 +474,60 @@ export function buildOrchestraRows(comp: OrchestraComposition): OrchestraRowsRes
       }
       return [makePlaceholderChair(COLORS.strings), makePlaceholderChair(COLORS.strings)]
     }
-    const placeholderPair = (): Chair[] => [
+    const placeholderDesk = (): Chair[] => [
       makePlaceholderChair(COLORS.strings),
       makePlaceholderChair(COLORS.strings),
     ]
 
-    // Ordered column getters. Each returns the chairs for that column's slot
-    // at the given row index.
-    const columns: Array<(r: number) => Chair[]> = []
-    if (v1Desks > 0) columns.push(r => r < v1Desks ? slotChairs(v1!, r) : placeholderPair())
-    if (v2Desks > 0) columns.push(r => r < v2Desks ? slotChairs(v2!, r) : placeholderPair())
-    if (vaDesks > 0) columns.push(r => r < vaDesks ? slotChairs(va!, r) : placeholderPair())
-    if (rightColumnRows > 0) {
-      columns.push(r => {
-        if (vc && r < vcDesks) return slotChairs(vc, r)
-        if (cb) {
-          const cbRow = r - vcDesks
-          if (cbRow >= 0 && cbRow < cbDesks) return slotChairs(cb, cbRow)
+    // Each column tracks how many desks it has already placed, then hands
+    // out the next `n` desks on request (padding with placeholder desks
+    // once its real desks are exhausted).
+    let v1Used = 0, v2Used = 0, vaUsed = 0, rightUsed = 0
+    const takeFrom = (
+      slot: ParsedSlot | undefined,
+      used: () => number,
+      bump: () => void,
+      total: number,
+      n: number,
+    ): Chair[] => {
+      const out: Chair[] = []
+      for (let i = 0; i < n; i++) {
+        if (slot && used() < total) {
+          out.push(...oneDesk(slot, used()))
+          bump()
+        } else {
+          out.push(...placeholderDesk())
         }
-        return placeholderPair()
-      })
+      }
+      return out
+    }
+    const takeRight = (n: number): Chair[] => {
+      const out: Chair[] = []
+      for (let i = 0; i < n; i++) {
+        if (vc && rightUsed < vcDesks) {
+          out.push(...oneDesk(vc, rightUsed))
+          rightUsed++
+        } else if (cb && rightUsed < rightTotal) {
+          out.push(...oneDesk(cb, rightUsed - vcDesks))
+          rightUsed++
+        } else {
+          out.push(...placeholderDesk())
+        }
+      }
+      return out
     }
 
-    for (let r = 0; r < numStringRows; r++) {
+    let row = 0
+    // Keep going until every active column has placed all its real desks.
+    while (v1Used < v1Desks || v2Used < v2Desks || vaUsed < vaDesks || rightUsed < rightTotal) {
+      const desksPerSection = row < 4 ? 1 : 2
       const rowChairs: Chair[] = []
-      for (const col of columns) rowChairs.push(...col(r))
+      if (v1Desks > 0) rowChairs.push(...takeFrom(v1, () => v1Used, () => { v1Used++ }, v1Desks, desksPerSection))
+      if (v2Desks > 0) rowChairs.push(...takeFrom(v2, () => v2Used, () => { v2Used++ }, v2Desks, desksPerSection))
+      if (vaDesks > 0) rowChairs.push(...takeFrom(va, () => vaUsed, () => { vaUsed++ }, vaDesks, desksPerSection))
+      if (rightTotal > 0) rowChairs.push(...takeRight(desksPerSection))
       pushRow(rowChairs, true)
+      row++
     }
   }
 
