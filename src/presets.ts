@@ -112,8 +112,9 @@ export const PRESETS: Preset[] = [
     name: 'Chamber Orchestra',
     layout: 'semicircle',
     sections: [],
-    // Mozart-sized: 1 each of Fl/Ob/Cl/Bn, 2 horns, no perc, modest strings.
-    notation: '1.1.1.1 - 2.0.0.0 - 0 - 6.5.4.3.2',
+    // Mozart-sized: 1 each of Fl/Ob/Cl/Bn, 2 horns, no perc, modest strings,
+    // 1 bass sitting in the third row behind the cellos.
+    notation: '1.1.1.1 - 2.0.0.0 - 0 - 6.5.4.3.1',
   },
   {
     id: 'full-symphony',
@@ -436,71 +437,76 @@ export function buildOrchestraRows(comp: OrchestraComposition): OrchestraRowsRes
     if (r) pushRow(r.chairs, false)
   }
 
-  // ---- Bowed strings (V1/V2/Va/Vc): one desk per part per row ----
-  // Strings fan back in concentric arcs. Each row has one desk (pair) of
-  // every bowed string section. When a section runs out (it's smaller than
-  // the longest), the slot is filled with a disabled placeholder chair so
-  // the semicircle row stays the same shape across the back. Odd-count
-  // sections end with a single chair on its own stand.
+  // ---- Strings: integrated semicircle rows ----
+  // Layout: each row is one desk per active string column, in left-to-right
+  // order V1 | V2 | Va | (Vc → Cb). The rightmost column is shared between
+  // Vc and Cb: Vc fills the front rows, then Cb fills the rest behind it,
+  // putting the basses naturally behind the cellos. Disabled placeholders
+  // fill any "exhausted" slots so the semicircle keeps the same shape across
+  // every back row. A single placeholder is also inserted between adjacent
+  // section columns so the desk pairs stay visually compact instead of
+  // drifting apart on the wider back arcs.
   const v1 = comp.strings[0], v2 = comp.strings[1], va = comp.strings[2], vc = comp.strings[3], cb = comp.strings[4]
-  const bowedSlots = [v1, v2, va, vc].filter((s): s is ParsedSlot => !!s && s.parsed.count > 0)
+  const v1Desks = v1?.parsed.count ? Math.ceil(v1.parsed.count / 2) : 0
+  const v2Desks = v2?.parsed.count ? Math.ceil(v2.parsed.count / 2) : 0
+  const vaDesks = va?.parsed.count ? Math.ceil(va.parsed.count / 2) : 0
+  const vcDesks = vc?.parsed.count ? Math.ceil(vc.parsed.count / 2) : 0
+  const cbDesks = cb?.parsed.count ? Math.ceil(cb.parsed.count / 2) : 0
+  const rightColumnRows = vcDesks + cbDesks
+  const numStringRows = Math.max(v1Desks, v2Desks, vaDesks, rightColumnRows)
 
-  if (bowedSlots.length > 0) {
-    const numStringRows = Math.max(...bowedSlots.map(s => Math.ceil(s.parsed.count / 2)))
+  if (numStringRows > 0) {
+    // Returns the 2 chairs for one desk slot of `slot` at the given desk index.
+    // remaining >= 2 → shared desk, remaining === 1 → solo + placeholder,
+    // remaining === 0 → 2 placeholders.
+    const deskChairs = (slot: ParsedSlot, deskIdx: number): Chair[] => {
+      const startIdx = deskIdx * 2
+      const remaining = slot.parsed.count - startIdx
+      if (remaining >= 2) {
+        const c1 = makeChairFromSlot(slot, startIdx,     COLORS.strings, 'shared')
+        const c2 = makeChairFromSlot(slot, startIdx + 1, COLORS.strings, 'shared')
+        c1.standAfter = true
+        return [c1, c2]
+      }
+      if (remaining === 1) {
+        return [
+          makeChairFromSlot(slot, startIdx, COLORS.strings, 'solo'),
+          makePlaceholderChair(COLORS.strings),
+        ]
+      }
+      return [makePlaceholderChair(COLORS.strings), makePlaceholderChair(COLORS.strings)]
+    }
+    const placeholderPair = (): Chair[] => [
+      makePlaceholderChair(COLORS.strings),
+      makePlaceholderChair(COLORS.strings),
+    ]
+
+    // Ordered column getters. Each returns the 2 chairs for that column at row r.
+    const columns: Array<(r: number) => Chair[]> = []
+    if (v1Desks > 0) columns.push(r => r < v1Desks ? deskChairs(v1!, r) : placeholderPair())
+    if (v2Desks > 0) columns.push(r => r < v2Desks ? deskChairs(v2!, r) : placeholderPair())
+    if (vaDesks > 0) columns.push(r => r < vaDesks ? deskChairs(va!, r) : placeholderPair())
+    if (rightColumnRows > 0) {
+      columns.push(r => {
+        if (vc && r < vcDesks) return deskChairs(vc, r)
+        if (cb) {
+          const cbRow = r - vcDesks
+          if (cbRow >= 0 && cbRow < cbDesks) return deskChairs(cb, cbRow)
+        }
+        return placeholderPair()
+      })
+    }
+
     for (let r = 0; r < numStringRows; r++) {
       const rowChairs: Chair[] = []
-      for (const s of bowedSlots) {
-        const startIdx = r * 2
-        const remaining = s.parsed.count - startIdx
-        if (remaining >= 2) {
-          // Full desk
-          const c1 = makeChairFromSlot(s, startIdx,     COLORS.strings, 'shared')
-          const c2 = makeChairFromSlot(s, startIdx + 1, COLORS.strings, 'shared')
-          c1.standAfter = true
-          rowChairs.push(c1, c2)
-        } else if (remaining === 1) {
-          // Last lone chair: solo stand, plus a placeholder to keep the desk-pair shape
-          rowChairs.push(makeChairFromSlot(s, startIdx, COLORS.strings, 'solo'))
-          rowChairs.push(makePlaceholderChair(COLORS.strings))
-        } else {
-          // Section exhausted: two placeholders to preserve the row shape
-          rowChairs.push(makePlaceholderChair(COLORS.strings))
+      for (let c = 0; c < columns.length; c++) {
+        rowChairs.push(...columns[c](r))
+        // Separator placeholder between adjacent columns (not after the last)
+        if (c < columns.length - 1) {
           rowChairs.push(makePlaceholderChair(COLORS.strings))
         }
       }
       pushRow(rowChairs, true)
-    }
-  }
-
-  // ---- Double basses: one or two straight rows behind the cellos ----
-  // Up to 4 basses → one row. 5+ basses → two rows roughly evenly split,
-  // with the front row carrying the larger half (and full desks).
-  if (cb && cb.parsed.count > 0) {
-    const cbCount = cb.parsed.count
-
-    const pushCbRow = (startIdx: number, count: number) => {
-      const chairs: Chair[] = []
-      for (let i = 0; i < count; i++) {
-        const c = makeChairFromSlot(cb, startIdx + i, COLORS.strings, 'shared')
-        if (i % 2 === 0) {
-          const paired = (i + 1 < count)
-          c.standAfter = paired
-          c.hasStand = !paired   // lone last chair gets a solo stand
-        }
-        chairs.push(c)
-      }
-      pushRow(chairs, false)
-    }
-
-    if (cbCount > 4) {
-      // Round front row up to even so it holds full desks; any odd remainder
-      // ends up alone in the back row.
-      const half = Math.ceil(cbCount / 2)
-      const firstRowCount = (half % 2 === 0) ? half : half + 1
-      pushCbRow(0, firstRowCount)
-      pushCbRow(firstRowCount, cbCount - firstRowCount)
-    } else {
-      pushCbRow(0, cbCount)
     }
   }
 
