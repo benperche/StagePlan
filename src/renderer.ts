@@ -53,6 +53,7 @@ export class Renderer {
 
     this.drawTitle(ctx, config.title, w)
     this.drawNotes(ctx, config.notes, h)
+    if (config.showStageDirections) this.drawStageDirections(ctx, w, h)
 
     if (config.layout === 'semicircle') {
       this.renderSemicircle(ctx, config, w, h)
@@ -824,6 +825,34 @@ export class Renderer {
     lines.forEach((line, i) => {
       ctx.fillText(line, x, bottomY - (lines.length - 1 - i) * lineHeight)
     })
+    ctx.restore()
+  }
+
+  // Light-grey vertical "STAGE RIGHT" / "STAGE LEFT" labels on the canvas
+  // edges, from the performer's perspective. Stage right = audience left
+  // = canvas left; stage left = canvas right. Both rotated so they read
+  // bottom-to-top (the spine-text convention).
+  private drawStageDirections(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    ctx.save()
+    ctx.fillStyle = '#ddd'
+    ctx.font = 'bold 26px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+
+    // Left edge — Stage Right
+    ctx.save()
+    ctx.translate(26, h / 2)
+    ctx.rotate(-Math.PI / 2)
+    ctx.fillText('STAGE RIGHT', 0, 0)
+    ctx.restore()
+
+    // Right edge — Stage Left
+    ctx.save()
+    ctx.translate(w - 26, h / 2)
+    ctx.rotate(-Math.PI / 2)
+    ctx.fillText('STAGE LEFT', 0, 0)
+    ctx.restore()
+
     ctx.restore()
   }
 

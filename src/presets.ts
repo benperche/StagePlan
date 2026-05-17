@@ -202,15 +202,23 @@ export const PRESETS: Preset[] = [
       },
     ],
     instruments: [
-      // Back row of large fixed instruments, spread evenly across the
-      // canvas above the back chair row (mallets/aux on the left,
-      // drumkit/timpani on the right). Polar coords from the conductor.
-      { type: 'mallet',   angle: -2.30, distance: 500 },
-      { type: 'square',   angle: -1.85, distance: 470, label: 'Aux' },
-      { type: 'drumkit',  angle: -1.28, distance: 470 },
-      { type: 'timpani',  angle: -0.85, distance: 500, count: 4 },
-      // Bass amp tucked in front of the timpani, behind the back chair row.
-      { type: 'bass-amp', angle: -0.80, distance: 400 },
+      // Large fixed instruments curve along the back of the canvas at a
+      // consistent radius behind the back chair row.
+      //   Drum Kit / Aux occupy the LEFT half.
+      //   Mallets (Glock, Xylo, Vibes, Marimba) curve from just-right-of-
+      //   centre out toward the RIGHT.
+      //   Timpani sits past the mallets on the far right (further back).
+      //   Bass amp tucks in front of the timpani, in line with its edge
+      //   and behind the euph/tuba area of the back chair row.
+      // Polar coords from the conductor.
+      { type: 'drumkit',  angle: -2.40, distance: 460 },
+      { type: 'square',   angle: -2.05, distance: 460, label: 'Aux' },
+      { type: 'mallet',   angle: -1.50, distance: 460, label: 'Glock' },
+      { type: 'mallet',   angle: -1.25, distance: 460, label: 'Xylo' },
+      { type: 'mallet',   angle: -1.00, distance: 460, label: 'Vibes' },
+      { type: 'mallet',   angle: -0.75, distance: 460, label: 'Marimba' },
+      { type: 'timpani',  angle: -0.50, distance: 520, count: 4 },
+      { type: 'bass-amp', angle: -0.40, distance: 460 },
     ],
   },
   {
@@ -587,11 +595,29 @@ export function buildOrchestraRows(comp: OrchestraComposition): OrchestraRowsRes
     // Keep going until every active column has placed all its real desks.
     while (v1Used < v1Desks || v2Used < v2Desks || vaUsed < vaDesks || rightUsed < rightTotal) {
       const desksPerSection = row < 4 ? 1 : 2
+      // Separator placeholders between adjacent section columns scale with
+      // how far back we are. The front rows have a small natural arc, so
+      // extra padding cramps them; the back rows have a wide arc where the
+      // desks would otherwise drift apart and lose their visual grouping.
+      //   Rows 0-1: no separators (tight front).
+      //   Row 2:    1 separator chair between sections.
+      //   Rows 3+:  2 separator chairs between sections.
+      const sepCount = row < 2 ? 0 : row < 3 ? 1 : 2
+      const cols: Chair[][] = []
+      if (v1Desks > 0)    cols.push(takeFrom(v1, () => v1Used, () => { v1Used++ }, v1Desks, desksPerSection))
+      if (v2Desks > 0)    cols.push(takeFrom(v2, () => v2Used, () => { v2Used++ }, v2Desks, desksPerSection))
+      if (vaDesks > 0)    cols.push(takeFrom(va, () => vaUsed, () => { vaUsed++ }, vaDesks, desksPerSection))
+      if (rightTotal > 0) cols.push(takeRight(desksPerSection))
+
       const rowChairs: Chair[] = []
-      if (v1Desks > 0) rowChairs.push(...takeFrom(v1, () => v1Used, () => { v1Used++ }, v1Desks, desksPerSection))
-      if (v2Desks > 0) rowChairs.push(...takeFrom(v2, () => v2Used, () => { v2Used++ }, v2Desks, desksPerSection))
-      if (vaDesks > 0) rowChairs.push(...takeFrom(va, () => vaUsed, () => { vaUsed++ }, vaDesks, desksPerSection))
-      if (rightTotal > 0) rowChairs.push(...takeRight(desksPerSection))
+      for (let i = 0; i < cols.length; i++) {
+        rowChairs.push(...cols[i])
+        if (i < cols.length - 1) {
+          for (let s = 0; s < sepCount; s++) {
+            rowChairs.push(makePlaceholderChair(COLORS.strings))
+          }
+        }
+      }
       pushRow(rowChairs, true)
       row++
     }

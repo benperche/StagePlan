@@ -79,6 +79,7 @@ const restartNumbersCheck = document.getElementById('restart-numbers') as HTMLIn
 const showRowLabelsCheck = document.getElementById('show-row-labels') as HTMLInputElement
 const conductorStandCheck = document.getElementById('conductor-stand') as HTMLInputElement
 const showArcCheck = document.getElementById('show-arc') as HTMLInputElement
+const showStageDirectionsCheck = document.getElementById('show-stage-directions') as HTMLInputElement
 const flipCheck = document.getElementById('flip') as HTMLInputElement
 const straightRowsInput = document.getElementById('straight-rows') as HTMLInputElement
 const straightRowsLabel = document.getElementById('straight-rows-label') as HTMLElement
@@ -141,6 +142,7 @@ function migrateConfig(c: ChartConfig) {
   if (typeof c.conductor.offsetY !== 'number') c.conductor.offsetY = 0
   if (typeof c.arcRange !== 'number') c.arcRange = Math.PI
   if (typeof c.rowSpacing !== 'number') c.rowSpacing = 70
+  if (typeof c.showStageDirections !== 'boolean') c.showStageDirections = false
 }
 
 // --- Render ---
@@ -171,6 +173,7 @@ function readInputs() {
   config.conductor.hasStand = conductorStandCheck.checked
   config.flipped = flipCheck.checked
   config.showArc = showArcCheck.checked
+  config.showStageDirections = showStageDirectionsCheck.checked
   config.straightRows = Math.max(0, Math.min(config.rows.length, Number(straightRowsInput.value) || 0))
   const arcDeg = Math.max(60, Math.min(180, Number(arcRangeInput.value) || 180))
   config.arcRange = (arcDeg * Math.PI) / 180
@@ -189,6 +192,7 @@ function updateAllInputs() {
   conductorStandCheck.checked = config.conductor.hasStand
   flipCheck.checked = config.flipped
   showArcCheck.checked = config.showArc
+  showStageDirectionsCheck.checked = config.showStageDirections ?? false
   straightRowsInput.value = String(config.straightRows)
   straightRowsInput.max = String(config.rows.length)
   // Only show semicircle-specific controls in semicircle mode
@@ -550,7 +554,7 @@ canvas.addEventListener('click', (e) => {
 function bindEvents() {
   for (const el of [titleInput, layoutSelect, notesArea, showNumbersCheck,
     restartNumbersCheck, showRowLabelsCheck, conductorStandCheck, flipCheck,
-    straightRowsInput, showArcCheck, arcRangeInput, rowSpacingInput]) {
+    straightRowsInput, showArcCheck, arcRangeInput, rowSpacingInput, showStageDirectionsCheck]) {
     el.addEventListener('change', () => { readInputs(); updateAllInputs(); renderChart() })
   }
 

@@ -78,6 +78,10 @@ export interface ChartConfig {
   // Larger values give more breathing room between rows; smaller values
   // pack more rows into a tight chart at the cost of stand/number clash.
   rowSpacing: number
+  // When true, draws light-grey "STAGE RIGHT" / "STAGE LEFT" labels on the
+  // canvas edges (from the performer's perspective, so stage right is on
+  // the audience's left). Off by default.
+  showStageDirections: boolean
 }
 
 export interface HitTarget {
