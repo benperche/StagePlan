@@ -776,7 +776,7 @@ export class Renderer {
     ctx.rect(-hw, -hh, hw * 2, hh * 2)
     ctx.fill()
     ctx.stroke()
-    return { hw, hh, labelInside: true }
+    return { hw, hh, labelInside: false }
   }
 
   private roundRect(
