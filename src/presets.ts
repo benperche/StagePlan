@@ -142,14 +142,14 @@ export const PRESETS: Preset[] = [
       {
         label: 'A',
         chairs: [
-          { label: 'Cl 1', color: COLORS.woodwind, hasStand: true },
           { label: 'Fl 2', color: COLORS.woodwind, hasStand: true },
           { label: 'Fl 2', color: COLORS.woodwind, hasStand: true },
+          { label: 'Fl 2', color: COLORS.woodwind, hasStand: true },
           { label: 'Fl 1', color: COLORS.woodwind, hasStand: true },
           { label: 'Fl 1', color: COLORS.woodwind, hasStand: true },
-          { label: 'Fl 1', color: COLORS.woodwind, hasStand: true },
+          { label: 'Picc', color: COLORS.woodwind, hasStand: true },
           { label: 'Ob',   color: COLORS.woodwind, hasStand: true },
-          { label: 'Bsn',  color: COLORS.woodwind, hasStand: true },
+          { label: 'Ob',  color: COLORS.woodwind, hasStand: true },
         ],
       },
       {
@@ -165,14 +165,16 @@ export const PRESETS: Preset[] = [
           { label: 'Cl 3', color: COLORS.woodwind, hasStand: true },
           { label: 'B Cl', color: COLORS.woodwind, hasStand: true },
           { label: 'Bsn',  color: COLORS.woodwind, hasStand: true },
+          { label: 'Bsn',  color: COLORS.woodwind, hasStand: true },
         ],
       },
       {
         label: 'C',
-        // 7 saxes centred in 11 slots — 2 disabled placeholder chairs on
+        // 7 saxes centred in 13 slots — 3 disabled placeholder chairs on
         // each side so the saxes cluster behind the clarinets instead of
         // stretching to the edges of the arc.
         chairs: [
+          { label: '',     color: COLORS.woodwind, enabled: false },
           { label: '',     color: COLORS.woodwind, enabled: false },
           { label: '',     color: COLORS.woodwind, enabled: false },
           { label: 'AS 1', color: COLORS.woodwind, hasStand: true },
@@ -182,6 +184,7 @@ export const PRESETS: Preset[] = [
           { label: 'TS',   color: COLORS.woodwind, hasStand: true },
           { label: 'TS',   color: COLORS.woodwind, hasStand: true },
           { label: 'BS',   color: COLORS.woodwind, hasStand: true },
+          { label: '',     color: COLORS.woodwind, enabled: false },
           { label: '',     color: COLORS.woodwind, enabled: false },
           { label: '',     color: COLORS.woodwind, enabled: false },
         ],
@@ -237,19 +240,6 @@ export const PRESETS: Preset[] = [
       { name: 'Violin II', instrument: 'Violin', count: 1, color: COLORS.strings, standMode: 'solo' },
       { name: 'Viola',     instrument: 'Viola',  count: 1, color: COLORS.strings, standMode: 'solo' },
       { name: 'Cello',     instrument: 'Cello',  count: 1, color: COLORS.strings, standMode: 'solo' },
-    ],
-  },
-  {
-    id: 'jazz-combo',
-    name: 'Jazz Combo',
-    layout: 'semicircle',
-    sections: [
-      { name: 'Trumpet',  instrument: 'Trumpet',  count: 1, color: COLORS.brass,    standMode: 'solo' },
-      { name: 'Saxophone',instrument: 'Sax',      count: 1, color: COLORS.woodwind, standMode: 'solo' },
-      { name: 'Piano',    instrument: 'Piano',    count: 1, color: COLORS.rhythm,   standMode: 'solo' },
-      { name: 'Guitar',   instrument: 'Guitar',   count: 1, color: COLORS.rhythm,   standMode: 'solo' },
-      { name: 'Bass',     instrument: 'Bass',     count: 1, color: COLORS.rhythm,   standMode: 'solo' },
-      { name: 'Drums',    instrument: 'Drums',    count: 1, color: COLORS.rhythm,   standMode: 'solo' },
     ],
   },
 ]
