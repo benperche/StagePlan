@@ -129,22 +129,88 @@ export const PRESETS: Preset[] = [
     id: 'concert-band',
     name: 'Concert Band',
     layout: 'semicircle',
-    sections: [
-      { name: 'Flute',          instrument: 'Flute',       count: 6,  color: COLORS.woodwind,   standMode: 'shared' },
-      { name: 'Oboe',           instrument: 'Oboe',        count: 2,  color: COLORS.woodwind,   standMode: 'shared' },
-      { name: 'Clarinet',       instrument: 'Clarinet',    count: 10, color: COLORS.woodwind,   standMode: 'shared' },
-      { name: 'Bass Clarinet',  instrument: 'Bass Clar.',  count: 2,  color: COLORS.woodwind,   standMode: 'shared' },
-      { name: 'Alto Saxophone', instrument: 'Alto Sax',    count: 3,  color: COLORS.woodwind,   standMode: 'solo'   },
-      { name: 'Tenor Saxophone',instrument: 'Tenor Sax',   count: 2,  color: COLORS.woodwind,   standMode: 'solo'   },
-      { name: 'Bari Saxophone', instrument: 'Bari Sax',    count: 1,  color: COLORS.woodwind,   standMode: 'solo'   },
-      { name: 'Bassoon',        instrument: 'Bassoon',     count: 2,  color: COLORS.woodwind,   standMode: 'shared' },
-      { name: 'French Horn',    instrument: 'French Horn', count: 4,  color: COLORS.brass,      standMode: 'solo'   },
-      { name: 'Trumpet',        instrument: 'Trumpet',     count: 6,  color: COLORS.brass,      standMode: 'shared' },
-      { name: 'Trombone',       instrument: 'Trombone',    count: 4,  color: COLORS.brass,      standMode: 'shared' },
-      { name: 'Euphonium',      instrument: 'Euphonium',   count: 2,  color: COLORS.brass,      standMode: 'solo'   },
-      { name: 'Tuba',           instrument: 'Tuba',        count: 2,  color: COLORS.brass,      standMode: 'solo'   },
-      { name: 'Timpani',        instrument: 'Timpani',     count: 1,  color: COLORS.percussion, standMode: 'solo'   },
-      { name: 'Percussion',     instrument: 'Percussion',  count: 4,  color: COLORS.percussion, standMode: 'solo'   },
+    sections: [],
+    // Four concentric rows fan back from the conductor with chair counts
+    // 8 / 10 / 7 / 19 (front to back). Every player gets their own stand —
+    // no shared desks in a concert band. The percussion section lives at
+    // the back as a row of large fixed instruments (mallets, aux, drum
+    // kit, timpani) plus a bass amp tucked behind the back row.
+    customRows: [
+      {
+        label: 'A',
+        chairs: [
+          { label: 'Cl 1', color: COLORS.woodwind, hasStand: true },
+          { label: 'Fl 2', color: COLORS.woodwind, hasStand: true },
+          { label: 'Fl 2', color: COLORS.woodwind, hasStand: true },
+          { label: 'Fl 1', color: COLORS.woodwind, hasStand: true },
+          { label: 'Fl 1', color: COLORS.woodwind, hasStand: true },
+          { label: 'Fl 1', color: COLORS.woodwind, hasStand: true },
+          { label: 'Ob',   color: COLORS.woodwind, hasStand: true },
+          { label: 'Bsn',  color: COLORS.woodwind, hasStand: true },
+        ],
+      },
+      {
+        label: 'B',
+        chairs: [
+          { label: 'Cl 1', color: COLORS.woodwind, hasStand: true },
+          { label: 'Cl 1', color: COLORS.woodwind, hasStand: true },
+          { label: 'Cl 2', color: COLORS.woodwind, hasStand: true },
+          { label: 'Cl 2', color: COLORS.woodwind, hasStand: true },
+          { label: 'Cl 2', color: COLORS.woodwind, hasStand: true },
+          { label: 'Cl 3', color: COLORS.woodwind, hasStand: true },
+          { label: 'Cl 3', color: COLORS.woodwind, hasStand: true },
+          { label: 'Cl 3', color: COLORS.woodwind, hasStand: true },
+          { label: 'B Cl', color: COLORS.woodwind, hasStand: true },
+          { label: 'Bsn',  color: COLORS.woodwind, hasStand: true },
+        ],
+      },
+      {
+        label: 'C',
+        chairs: [
+          { label: 'AS 1', color: COLORS.woodwind, hasStand: true },
+          { label: 'AS 1', color: COLORS.woodwind, hasStand: true },
+          { label: 'AS 2', color: COLORS.woodwind, hasStand: true },
+          { label: 'AS 2', color: COLORS.woodwind, hasStand: true },
+          { label: 'TS',   color: COLORS.woodwind, hasStand: true },
+          { label: 'TS',   color: COLORS.woodwind, hasStand: true },
+          { label: 'BS',   color: COLORS.woodwind, hasStand: true },
+        ],
+      },
+      {
+        label: 'D',
+        chairs: [
+          { label: 'Hn',    color: COLORS.brass, hasStand: true },
+          { label: 'Hn',    color: COLORS.brass, hasStand: true },
+          { label: 'Hn',    color: COLORS.brass, hasStand: true },
+          { label: 'Hn',    color: COLORS.brass, hasStand: true },
+          { label: 'Tpt 3', color: COLORS.brass, hasStand: true },
+          { label: 'Tpt 3', color: COLORS.brass, hasStand: true },
+          { label: 'Tpt 2', color: COLORS.brass, hasStand: true },
+          { label: 'Tpt 2', color: COLORS.brass, hasStand: true },
+          { label: 'Tpt 1', color: COLORS.brass, hasStand: true },
+          { label: 'Tpt 1', color: COLORS.brass, hasStand: true },
+          { label: 'Tbn 1', color: COLORS.brass, hasStand: true },
+          { label: 'Tbn 1', color: COLORS.brass, hasStand: true },
+          { label: 'Tbn 2', color: COLORS.brass, hasStand: true },
+          { label: 'Tbn 2', color: COLORS.brass, hasStand: true },
+          { label: 'Tbn 3', color: COLORS.brass, hasStand: true },
+          { label: 'Euph',  color: COLORS.brass, hasStand: true },
+          { label: 'Euph',  color: COLORS.brass, hasStand: true },
+          { label: 'Tuba',  color: COLORS.brass, hasStand: true },
+          { label: 'Tuba',  color: COLORS.brass, hasStand: true },
+        ],
+      },
+    ],
+    instruments: [
+      // Back row of large fixed instruments, spread evenly across the
+      // canvas above the back chair row (mallets/aux on the left,
+      // drumkit/timpani on the right). Polar coords from the conductor.
+      { type: 'mallet',   angle: -2.30, distance: 500 },
+      { type: 'square',   angle: -1.85, distance: 470, label: 'Aux' },
+      { type: 'drumkit',  angle: -1.28, distance: 470 },
+      { type: 'timpani',  angle: -0.85, distance: 500, count: 4 },
+      // Bass amp tucked in front of the timpani, behind the back chair row.
+      { type: 'bass-amp', angle: -0.80, distance: 400 },
     ],
   },
   {
