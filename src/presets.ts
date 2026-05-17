@@ -17,6 +17,9 @@ export interface PresetCustomChair {
   color: string
   hasStand?: boolean
   standAfter?: boolean
+  // Default true. Set to false for a disabled placeholder chair that keeps
+  // the row shape intact without representing a real player.
+  enabled?: boolean
 }
 export interface PresetCustomRow {
   label: string
@@ -166,7 +169,12 @@ export const PRESETS: Preset[] = [
       },
       {
         label: 'C',
+        // 7 saxes centred in 11 slots — 2 disabled placeholder chairs on
+        // each side so the saxes cluster behind the clarinets instead of
+        // stretching to the edges of the arc.
         chairs: [
+          { label: '',     color: COLORS.woodwind, enabled: false },
+          { label: '',     color: COLORS.woodwind, enabled: false },
           { label: 'AS 1', color: COLORS.woodwind, hasStand: true },
           { label: 'AS 1', color: COLORS.woodwind, hasStand: true },
           { label: 'AS 2', color: COLORS.woodwind, hasStand: true },
@@ -174,6 +182,8 @@ export const PRESETS: Preset[] = [
           { label: 'TS',   color: COLORS.woodwind, hasStand: true },
           { label: 'TS',   color: COLORS.woodwind, hasStand: true },
           { label: 'BS',   color: COLORS.woodwind, hasStand: true },
+          { label: '',     color: COLORS.woodwind, enabled: false },
+          { label: '',     color: COLORS.woodwind, enabled: false },
         ],
       },
       {
@@ -202,23 +212,20 @@ export const PRESETS: Preset[] = [
       },
     ],
     instruments: [
-      // Large fixed instruments curve along the back of the canvas at a
-      // consistent radius behind the back chair row.
-      //   Drum Kit / Aux occupy the LEFT half.
-      //   Mallets (Glock, Xylo, Vibes, Marimba) curve from just-right-of-
-      //   centre out toward the RIGHT.
-      //   Timpani sits past the mallets on the far right (further back).
-      //   Bass amp tucks in front of the timpani, in line with its edge
-      //   and behind the euph/tuba area of the back chair row.
+      // Drum Kit and Aux at the top centre / centre-right.
+      // Mallets curve around the LEFT side of the back arc, each rotated
+      // so its long axis is tangent to the curve (radial-out from the
+      // conductor). Timpani sits at the top-right; bass amp tucks in to
+      // its lower-right, behind the euph/tuba area of the back chair row.
       // Polar coords from the conductor.
-      { type: 'drumkit',  angle: -2.40, distance: 460 },
-      { type: 'square',   angle: -2.05, distance: 460, label: 'Aux' },
-      { type: 'mallet',   angle: -1.50, distance: 460, label: 'Glock' },
-      { type: 'mallet',   angle: -1.25, distance: 460, label: 'Xylo' },
-      { type: 'mallet',   angle: -1.00, distance: 460, label: 'Vibes' },
-      { type: 'mallet',   angle: -0.75, distance: 460, label: 'Marimba' },
-      { type: 'timpani',  angle: -0.50, distance: 520, count: 4 },
-      { type: 'bass-amp', angle: -0.40, distance: 460 },
+      { type: 'drumkit',  angle: -1.27, distance: 470 },
+      { type: 'square',   angle: -1.55, distance: 440, label: 'Aux' },
+      { type: 'mallet',   angle: -1.92, distance: 460, label: 'Glock',   rotation: -0.35 },
+      { type: 'mallet',   angle: -2.22, distance: 445, label: 'Xylo',    rotation: -0.65 },
+      { type: 'mallet',   angle: -2.53, distance: 445, label: 'Vibes',   rotation: -0.96 },
+      { type: 'mallet',   angle: -2.80, distance: 445, label: 'Marimba', rotation: -1.23 },
+      { type: 'timpani',  angle: -0.95, distance: 490, count: 4 },
+      { type: 'bass-amp', angle: -0.37, distance: 435 },
     ],
   },
   {

@@ -319,7 +319,7 @@ function applyPreset(preset: Preset) {
       id: crypto.randomUUID(),
       chairs: row.chairs.map(c => ({
         id: crypto.randomUUID(),
-        enabled: true,
+        enabled: c.enabled ?? true,
         color: c.color,
         label: c.label,
         hasStand: c.hasStand ?? false,
