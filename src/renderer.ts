@@ -95,6 +95,7 @@ export class Renderer {
     if (scaling) ctx.restore()
 
     this.drawRowSummary(ctx, config, w, h)
+    this.drawCredit(ctx, h)
     ctx.restore()
   }
 
@@ -984,6 +985,16 @@ export class Renderer {
     lines.forEach((line, i) => {
       ctx.fillText(line, x, bottomY - (lines.length - 1 - i) * lineHeight)
     })
+    ctx.restore()
+  }
+
+  private drawCredit(ctx: CanvasRenderingContext2D, h: number) {
+    ctx.save()
+    ctx.fillStyle = '#aaa'
+    ctx.font = '10px sans-serif'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'bottom'
+    ctx.fillText('Created with StagePlan  https://benperche.github.io/StagePlan/', 12, h - 12)
     ctx.restore()
   }
 
