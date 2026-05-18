@@ -64,7 +64,7 @@ export class Renderer {
     this.renderInstruments(ctx, config)
 
     this.drawRowSummary(ctx, config, w, h)
-    this.drawCredit(ctx, h)
+    if (config.showCredit ?? true) this.drawCredit(ctx, h)
     ctx.restore()
   }
 

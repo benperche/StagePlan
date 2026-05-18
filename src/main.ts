@@ -79,6 +79,7 @@ const restartNumbersCheck = document.getElementById('restart-numbers') as HTMLIn
 const showRowLabelsCheck = document.getElementById('show-row-labels') as HTMLInputElement
 const conductorStandCheck = document.getElementById('conductor-stand') as HTMLInputElement
 const showArcCheck = document.getElementById('show-arc') as HTMLInputElement
+const showCreditCheck = document.getElementById('show-credit') as HTMLInputElement
 const flipCheck = document.getElementById('flip') as HTMLInputElement
 const straightRowsInput = document.getElementById('straight-rows') as HTMLInputElement
 const straightRowsLabel = document.getElementById('straight-rows-label') as HTMLElement
@@ -171,6 +172,7 @@ function readInputs() {
   config.conductor.hasStand = conductorStandCheck.checked
   config.flipped = flipCheck.checked
   config.showArc = showArcCheck.checked
+  config.showCredit = showCreditCheck.checked
   config.straightRows = Math.max(0, Math.min(config.rows.length, Number(straightRowsInput.value) || 0))
   const arcDeg = Math.max(60, Math.min(180, Number(arcRangeInput.value) || 180))
   config.arcRange = (arcDeg * Math.PI) / 180
@@ -189,6 +191,7 @@ function updateAllInputs() {
   conductorStandCheck.checked = config.conductor.hasStand
   flipCheck.checked = config.flipped
   showArcCheck.checked = config.showArc
+  showCreditCheck.checked = config.showCredit ?? true
   straightRowsInput.value = String(config.straightRows)
   straightRowsInput.max = String(config.rows.length)
   // Only show semicircle-specific controls in semicircle mode
@@ -550,7 +553,7 @@ canvas.addEventListener('click', (e) => {
 function bindEvents() {
   for (const el of [titleInput, layoutSelect, notesArea, showNumbersCheck,
     restartNumbersCheck, showRowLabelsCheck, conductorStandCheck, flipCheck,
-    straightRowsInput, showArcCheck, arcRangeInput, rowSpacingInput]) {
+    straightRowsInput, showArcCheck, arcRangeInput, rowSpacingInput, showCreditCheck]) {
     el.addEventListener('change', () => { readInputs(); updateAllInputs(); renderChart() })
   }
 
