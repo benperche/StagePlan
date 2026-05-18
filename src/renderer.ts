@@ -305,56 +305,47 @@ export class Renderer {
     seatNumber: number,
   ): number {
     const chairs = row.chairs
-    if (chairs.length === 0) return seatNumber
-
-    // Group chairs into slots. A slot is one "position" along the arc and
-    // holds either a single chair or a tight desk pair. Pairs come from
-    //   (a) chair.standAfter on the first chair (a real desk), or
-    //   (b) two adjacent disabled chairs (a ghost desk used to keep the row
-    //       shape consistent when a string section runs out of players).
-    // This means every section column produces exactly one slot per row, so
-    // columns align cleanly across rows regardless of how many players are
-    // actually present.
-    type Slot = { idx0: number; idx1?: number }
-    const slots: Slot[] = []
-    for (let i = 0; i < chairs.length; ) {
-      const c = chairs[i]
-      const next = i + 1 < chairs.length ? chairs[i + 1] : null
-      const isPair = !!next && (c.standAfter || (!c.enabled && !next.enabled))
-      if (isPair) {
-        slots.push({ idx0: i, idx1: i + 1 })
-        i += 2
-      } else {
-        slots.push({ idx0: i })
-        i += 1
-      }
-    }
+    const N = chairs.length
+    if (N === 0) return seatNumber
 
     // Arc range — by default the full 180° semicircle, but configurable so
     // tighter ensembles can be drawn with a narrower spread.
     const arcRange = config.arcRange ?? Math.PI
     const startAngle = Math.PI / 2 + arcRange / 2
     const endAngle = Math.PI / 2 - arcRange / 2
-    const totalSlots = slots.length
-    const slotStep = totalSlots > 1 ? (startAngle - endAngle) / (totalSlots - 1) : 0
-    // Pair offset = angle that places the two chairs DESK_PAIR_SPACING apart
-    // (centre-to-centre) at this radius. Capped at 45% of the slot span so
-    // adjacent desks can't overlap when slots get tight.
-    const desiredOffset = DESK_PAIR_SPACING / 2 / r
-    const pairAngleOffset = Math.min(desiredOffset, slotStep * 0.45)
+    // Every chair gets its own evenly-spread slot — toggling a shared stand
+    // on a single chair never reshuffles the rest of the row. The natural
+    // step is the angle between adjacent chair slots.
+    const naturalStep = N > 1 ? (startAngle - endAngle) / (N - 1) : 0
+    // When two chairs share a desk (standAfter, or two adjacent disabled
+    // placeholders), the pair pulls toward the midpoint of their natural
+    // slots until the chairs sit DESK_PAIR_SPACING centre-to-centre apart.
+    // If their natural separation is already tighter than that, they stay
+    // put — we never push chairs apart.
+    const desiredHalfOffset = DESK_PAIR_SPACING / 2 / r
 
-    const positions: Array<{ cx: number; cy: number }> = new Array(chairs.length)
-    slots.forEach((slot, slotIdx) => {
-      const slotAngle = startAngle - slotIdx * slotStep
-      if (slot.idx1 !== undefined) {
-        const a1 = slotAngle + pairAngleOffset
-        const a2 = slotAngle - pairAngleOffset
-        positions[slot.idx0] = { cx: ox + r * Math.cos(a1), cy: oy + yDir * r * Math.sin(a1) }
-        positions[slot.idx1] = { cx: ox + r * Math.cos(a2), cy: oy + yDir * r * Math.sin(a2) }
+    const positions: Array<{ cx: number; cy: number }> = new Array(N)
+    let i = 0
+    while (i < N) {
+      const c = chairs[i]
+      const next = i + 1 < N ? chairs[i + 1] : null
+      const isPair = !!next && (c.standAfter || (!c.enabled && !next.enabled))
+      if (isPair) {
+        const a0 = startAngle - i * naturalStep
+        const a1 = startAngle - (i + 1) * naturalStep
+        const midpoint = (a0 + a1) / 2
+        const halfSep = Math.min(naturalStep / 2, desiredHalfOffset)
+        const angleA = midpoint + halfSep
+        const angleB = midpoint - halfSep
+        positions[i]     = { cx: ox + r * Math.cos(angleA), cy: oy + yDir * r * Math.sin(angleA) }
+        positions[i + 1] = { cx: ox + r * Math.cos(angleB), cy: oy + yDir * r * Math.sin(angleB) }
+        i += 2
       } else {
-        positions[slot.idx0] = { cx: ox + r * Math.cos(slotAngle), cy: oy + yDir * r * Math.sin(slotAngle) }
+        const angle = startAngle - i * naturalStep
+        positions[i] = { cx: ox + r * Math.cos(angle), cy: oy + yDir * r * Math.sin(angle) }
+        i += 1
       }
-    })
+    }
 
     chairs.forEach((chair, chairIndex) => {
       const { cx, cy } = positions[chairIndex]

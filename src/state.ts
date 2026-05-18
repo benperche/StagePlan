@@ -10,7 +10,10 @@ export function makeChair(): Chair {
     enabled: true,
     color: CHAIR_COLORS[0],
     label: '',
-    hasStand: false,
+    // Stands on by default — most ensembles have one per chair, and it's
+    // easier to toggle a stand off than to remember to add it to every
+    // chair on a fresh chart.
+    hasStand: true,
     standAfter: false,
   }
 }
