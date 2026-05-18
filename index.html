@@ -119,6 +119,13 @@
           <input type="file" id="bg-input" accept="image/*" />
         </label>
         <button id="bg-clear-btn" class="secondary" disabled>✕ Clear background</button>
+        <label>Fit
+          <select id="bg-fit">
+            <option value="contain">Contain (letterbox)</option>
+            <option value="cover">Cover (crop edges)</option>
+            <option value="stretch">Stretch (fill)</option>
+          </select>
+        </label>
         <p class="hint" id="bg-status">No background.</p>
       </section>
 

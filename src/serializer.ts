@@ -37,12 +37,18 @@ function migrate(data: Record<string, unknown>): ChartConfig {
   return data as unknown as ChartConfig
 }
 
-// URL hash encoding — LZ-style compression via built-in btoa
-export function encodeToHash(config: ChartConfig): string {
-  const json = JSON.stringify(config)
+/**
+ * Encode a ChartConfig into a URL hash. The background image is stripped
+ * because data-URL-encoded images blow past every browser's URL length
+ * cap. Returns `strippedBackground: true` so callers can surface a warning
+ * when the chart had a background that won't make the trip.
+ */
+export function encodeToHash(config: ChartConfig): { hash: string; strippedBackground: boolean } {
+  const { backgroundImage, ...rest } = config
+  const json = JSON.stringify(rest)
   // btoa requires ASCII; encode UTF-8 safely
   const encoded = btoa(encodeURIComponent(json))
-  return '#' + encoded
+  return { hash: '#' + encoded, strippedBackground: !!backgroundImage }
 }
 
 export function decodeFromHash(hash: string): ChartConfig | null {

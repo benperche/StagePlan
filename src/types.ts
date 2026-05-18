@@ -83,9 +83,13 @@ export interface ChartConfig {
   // the audience's left). Off by default.
   showStageDirections: boolean
   // Optional background image, stored as a data URL so it persists with
-  // the chart. Drawn behind everything else, fit to the canvas with
-  // aspect ratio preserved (letterboxed if needed).
+  // the chart. Drawn behind everything else.
   backgroundImage?: string
+  // How the background image is sized to the canvas.
+  //   'contain' (default) — preserve aspect, letterbox the remainder
+  //   'cover'             — preserve aspect, crop the overflow
+  //   'stretch'           — ignore aspect, fill the whole canvas
+  backgroundFit: 'contain' | 'cover' | 'stretch'
   // Uniform scale applied to the seating chart (chairs, stands,
   // instruments, conductor) around the conductor position. Default 1.
   // Lets the user fit the chart onto a background image of any size.

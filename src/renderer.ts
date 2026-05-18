@@ -118,20 +118,39 @@ export class Renderer {
     const img = this.backgroundImage
     if (!img) return
 
-    // Contain-fit: preserve aspect ratio, letterbox the remainder.
+    const fit = config.backgroundFit ?? 'contain'
     const imgRatio = img.width / img.height
     const canvasRatio = w / h
     let drawW: number, drawH: number, drawX: number, drawY: number
-    if (imgRatio > canvasRatio) {
-      drawW = w
-      drawH = w / imgRatio
-      drawX = 0
-      drawY = (h - drawH) / 2
+
+    if (fit === 'stretch') {
+      drawW = w; drawH = h; drawX = 0; drawY = 0
+    } else if (fit === 'cover') {
+      // Fill the canvas, preserving aspect — overflow is cropped.
+      if (imgRatio > canvasRatio) {
+        drawH = h
+        drawW = h * imgRatio
+        drawX = (w - drawW) / 2
+        drawY = 0
+      } else {
+        drawW = w
+        drawH = w / imgRatio
+        drawX = 0
+        drawY = (h - drawH) / 2
+      }
     } else {
-      drawH = h
-      drawW = h * imgRatio
-      drawX = (w - drawW) / 2
-      drawY = 0
+      // Contain: preserve aspect, letterbox the remainder.
+      if (imgRatio > canvasRatio) {
+        drawW = w
+        drawH = w / imgRatio
+        drawX = 0
+        drawY = (h - drawH) / 2
+      } else {
+        drawH = h
+        drawW = h * imgRatio
+        drawX = (w - drawW) / 2
+        drawY = 0
+      }
     }
     ctx.drawImage(img, drawX, drawY, drawW, drawH)
   }

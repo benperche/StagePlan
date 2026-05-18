@@ -47,6 +47,7 @@ export function makeDefaultConfig(): ChartConfig {
     rowSpacing: 70,
     showStageDirections: false,
     chartScale: 1,
+    backgroundFit: 'contain',
   }
 }
 

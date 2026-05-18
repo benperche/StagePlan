@@ -84,6 +84,7 @@ const chartScaleInput = document.getElementById('chart-scale') as HTMLInputEleme
 const bgInput = document.getElementById('bg-input') as HTMLInputElement
 const bgClearBtn = document.getElementById('bg-clear-btn') as HTMLButtonElement
 const bgStatus = document.getElementById('bg-status') as HTMLElement
+const bgFitSelect = document.getElementById('bg-fit') as HTMLSelectElement
 const flipCheck = document.getElementById('flip') as HTMLInputElement
 const straightRowsInput = document.getElementById('straight-rows') as HTMLInputElement
 const straightRowsLabel = document.getElementById('straight-rows-label') as HTMLElement
@@ -148,6 +149,9 @@ function migrateConfig(c: ChartConfig) {
   if (typeof c.rowSpacing !== 'number') c.rowSpacing = 70
   if (typeof c.showStageDirections !== 'boolean') c.showStageDirections = false
   if (typeof c.chartScale !== 'number') c.chartScale = 1
+  if (c.backgroundFit !== 'contain' && c.backgroundFit !== 'cover' && c.backgroundFit !== 'stretch') {
+    c.backgroundFit = 'contain'
+  }
 }
 
 // --- Render ---
@@ -184,6 +188,8 @@ function readInputs() {
   config.showStageDirections = showStageDirectionsCheck.checked
   const scalePct = Math.max(50, Math.min(200, Number(chartScaleInput.value) || 100))
   config.chartScale = scalePct / 100
+  const fit = bgFitSelect.value
+  if (fit === 'contain' || fit === 'cover' || fit === 'stretch') config.backgroundFit = fit
   config.straightRows = Math.max(0, Math.min(config.rows.length, Number(straightRowsInput.value) || 0))
   const arcDeg = Math.max(60, Math.min(180, Number(arcRangeInput.value) || 180))
   config.arcRange = (arcDeg * Math.PI) / 180
@@ -206,6 +212,7 @@ function updateAllInputs() {
   chartScaleInput.value = String(Math.round((config.chartScale ?? 1) * 100))
   bgClearBtn.disabled = !config.backgroundImage
   bgStatus.textContent = config.backgroundImage ? 'Background loaded.' : 'No background.'
+  bgFitSelect.value = config.backgroundFit ?? 'contain'
   straightRowsInput.value = String(config.straightRows)
   straightRowsInput.max = String(config.rows.length)
   // Only show semicircle-specific controls in semicircle mode
@@ -590,7 +597,7 @@ function bindEvents() {
   for (const el of [titleInput, layoutSelect, notesArea, showNumbersCheck,
     restartNumbersCheck, showRowLabelsCheck, conductorStandCheck, flipCheck,
     straightRowsInput, showArcCheck, arcRangeInput, rowSpacingInput, showStageDirectionsCheck,
-    chartScaleInput]) {
+    chartScaleInput, bgFitSelect]) {
     el.addEventListener('change', () => { readInputs(); updateAllInputs(); renderChart() })
   }
 
@@ -878,10 +885,12 @@ function bindEvents() {
   exportPngBtn.addEventListener('click', () => exportToPng(canvas, config.title))
 
   shareLinkBtn.addEventListener('click', () => {
-    const hash = encodeToHash(config)
+    const { hash, strippedBackground } = encodeToHash(config)
     const url = location.origin + location.pathname + hash
     navigator.clipboard.writeText(url).catch(() => {})
-    shareUrlDisplay.textContent = url
+    shareUrlDisplay.textContent = strippedBackground
+      ? `${url}\n(Background image was not included — share links can't carry images. Use "Save JSON" to keep it.)`
+      : url
     shareUrlDisplay.style.display = 'block'
   })
 
