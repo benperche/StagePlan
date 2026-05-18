@@ -36,6 +36,12 @@ export class Renderer {
   selectedInstrumentId: string | null = null
   rotateHandleHit: RotateHandleHit | null = null
 
+  // Background image cache + async-load callback so main.ts can trigger
+  // a re-render once a newly-uploaded image is decoded.
+  private backgroundImage: HTMLImageElement | null = null
+  private backgroundImageSrc: string | null = null
+  onBackgroundLoaded: (() => void) | null = null
+
   render(canvas: HTMLCanvasElement, config: ChartConfig, opts: RenderOptions = {}): void {
     const scale = opts.scale ?? 1
     const ctx = canvas.getContext('2d')!
@@ -51,9 +57,31 @@ export class Renderer {
     const w = canvas.width / scale
     const h = canvas.height / scale
 
+    // Background image (fit to canvas) drawn first, beneath everything.
+    this.drawBackground(ctx, config, w, h)
+
+    // Title / notes / stage-direction labels stay at canvas scale so they
+    // don't shrink with chartScale and remain readable.
     this.drawTitle(ctx, config.title, w)
     this.drawNotes(ctx, config.notes, h)
     if (config.showStageDirections) this.drawStageDirections(ctx, w, h)
+
+    // The seating chart itself is wrapped in a uniform scale transform
+    // centred on the conductor. Hit targets are stored in chart coords
+    // (unscaled) so main.ts must inverse-transform pointer coordinates
+    // before calling the hit-test methods.
+    const numRows = config.rows.length
+    const rowSpacing = this.effectiveRowSpacing(h, numRows, config.rowSpacing ?? ROW_SPACING_DEFAULT)
+    const ox = w / 2 + (config.conductor.offsetX ?? 0)
+    const oy = this.computeOy(h, numRows, config.flipped, rowSpacing) + (config.conductor.offsetY ?? 0)
+    const chartScale = config.chartScale ?? 1
+    const scaling = chartScale !== 1
+    if (scaling) {
+      ctx.save()
+      ctx.translate(ox, oy)
+      ctx.scale(chartScale, chartScale)
+      ctx.translate(-ox, -oy)
+    }
 
     if (config.layout === 'semicircle') {
       this.renderSemicircle(ctx, config, w, h)
@@ -64,8 +92,48 @@ export class Renderer {
     // Instruments draw on top so they're always visible & selectable
     this.renderInstruments(ctx, config)
 
+    if (scaling) ctx.restore()
+
     this.drawRowSummary(ctx, config, w, h)
     ctx.restore()
+  }
+
+  private drawBackground(ctx: CanvasRenderingContext2D, config: ChartConfig, w: number, h: number) {
+    const src = config.backgroundImage ?? null
+    if (src !== this.backgroundImageSrc) {
+      // New (or removed) source — invalidate cache and start loading.
+      this.backgroundImageSrc = src
+      this.backgroundImage = null
+      if (src) {
+        const img = new Image()
+        img.onload = () => {
+          if (this.backgroundImageSrc === src) {
+            this.backgroundImage = img
+            if (this.onBackgroundLoaded) this.onBackgroundLoaded()
+          }
+        }
+        img.src = src
+      }
+    }
+    const img = this.backgroundImage
+    if (!img) return
+
+    // Contain-fit: preserve aspect ratio, letterbox the remainder.
+    const imgRatio = img.width / img.height
+    const canvasRatio = w / h
+    let drawW: number, drawH: number, drawX: number, drawY: number
+    if (imgRatio > canvasRatio) {
+      drawW = w
+      drawH = w / imgRatio
+      drawX = 0
+      drawY = (h - drawH) / 2
+    } else {
+      drawH = h
+      drawW = h * imgRatio
+      drawX = (w - drawW) / 2
+      drawY = 0
+    }
+    ctx.drawImage(img, drawX, drawY, drawW, drawH)
   }
 
   instrumentHitTest(x: number, y: number): InstrumentHit | null {

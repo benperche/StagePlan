@@ -82,6 +82,14 @@ export interface ChartConfig {
   // canvas edges (from the performer's perspective, so stage right is on
   // the audience's left). Off by default.
   showStageDirections: boolean
+  // Optional background image, stored as a data URL so it persists with
+  // the chart. Drawn behind everything else, fit to the canvas with
+  // aspect ratio preserved (letterboxed if needed).
+  backgroundImage?: string
+  // Uniform scale applied to the seating chart (chairs, stands,
+  // instruments, conductor) around the conductor position. Default 1.
+  // Lets the user fit the chart onto a background image of any size.
+  chartScale: number
 }
 
 export interface HitTarget {

@@ -80,6 +80,10 @@ const showRowLabelsCheck = document.getElementById('show-row-labels') as HTMLInp
 const conductorStandCheck = document.getElementById('conductor-stand') as HTMLInputElement
 const showArcCheck = document.getElementById('show-arc') as HTMLInputElement
 const showStageDirectionsCheck = document.getElementById('show-stage-directions') as HTMLInputElement
+const chartScaleInput = document.getElementById('chart-scale') as HTMLInputElement
+const bgInput = document.getElementById('bg-input') as HTMLInputElement
+const bgClearBtn = document.getElementById('bg-clear-btn') as HTMLButtonElement
+const bgStatus = document.getElementById('bg-status') as HTMLElement
 const flipCheck = document.getElementById('flip') as HTMLInputElement
 const straightRowsInput = document.getElementById('straight-rows') as HTMLInputElement
 const straightRowsLabel = document.getElementById('straight-rows-label') as HTMLElement
@@ -143,6 +147,7 @@ function migrateConfig(c: ChartConfig) {
   if (typeof c.arcRange !== 'number') c.arcRange = Math.PI
   if (typeof c.rowSpacing !== 'number') c.rowSpacing = 70
   if (typeof c.showStageDirections !== 'boolean') c.showStageDirections = false
+  if (typeof c.chartScale !== 'number') c.chartScale = 1
 }
 
 // --- Render ---
@@ -153,6 +158,9 @@ function renderChart() {
   undoBtn.disabled = !history.canUndo()
   redoBtn.disabled = !history.canRedo()
 }
+
+// Re-render once the background image finishes decoding.
+renderer.onBackgroundLoaded = () => renderChart()
 
 function resizeCanvas() {
   const container = canvas.parentElement!
@@ -174,6 +182,8 @@ function readInputs() {
   config.flipped = flipCheck.checked
   config.showArc = showArcCheck.checked
   config.showStageDirections = showStageDirectionsCheck.checked
+  const scalePct = Math.max(50, Math.min(200, Number(chartScaleInput.value) || 100))
+  config.chartScale = scalePct / 100
   config.straightRows = Math.max(0, Math.min(config.rows.length, Number(straightRowsInput.value) || 0))
   const arcDeg = Math.max(60, Math.min(180, Number(arcRangeInput.value) || 180))
   config.arcRange = (arcDeg * Math.PI) / 180
@@ -193,6 +203,9 @@ function updateAllInputs() {
   flipCheck.checked = config.flipped
   showArcCheck.checked = config.showArc
   showStageDirectionsCheck.checked = config.showStageDirections ?? false
+  chartScaleInput.value = String(Math.round((config.chartScale ?? 1) * 100))
+  bgClearBtn.disabled = !config.backgroundImage
+  bgStatus.textContent = config.backgroundImage ? 'Background loaded.' : 'No background.'
   straightRowsInput.value = String(config.straightRows)
   straightRowsInput.max = String(config.rows.length)
   // Only show semicircle-specific controls in semicircle mode
@@ -284,6 +297,18 @@ function pointerCanvasCoords(e: MouseEvent): { x: number; y: number } {
   return { x: e.clientX - rect.left, y: e.clientY - rect.top }
 }
 
+// Inverse of the renderer's chart-scale transform: takes a raw canvas
+// pixel and returns the matching point in chart coordinates. Hit targets
+// (chair / instrument / conductor / rotate-handle) are stored in chart
+// coords, so pointer events must be transformed through this before any
+// hitTest call.
+function canvasToChart(x: number, y: number): { x: number; y: number } {
+  const scale = config.chartScale ?? 1
+  if (scale === 1) return { x, y }
+  const { ox, oy } = renderer.conductorOrigin
+  return { x: (x - ox) / scale + ox, y: (y - oy) / scale + oy }
+}
+
 // --- Presets ---
 
 function populatePresets() {
@@ -365,7 +390,8 @@ function applyPreset(preset: Preset) {
 const DRAG_THRESHOLD = 4   // pixels before a mousedown is treated as a drag
 
 canvas.addEventListener('mousedown', (e) => {
-  const { x, y } = pointerCanvasCoords(e)
+  const cv = pointerCanvasCoords(e)
+  const { x, y } = canvasToChart(cv.x, cv.y)
 
   // Rotate handle (only present for the selected instrument) takes priority
   if (renderer.rotateHandleHitTest(x, y)) {
@@ -405,9 +431,12 @@ canvas.addEventListener('mousedown', (e) => {
   // Conductor: prepare for potential drag.  If the pointer never moves
   // beyond the threshold, the click handler will fire and toggle visibility.
   if (renderer.conductorHitTest(x, y)) {
+    // Conductor offset is stored in canvas pixels (it determines where the
+    // conductor lands on the canvas, independent of chartScale). So the
+    // drag-start cursor is recorded in RAW canvas coords too.
     conductorDragState = {
-      startX: x,
-      startY: y,
+      startX: cv.x,
+      startY: cv.y,
       initialOffsetX: config.conductor.offsetX,
       initialOffsetY: config.conductor.offsetY,
       preDragConfig: JSON.parse(JSON.stringify(config)),
@@ -428,14 +457,15 @@ canvas.addEventListener('mousedown', (e) => {
 })
 
 window.addEventListener('mousemove', (e) => {
-  const { x, y } = pointerCanvasCoords(e)
+  const cv = pointerCanvasCoords(e)
 
   // Conductor drag — moves the whole chart (chairs and instruments are all
   // positioned relative to the conductor, so they translate as one unit).
+  // Uses raw canvas delta because the conductor offset is in canvas pixels.
   const cdrag = conductorDragState
   if (cdrag) {
-    const dx = x - cdrag.startX
-    const dy = y - cdrag.startY
+    const dx = cv.x - cdrag.startX
+    const dy = cv.y - cdrag.startY
     if (!cdrag.moved) {
       if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return
       history.push(cdrag.preDragConfig)
@@ -446,6 +476,10 @@ window.addEventListener('mousemove', (e) => {
     renderChart()
     return
   }
+
+  // Rotate / instrument drags both work in chart coordinates so the
+  // pointer tracks the instrument 1:1 regardless of chartScale.
+  const { x, y } = canvasToChart(cv.x, cv.y)
 
   // Rotation drag — pointer angle around instrument centre drives rotation
   const rot = rotateState
@@ -507,7 +541,8 @@ window.addEventListener('mouseup', () => {
 // or its rotate handle (already handled in mousedown) so chair/conductor logic
 // doesn't fire on top.
 canvas.addEventListener('click', (e) => {
-  const { x, y } = pointerCanvasCoords(e)
+  const cv = pointerCanvasCoords(e)
+  const { x, y } = canvasToChart(cv.x, cv.y)
   if (renderer.rotateHandleHitTest(x, y)) return
   if (renderer.instrumentHitTest(x, y)) return
 
@@ -554,7 +589,8 @@ canvas.addEventListener('click', (e) => {
 function bindEvents() {
   for (const el of [titleInput, layoutSelect, notesArea, showNumbersCheck,
     restartNumbersCheck, showRowLabelsCheck, conductorStandCheck, flipCheck,
-    straightRowsInput, showArcCheck, arcRangeInput, rowSpacingInput, showStageDirectionsCheck]) {
+    straightRowsInput, showArcCheck, arcRangeInput, rowSpacingInput, showStageDirectionsCheck,
+    chartScaleInput]) {
     el.addEventListener('change', () => { readInputs(); updateAllInputs(); renderChart() })
   }
 
@@ -809,6 +845,36 @@ function bindEvents() {
     loadInput.value = ''
   })
 
+  // Background image upload — store the file as a data URL so it serialises
+  // with the chart JSON. The renderer caches the decoded HTMLImageElement
+  // and fires onBackgroundLoaded to trigger a re-render once it's ready.
+  bgInput.addEventListener('change', () => {
+    const file = bgInput.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      alert('Please choose an image file.')
+      bgInput.value = ''
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      history.push(config)
+      config.backgroundImage = String(reader.result)
+      updateAllInputs()
+      renderChart()
+    }
+    reader.onerror = () => alert('Could not read image file.')
+    reader.readAsDataURL(file)
+    bgInput.value = ''
+  })
+  bgClearBtn.addEventListener('click', () => {
+    if (!config.backgroundImage) return
+    history.push(config)
+    config.backgroundImage = undefined
+    updateAllInputs()
+    renderChart()
+  })
+
   exportPngBtn.addEventListener('click', () => exportToPng(canvas, config.title))
 
   shareLinkBtn.addEventListener('click', () => {
@@ -889,9 +955,8 @@ function bindEvents() {
   // Hover cursor reflects what's under the pointer.  Conductor uses 'move'
   // since dragging it now translates the entire chart.
   canvas.addEventListener('mousemove', (e) => {
-    const rect = canvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
+    const cv = pointerCanvasCoords(e)
+    const { x, y } = canvasToChart(cv.x, cv.y)
     if (rotateState || dragState || conductorDragState) {
       canvas.style.cursor = 'grabbing'
       return

@@ -113,6 +113,16 @@
       </section>
 
       <section class="panel">
+        <h2>Stage Background</h2>
+        <label class="file-label">
+          ⬆ Upload image
+          <input type="file" id="bg-input" accept="image/*" />
+        </label>
+        <button id="bg-clear-btn" class="secondary" disabled>✕ Clear background</button>
+        <p class="hint" id="bg-status">No background.</p>
+      </section>
+
+      <section class="panel">
         <h2>Save &amp; Export</h2>
         <button id="save-btn">⬇ Save JSON</button>
         <label class="file-label">
@@ -136,6 +146,9 @@
       <p class="hint">Fine controls for chart dimensions. Changes apply live.</p>
       <label id="row-spacing-label">Row spacing (px)
         <input type="number" id="row-spacing" min="50" max="120" step="5" value="70" />
+      </label>
+      <label id="chart-scale-label">Chart scale (%)
+        <input type="number" id="chart-scale" min="50" max="200" step="5" value="100" />
       </label>
       <label id="arc-range-label">Arc range (°)
         <input type="number" id="arc-range" min="60" max="180" step="5" value="180" />

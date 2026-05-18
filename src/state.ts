@@ -46,6 +46,7 @@ export function makeDefaultConfig(): ChartConfig {
     arcRange: Math.PI,
     rowSpacing: 70,
     showStageDirections: false,
+    chartScale: 1,
   }
 }
 
