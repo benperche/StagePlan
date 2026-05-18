@@ -41,6 +41,7 @@ export function makeDefaultConfig(): ChartConfig {
     numberRestartPerRow: false,
     showRowLabels: false,
     showArc: false,
+    showCredit: true,
     notes: '',
     instruments: [],
     arcRange: Math.PI,

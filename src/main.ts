@@ -85,6 +85,7 @@ const bgInput = document.getElementById('bg-input') as HTMLInputElement
 const bgClearBtn = document.getElementById('bg-clear-btn') as HTMLButtonElement
 const bgStatus = document.getElementById('bg-status') as HTMLElement
 const bgFitSelect = document.getElementById('bg-fit') as HTMLSelectElement
+const showCreditCheck = document.getElementById('show-credit') as HTMLInputElement
 const flipCheck = document.getElementById('flip') as HTMLInputElement
 const straightRowsInput = document.getElementById('straight-rows') as HTMLInputElement
 const straightRowsLabel = document.getElementById('straight-rows-label') as HTMLElement
@@ -190,6 +191,7 @@ function readInputs() {
   config.chartScale = scalePct / 100
   const fit = bgFitSelect.value
   if (fit === 'contain' || fit === 'cover' || fit === 'stretch') config.backgroundFit = fit
+  config.showCredit = showCreditCheck.checked
   config.straightRows = Math.max(0, Math.min(config.rows.length, Number(straightRowsInput.value) || 0))
   const arcDeg = Math.max(60, Math.min(180, Number(arcRangeInput.value) || 180))
   config.arcRange = (arcDeg * Math.PI) / 180
@@ -213,6 +215,7 @@ function updateAllInputs() {
   bgClearBtn.disabled = !config.backgroundImage
   bgStatus.textContent = config.backgroundImage ? 'Background loaded.' : 'No background.'
   bgFitSelect.value = config.backgroundFit ?? 'contain'
+  showCreditCheck.checked = config.showCredit ?? true
   straightRowsInput.value = String(config.straightRows)
   straightRowsInput.max = String(config.rows.length)
   // Only show semicircle-specific controls in semicircle mode
@@ -597,7 +600,7 @@ function bindEvents() {
   for (const el of [titleInput, layoutSelect, notesArea, showNumbersCheck,
     restartNumbersCheck, showRowLabelsCheck, conductorStandCheck, flipCheck,
     straightRowsInput, showArcCheck, arcRangeInput, rowSpacingInput, showStageDirectionsCheck,
-    chartScaleInput, bgFitSelect]) {
+    chartScaleInput, bgFitSelect, showCreditCheck]) {
     el.addEventListener('change', () => { readInputs(); updateAllInputs(); renderChart() })
   }
 

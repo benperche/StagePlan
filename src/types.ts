@@ -68,6 +68,7 @@ export interface ChartConfig {
   numberRestartPerRow: boolean
   showRowLabels: boolean
   showArc: boolean
+  showCredit: boolean
   notes: string
   instruments: FixedInstrument[]
   // Angular range of the chair arc in radians. Default Math.PI (180°),

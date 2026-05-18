@@ -95,7 +95,7 @@ export class Renderer {
     if (scaling) ctx.restore()
 
     this.drawRowSummary(ctx, config, w, h)
-    this.drawCredit(ctx, h)
+    if (config.showCredit ?? true) this.drawCredit(ctx, h)
     ctx.restore()
   }
 
