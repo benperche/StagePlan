@@ -720,6 +720,7 @@ function bindEvents() {
       activeTool = btn.dataset['tool'] as typeof activeTool
       toolButtons.forEach(b => b.classList.remove('active'))
       btn.classList.add('active')
+      if (activeTool === 'color') colorPicker.click()
     })
   })
 
