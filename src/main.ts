@@ -48,7 +48,7 @@ const INSTRUMENT_GROUPS: Array<{ name: string; items: string[] }> = [
     'Glockenspiel', 'Xylophone', 'Vibraphone', 'Marimba', 'Mallets',
     'Percussion', 'Auxiliary',
   ] },
-  { name: 'Voice', items: ['Voice'] },
+  { name: 'Voices', items: ['Voice', 'Soprano', 'Alto', 'Tenor', 'Bass', 'Solo'] },
 ]
 
 // Track which rows have their label editor open
