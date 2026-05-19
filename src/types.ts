@@ -16,13 +16,6 @@ export interface Row {
   fontSize: number
 }
 
-export interface Section {
-  id: string
-  name: string
-  color: string
-  instrument: string
-}
-
 export interface ConductorConfig {
   show: boolean
   hasStand: boolean
@@ -140,4 +133,3 @@ export interface ConductorOrigin {
   yDir: number     // +1 if conductor is above chairs (flipped), -1 otherwise
 }
 
-export type Tool = 'select' | 'color' | 'enable' | 'label' | 'stand'

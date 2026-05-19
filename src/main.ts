@@ -1,5 +1,5 @@
 import './style.css'
-import { makeDefaultConfig, makeRow, makeInstrument, History } from './state'
+import { makeDefaultConfig, makeRow, makeInstrument, History, cloneConfig } from './state'
 import { Renderer } from './renderer'
 import {
   PRESETS, buildRowsFromSections, parseOrchestraNotation,
@@ -23,44 +23,45 @@ const expandedRows = new Set<number>()
 // Currently selected fixed instrument (for drag/inspector/delete)
 let selectedInstrumentId: string | null = null
 
-// Drag state for instruments. Created on mousedown over an instrument and
-// torn down on mouseup. The pre-drag config snapshot is pushed to history
-// only if the pointer actually moves, so a pure click-to-select doesn't
-// pollute the undo stack.
-interface DragState {
-  instrumentId: string
-  offsetX: number      // pointer x minus instrument centre x at drag start
-  offsetY: number
+// Every drag tracks a pre-drag config snapshot (pushed to history only if
+// the pointer actually moves, so click-to-select doesn't pollute undo) and
+// a `moved` flag set when the threshold is crossed.
+interface DragBase {
   preDragConfig: ChartConfig
   moved: boolean
 }
+
+// Instrument body drag — created on mousedown over an instrument, torn down
+// on mouseup. Holds the pointer-to-centre offset so the instrument stays
+// under the cursor as you drag.
+interface DragState extends DragBase {
+  instrumentId: string
+  offsetX: number      // pointer x minus instrument centre x at drag start
+  offsetY: number
+}
 let dragState: DragState | null = null
 
-// Rotation drag (when user grabs the green rotate handle).  Records the
+// Rotation drag — when the user grabs the green rotate handle. Records the
 // instrument centre and the offset between the initial pointer angle and
-// the instrument's rotation, so the handle stays under the cursor as you drag.
-interface RotateState {
+// the instrument's rotation so the handle stays under the cursor.
+interface RotateState extends DragBase {
   instrumentId: string
   centerX: number
   centerY: number
   initialPointerAngle: number   // atan2 from centre to pointer at mousedown
   initialRotation: number       // instrument.rotation at mousedown
-  preDragConfig: ChartConfig
-  moved: boolean
 }
 let rotateState: RotateState | null = null
 
-// Conductor drag — moves the conductor podium, which everything else (chairs
-// and fixed instruments) is positioned relative to, so the entire chart
-// translates as one unit.  We store the pointer position at mousedown so we
-// can compute the delta on each move.
-interface ConductorDragState {
+// Conductor drag — moves the conductor podium, which everything else
+// (chairs and fixed instruments) is positioned relative to, so the entire
+// chart translates as one unit. Pointer position at mousedown is stored so
+// we can compute the delta on each move.
+interface ConductorDragState extends DragBase {
   startX: number
   startY: number
   initialOffsetX: number
   initialOffsetY: number
-  preDragConfig: ChartConfig
-  moved: boolean
 }
 let conductorDragState: ConductorDragState | null = null
 
@@ -143,17 +144,13 @@ function init() {
 }
 
 // Make older saved configs forward-compatible with newer schema fields.
+// Fill in any newer fields that an older saved config might be missing,
+// using makeDefaultConfig() as the source of truth. Mutates in place.
+// (Defaults are spread first so anything the user actually set wins.)
 function migrateConfig(c: ChartConfig) {
-  if (!Array.isArray(c.instruments)) c.instruments = []
-  if (typeof c.conductor.offsetX !== 'number') c.conductor.offsetX = 0
-  if (typeof c.conductor.offsetY !== 'number') c.conductor.offsetY = 0
-  if (typeof c.arcRange !== 'number') c.arcRange = Math.PI
-  if (typeof c.rowSpacing !== 'number') c.rowSpacing = 70
-  if (typeof c.showStageDirections !== 'boolean') c.showStageDirections = false
-  if (typeof c.chartScale !== 'number') c.chartScale = 1
-  if (c.backgroundFit !== 'contain' && c.backgroundFit !== 'cover' && c.backgroundFit !== 'stretch') {
-    c.backgroundFit = 'contain'
-  }
+  const defaults = makeDefaultConfig()
+  const merged = { ...defaults, ...c, conductor: { ...defaults.conductor, ...c.conductor } }
+  Object.assign(c, merged)
 }
 
 // --- Render ---
@@ -417,7 +414,7 @@ canvas.addEventListener('mousedown', (e) => {
         centerY: cy,
         initialPointerAngle: Math.atan2(y - cy, x - cx),
         initialRotation: inst.rotation,
-        preDragConfig: JSON.parse(JSON.stringify(config)),
+        preDragConfig: cloneConfig(config),
         moved: false,
       }
       return
@@ -432,7 +429,7 @@ canvas.addEventListener('mousedown', (e) => {
       instrumentId: instHit.id,
       offsetX: x - instHit.cx,
       offsetY: y - instHit.cy,
-      preDragConfig: JSON.parse(JSON.stringify(config)),
+      preDragConfig: cloneConfig(config),
       moved: false,
     }
     renderChart()
@@ -450,7 +447,7 @@ canvas.addEventListener('mousedown', (e) => {
       startY: cv.y,
       initialOffsetX: config.conductor.offsetX,
       initialOffsetY: config.conductor.offsetY,
-      preDragConfig: JSON.parse(JSON.stringify(config)),
+      preDragConfig: cloneConfig(config),
       moved: false,
     }
     if (selectedInstrumentId) {
