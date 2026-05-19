@@ -10,6 +10,7 @@ export const canvas = document.getElementById('chart-canvas') as HTMLCanvasEleme
 // --- Tab bar ---
 export const tabButtons = document.querySelectorAll<HTMLButtonElement>('[data-tab]')
 export const tabContents = document.querySelectorAll<HTMLElement>('[data-tab-content]')
+export const tabNavButtons = document.querySelectorAll<HTMLButtonElement>('[data-tab-nav]')
 
 // --- Chart panel ---
 export const titleInput = document.getElementById('title') as HTMLInputElement
@@ -90,5 +91,6 @@ export const redoBtn = document.getElementById('redo-btn') as HTMLButtonElement
 export const saveBtn = document.getElementById('save-btn') as HTMLButtonElement
 export const loadInput = document.getElementById('load-input') as HTMLInputElement
 export const exportPngBtn = document.getElementById('export-png-btn') as HTMLButtonElement
+export const printBtn = document.getElementById('print-btn') as HTMLButtonElement
 export const shareLinkBtn = document.getElementById('share-link-btn') as HTMLButtonElement
 export const shareUrlDisplay = document.getElementById('share-url-display') as HTMLElement

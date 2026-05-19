@@ -60,12 +60,7 @@
         </section>
 
         <section class="panel">
-          <h2>Notes</h2>
-          <textarea id="notes" rows="3" placeholder="Notes for this chart…"></textarea>
-        </section>
-
-        <section class="panel">
-          <h2>Stage Background</h2>
+          <h2>Stage Background (opt.)</h2>
           <label class="file-label">
             ⬆ Upload image
             <input type="file" id="bg-input" accept="image/*" />
@@ -80,6 +75,16 @@
           </label>
           <p class="hint" id="bg-status">No background.</p>
         </section>
+
+        <section class="panel">
+          <h2>Notes (appears at bottom left of chart)</h2>
+          <textarea id="notes" rows="3" placeholder="Notes for this chart…"></textarea>
+        </section>
+
+        <div class="tab-nav">
+          <span></span>
+          <button data-tab-nav="edit" class="tab-nav-next">Next: Edit →</button>
+        </div>
       </div>
 
       <!-- =================  EDIT TAB  ================= -->
@@ -139,6 +144,11 @@
             </div>
           </div>
         </section>
+
+        <div class="tab-nav">
+          <button data-tab-nav="setup" class="tab-nav-back">← Back: Setup</button>
+          <button data-tab-nav="export" class="tab-nav-next">Next: Export →</button>
+        </div>
       </div>
 
       <!-- =================  EXPORT TAB  ================= -->
@@ -151,9 +161,15 @@
             <input type="file" id="load-input" accept=".json" />
           </label>
           <button id="export-png-btn">🖼 Export PNG</button>
+          <button id="print-btn">🖨 Print / Save as PDF</button>
           <button id="share-link-btn">🔗 Copy share link</button>
           <div id="share-url-display" style="display:none"></div>
         </section>
+
+        <div class="tab-nav">
+          <button data-tab-nav="edit" class="tab-nav-back">← Back: Edit</button>
+          <span></span>
+        </div>
       </div>
     </aside>
 

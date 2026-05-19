@@ -106,14 +106,14 @@ let suppressConductorClick = false
 
 // All DOM refs live in dom.ts; pull them in by name.
 import {
-  canvas, tabButtons, tabContents,
+  canvas, tabButtons, tabContents, tabNavButtons,
   titleInput, layoutSelect, notesArea, showNumbersCheck, restartNumbersCheck,
   showRowLabelsCheck, conductorStandCheck, showArcCheck, showStageDirectionsCheck,
   chartScaleInput, bgInput, bgClearBtn, bgStatus, bgFitSelect, showCreditCheck,
   flipCheck, straightRowsInput, straightRowsLabel, arcRangeInput, arcRangeLabel,
   rowSpacingInput, advancedBtn, advancedModal, advancedCloseBtn, rowsContainer,
   colorPicker, colorPickerLabel, undoBtn, redoBtn, resetPositionBtn, addRowBtn, saveBtn,
-  loadInput, exportPngBtn, shareLinkBtn, shareUrlDisplay, presetSelect, applyPresetBtn,
+  loadInput, exportPngBtn, printBtn, shareLinkBtn, shareUrlDisplay, presetSelect, applyPresetBtn,
   customOrchestraBtn, customOrchestraModal, customOrchestraTitle, customOrchestraNotation,
   customOrchestraPreview, customOrchestraApply, customOrchestraCancel,
   toolButtons, instrumentPickerPanel, instrumentPickerList, instrumentPickerStatus,
@@ -840,14 +840,18 @@ function bindEvents() {
     renderChart()
   })
 
-  // Sidebar tab navigation (Setup / Edit / Export)
-  tabButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tab = btn.dataset['tab']
-      tabButtons.forEach(b => b.classList.toggle('active', b === btn))
-      tabContents.forEach(c => c.classList.toggle('active', c.dataset['tabContent'] === tab))
-    })
-  })
+  // Sidebar tab navigation (Setup / Edit / Export). Both the top tab
+  // buttons and the bottom Next/Back nav buttons end up calling this.
+  const switchTab = (tab: string | undefined) => {
+    if (!tab) return
+    tabButtons.forEach(b => b.classList.toggle('active', b.dataset['tab'] === tab))
+    tabContents.forEach(c => c.classList.toggle('active', c.dataset['tabContent'] === tab))
+    // Scroll the sidebar back to the top so Next/Back doesn't strand the
+    // user partway down the new tab.
+    document.getElementById('sidebar')?.scrollTo({ top: 0 })
+  }
+  tabButtons.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset['tab'])))
+  tabNavButtons.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset['tabNav'])))
 
   // Tool selection
   toolButtons.forEach(btn => {
@@ -1022,6 +1026,12 @@ function bindEvents() {
   })
 
   exportPngBtn.addEventListener('click', () => exportToPng(canvas, config.title))
+
+  // Print → triggers the browser print dialog. The @media print CSS in
+  // style.css hides every UI control, leaving only the canvas centred on
+  // the page. Users can then pick "Save as PDF" from the print dialog to
+  // get a PDF for free with no extra dependencies.
+  printBtn.addEventListener('click', () => window.print())
 
   shareLinkBtn.addEventListener('click', () => {
     const { hash, strippedBackground } = encodeToHash(config)

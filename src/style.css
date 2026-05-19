@@ -73,6 +73,26 @@ body {
 }
 .tab-content.active { display: flex; }
 
+/* Next / Back nav row at the bottom of each tab */
+.tab-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.tab-nav-back, .tab-nav-next {
+  font-size: 12px;
+  padding: 6px 10px;
+  color: var(--accent);
+  border-color: var(--border);
+  background: #fff;
+}
+.tab-nav-back:hover, .tab-nav-next:hover { background: #eff6ff; border-color: var(--accent); }
+.tab-nav span { flex: 1; }   /* spacer when only one button is present */
+
 /* Undo/redo overlay buttons, top-left of the canvas */
 .canvas-overlay-controls {
   position: absolute;
@@ -661,4 +681,29 @@ button.danger:hover { background: #fff0f0; }
   font-size: 12px;
   line-height: 1.5;
   padding: 8px 0;
+}
+
+/* Print: hide every piece of UI chrome, leave only the canvas itself
+   centred on the page. The print dialog's "Save as PDF" option then
+   produces a clean PDF without any of the editor controls. */
+@media print {
+  body { background: #fff; }
+  #sidebar,
+  .canvas-overlay-controls,
+  #tally-overlay,
+  .modal-overlay { display: none !important; }
+  #app { height: auto; }
+  #canvas-area {
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+  #chart-canvas {
+    width: 100% !important;
+    height: auto !important;
+    max-height: 95vh;
+    object-fit: contain;
+    display: block;
+    margin: 0 auto;
+  }
 }
