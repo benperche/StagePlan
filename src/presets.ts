@@ -1,4 +1,4 @@
-import type { ChartConfig, Row, Chair, InstrumentType } from './types'
+import type { ChartConfig, Row, Chair, FixedInstrument, InstrumentType } from './types'
 
 export interface PresetSection {
   name: string
@@ -644,4 +644,65 @@ export function buildOrchestraRows(comp: OrchestraComposition): OrchestraRowsRes
   }
 
   return { rows, straightRows: rows.length - arcRowCount }
+}
+
+// ---------------------------------------------------------------------------
+// Preset → materialised data
+//
+// A Preset is a declarative recipe — it can specify rows three different
+// ways (notation > customRows > sections), plus optional fixed instruments.
+// buildPreset takes one Preset and turns it into the concrete rows /
+// instrument list that the renderer needs, without touching app state.
+// Callers do whatever they want with the result (push history, assign to
+// config, re-render…).
+//
+// Returns a discriminated union so the only expected failure mode (bad
+// orchestra notation) is reported explicitly rather than thrown.
+// ---------------------------------------------------------------------------
+
+export type PresetBuild =
+  | { ok: true; rows: Row[]; straightRows: number; instruments: FixedInstrument[] }
+  | { ok: false; error: string }
+
+export function buildPreset(preset: Preset): PresetBuild {
+  let rows: Row[]
+  // Default to whatever the preset declared; orchestra notation may override.
+  let straightRows = preset.straightRows ?? 0
+
+  if (preset.notation) {
+    const comp = parseOrchestraNotation(preset.notation)
+    if (!comp) return { ok: false, error: `Invalid orchestra notation: "${preset.notation}"` }
+    const built = buildOrchestraRows(comp)
+    rows = built.rows
+    straightRows = built.straightRows
+  } else if (preset.customRows && preset.customRows.length > 0) {
+    const rowLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    rows = preset.customRows.map((row, i) => ({
+      id: crypto.randomUUID(),
+      chairs: row.chairs.map(c => ({
+        id: crypto.randomUUID(),
+        enabled: c.enabled ?? true,
+        color: c.color,
+        label: c.label,
+        hasStand: c.hasStand ?? false,
+        standAfter: c.standAfter ?? false,
+      })),
+      label: row.label || rowLetters[i] || String(i + 1),
+      fontSize: 11,
+    }))
+  } else {
+    rows = buildRowsFromSections(preset.sections.map(s => ({ ...s })))
+  }
+
+  const instruments: FixedInstrument[] = (preset.instruments ?? []).map(i => ({
+    id: crypto.randomUUID(),
+    type: i.type,
+    angle: i.angle,
+    distance: i.distance,
+    rotation: i.rotation ?? 0,
+    ...(i.count !== undefined ? { count: i.count } : {}),
+    ...(i.label !== undefined ? { label: i.label } : {}),
+  }))
+
+  return { ok: true, rows, straightRows, instruments }
 }

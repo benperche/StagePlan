@@ -103,9 +103,14 @@ Three ways a `Preset` can specify its rows, in priority order:
 
 1. **`notation`** — Boosey & Hawkes shorthand. Used by Chamber Orchestra, Full Symphony.
 2. **`customRows`** — explicit per-chair specification (label, colour, stand flags, optional `enabled: false` for placeholders). Used by Big Band, Concert Band.
-3. **`sections`** — `[{ name, count, color, standMode }]`, auto-packed into rows of 12 chairs. Used by Concert Band's wind row, String Quartet, Jazz Combo.
+3. **`sections`** — `[{ name, count, color, standMode }]`, auto-packed into rows of 12 chairs. Used by String Quartet, Jazz Combo.
 
-`applyPreset(preset)` in `main.ts` dispatches between them and also clears + installs the preset's fixed instruments.
+`buildPreset(preset)` in `presets.ts` does the dispatch and turns a `Preset`
+into concrete `{ ok: true, rows, straightRows, instruments }` (or
+`{ ok: false, error }` if orchestra notation is malformed). It's a pure
+function — no `config` mutation, no DOM. `applyPreset(preset)` in `main.ts`
+is then a thin wrapper that calls `buildPreset`, pushes the result into
+`config`, and re-renders.
 
 ## Fixed instruments
 
@@ -165,8 +170,9 @@ through have since been done.
   down to ~940 lines, glyphs now in their own module.
 - `main.ts` is ~1000 lines and has no internal structure — could split
   into `dom.ts` (refs), `events.ts` (handlers), `row-ui.ts` (row list).
-- `applyPreset` is ~270 lines doing notation/customRows/sections dispatch
+- ~~`applyPreset` is ~270 lines doing notation/customRows/sections dispatch
   + chair construction + instrument placement. The "build rows from
-  preset" part probably belongs in `presets.ts`.
+  preset" part probably belongs in `presets.ts`.~~ — done; the pure build
+  is now `buildPreset` in `presets.ts`, `applyPreset` is a 17-line wrapper.
 - State management is implicit — a `setConfig(newConfig)` wrapper that
   calls `renderChart` automatically would make data flow more obvious.

@@ -2,12 +2,11 @@ import './style.css'
 import { makeDefaultConfig, makeRow, makeInstrument, History, cloneConfig } from './state'
 import { Renderer } from './renderer'
 import {
-  PRESETS, buildRowsFromSections, parseOrchestraNotation,
-  buildOrchestraRows, describeComposition,
-  type Preset, type PresetSection,
+  PRESETS, buildPreset, parseOrchestraNotation, describeComposition,
+  type Preset,
 } from './presets'
 import { saveToJson, loadFromJson, encodeToHash, decodeFromHash, exportToPng } from './serializer'
-import type { ChartConfig, InstrumentType, FixedInstrument, Row } from './types'
+import type { ChartConfig, InstrumentType } from './types'
 
 // --- App state ---
 let config: ChartConfig = makeDefaultConfig()
@@ -351,63 +350,18 @@ function populatePresets() {
 }
 
 function applyPreset(preset: Preset) {
-  history.push(config)
-
-  // Row source priority: notation > customRows > sections.
-  let rows: Row[]
-  // For orchestra notation, the row builder also tells us how many of the
-  // back rows should render straight (winds/brass/perc) so a small section
-  // doesn't get stretched across the full back arc.
-  let straightRowsOverride: number | null = null
-  if (preset.notation) {
-    const comp = parseOrchestraNotation(preset.notation)
-    if (!comp) {
-      alert(`Invalid orchestra notation: "${preset.notation}"`)
-      return
-    }
-    const built = buildOrchestraRows(comp)
-    rows = built.rows
-    straightRowsOverride = built.straightRows
-  } else if (preset.customRows && preset.customRows.length > 0) {
-    const rowLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-    rows = preset.customRows.map((row, i) => ({
-      id: crypto.randomUUID(),
-      chairs: row.chairs.map(c => ({
-        id: crypto.randomUUID(),
-        enabled: c.enabled ?? true,
-        color: c.color,
-        label: c.label,
-        hasStand: c.hasStand ?? false,
-        standAfter: c.standAfter ?? false,
-      })),
-      label: row.label || rowLetters[i] || String(i + 1),
-      fontSize: 11,
-    }))
-  } else {
-    const sections: PresetSection[] = preset.sections.map(s => ({ ...s }))
-    rows = buildRowsFromSections(sections)
+  const built = buildPreset(preset)
+  if (!built.ok) {
+    alert(built.error)
+    return
   }
 
-  // Always clear existing fixed instruments on preset apply, then add any
-  // the preset wants pre-placed.
-  const instruments: FixedInstrument[] = (preset.instruments ?? []).map(i => ({
-    id: crypto.randomUUID(),
-    type: i.type,
-    angle: i.angle,
-    distance: i.distance,
-    rotation: i.rotation ?? 0,
-    ...(i.count !== undefined ? { count: i.count } : {}),
-    ...(i.label !== undefined ? { label: i.label } : {}),
-  }))
-
-  config.rows = rows
+  history.push(config)
+  config.rows = built.rows
   config.layout = preset.layout
   config.title = preset.name
-  config.straightRows = straightRowsOverride ?? preset.straightRows ?? 0
-  config.instruments = instruments
-
-  layoutSelect.value = preset.layout
-  titleInput.value = preset.name
+  config.straightRows = built.straightRows
+  config.instruments = built.instruments
 
   expandedRows.clear()
   setSelectedInstrument(null)
