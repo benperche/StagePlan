@@ -291,8 +291,7 @@ export class Renderer {
     let seatNumber = 1
     config.rows.forEach((row, rowIndex) => {
       const r = BASE_RADIUS + rowIndex * rowSpacing
-      const isStraight = rowIndex >= numRows - config.straightRows
-      if (isStraight) {
+      if (isStraightRow(rowIndex)) {
         seatNumber = this.renderStraightRow(ctx, row, rowIndex, oy + yDir * r, ox, oy, config, seatNumber, straightLabelX)
       } else {
         seatNumber = this.renderArcRow(ctx, row, rowIndex, r, ox, oy, yDir, config, seatNumber)
