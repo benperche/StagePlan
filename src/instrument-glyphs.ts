@@ -1,0 +1,255 @@
+import type { FixedInstrument } from './types'
+
+/**
+ * Each glyph is drawn centred at (0, 0) in the canvas's current (already
+ * translated and possibly rotated) frame, and returns its half-width /
+ * half-height for the renderer's hit-box plus a `labelInside` flag:
+ *
+ *   - labelInside: true  → renderer draws the white instrument label
+ *                          centred on top of the glyph
+ *   - labelInside: false → renderer drops the label below the glyph's
+ *                          rotated bounding box
+ *
+ * All glyphs are monochrome (black silhouettes with optional white inner
+ * detail) so the chart stays a clean black-and-white diagram; chair
+ * colours remain the only user-controlled hue.
+ */
+export interface GlyphResult {
+  hw: number
+  hh: number
+  labelInside: boolean
+}
+
+// ---------------------------------------------------------------------------
+// Drum kit — bass drum (large circle), two angled tom tops above it, and
+// short vertical hardware bars connecting them.
+// ---------------------------------------------------------------------------
+export function drawDrumkit(ctx: CanvasRenderingContext2D): GlyphResult {
+  const bassR = 19
+
+  ctx.fillStyle = '#1a1a1a'
+  ctx.strokeStyle = '#fff'
+  ctx.lineWidth = 1
+
+  // Hardware first so the drums sit on top of it
+  ctx.fillRect(-13, -14, 4, 22)
+  ctx.fillRect(9, -14, 4, 22)
+
+  // Bass drum
+  ctx.beginPath()
+  ctx.arc(0, 7, bassR, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.stroke()
+
+  // Two angled tom tops (smaller filled ellipses, tilted toward the centre)
+  const drawTom = (tx: number, ty: number, tilt: number) => {
+    ctx.save()
+    ctx.translate(tx, ty)
+    ctx.rotate(tilt)
+    ctx.beginPath()
+    ctx.ellipse(0, 0, 10, 6, 0, 0, Math.PI * 2)
+    ctx.fillStyle = '#1a1a1a'
+    ctx.fill()
+    ctx.strokeStyle = '#fff'
+    ctx.stroke()
+    ctx.restore()
+  }
+  drawTom(-12, -13, -0.28)
+  drawTom(12, -13, 0.28)
+
+  return { hw: 22, hh: bassR + 7, labelInside: false }
+}
+
+// ---------------------------------------------------------------------------
+// Grand piano — top-down silhouette with a straight LEFT/TOP/BOTTOM and a
+// multi-segment bezier curve for the rounded right tail.
+// ---------------------------------------------------------------------------
+export function drawPiano(ctx: CanvasRenderingContext2D): GlyphResult {
+  const halfW = 55
+  const halfH = 26
+  const straightX = halfW * 0.15   // top/bottom run straight to here, then curve
+
+  ctx.fillStyle = '#1a1a1a'
+  ctx.beginPath()
+  // Top-left corner (start of straight left edge)
+  ctx.moveTo(-halfW, -halfH)
+  // Straight top edge — runs most of the way across
+  ctx.lineTo(straightX, -halfH)
+  // Top-right curve: bezier easing down to the rounded tail tip
+  ctx.bezierCurveTo(
+    halfW * 0.55, -halfH,        // c1: continues horizontal
+    halfW + 2, -halfH * 0.55,    // c2: pulls slightly past halfW
+    halfW + 2, 0,                // tip of tail
+  )
+  // Bottom-right curve: mirrors the top, returning to the straight bottom
+  ctx.bezierCurveTo(
+    halfW + 2, halfH * 0.55,
+    halfW * 0.55, halfH,
+    straightX, halfH,
+  )
+  // Bottom edge with a gentle bass bulge along the back portion
+  ctx.bezierCurveTo(
+    -halfW * 0.1, halfH + 4,     // c1: bulges slightly down
+    -halfW * 0.55, halfH + 3,    // c2: continues the bulge
+    -halfW, halfH,               // back to bottom-left corner
+  )
+  // closePath draws the straight left edge back to start
+  ctx.closePath()
+  ctx.fill()
+
+  return { hw: halfW + 2, hh: halfH + 4, labelInside: true }
+}
+
+// ---------------------------------------------------------------------------
+// Amp cabinet — black box with a white control strip and a row of knobs.
+// Used for both guitar amp (32×34) and bass amp (40×42).
+// ---------------------------------------------------------------------------
+export function drawAmp(ctx: CanvasRenderingContext2D, w: number, h: number): GlyphResult {
+  const hw = w / 2, hh = h / 2
+
+  ctx.fillStyle = '#1a1a1a'
+  roundRect(ctx, -hw, -hh, w, h, 2)
+  ctx.fill()
+
+  // Control panel strip near the top
+  const stripPad = 3
+  const stripH = 5
+  const stripY = -hh + stripPad
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(-hw + stripPad, stripY, w - stripPad * 2, stripH)
+
+  // Tiny black knobs along the strip
+  ctx.fillStyle = '#1a1a1a'
+  const knobs = 4
+  const knobY = stripY + stripH / 2
+  const usableW = w - stripPad * 2 - 4
+  for (let i = 0; i < knobs; i++) {
+    const t = (i + 0.5) / knobs
+    const knobX = -hw + stripPad + 2 + t * usableW
+    ctx.beginPath()
+    ctx.arc(knobX, knobY, 1, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  return { hw, hh, labelInside: false }
+}
+
+// ---------------------------------------------------------------------------
+// Timpani cluster — N drums (2–6) arranged on an upward-curving arc, as if
+// the player stands above. Uses a fixed total arc angle (108°) so the
+// curvature stays visible at any count; the radius scales with N.
+// ---------------------------------------------------------------------------
+export function drawTimpani(ctx: CanvasRenderingContext2D, inst: FixedInstrument): GlyphResult {
+  const count = Math.max(2, Math.min(6, inst.count ?? 4))
+  const drumR = 18
+  const chord = drumR * 2 + 1                      // touching with a 1px hair of gap
+  const totalAngle = (3 * Math.PI) / 5             // 108°
+  const angleStep = count > 1 ? totalAngle / (count - 1) : 0
+  const arcR = count > 1 ? chord / (2 * Math.sin(angleStep / 2)) : drumR
+  const startAngle = Math.PI / 2 - totalAngle / 2
+
+  // Arc centre at (0, -arcR) — above the drums, so the cluster smiles upward.
+  const positions: Array<{ x: number; y: number }> = []
+  for (let i = 0; i < count; i++) {
+    const a = startAngle + i * angleStep
+    positions.push({
+      x: arcR * Math.cos(a),
+      y: -arcR + arcR * Math.sin(a),
+    })
+  }
+
+  // Re-centre vertically so the cluster sits around y=0
+  const minY = Math.min(...positions.map(p => p.y))
+  const maxY = Math.max(...positions.map(p => p.y))
+  const offsetY = -(minY + maxY) / 2
+  positions.forEach(p => { p.y += offsetY })
+
+  ctx.fillStyle = '#1a1a1a'
+  ctx.strokeStyle = '#fff'
+  ctx.lineWidth = 1
+  positions.forEach(p => {
+    ctx.beginPath()
+    ctx.arc(p.x, p.y, drumR, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.stroke()
+    // Inner head ring (thin white) — gives the drum some depth detail
+    ctx.beginPath()
+    ctx.arc(p.x, p.y, drumR - 4, 0, Math.PI * 2)
+    ctx.stroke()
+  })
+
+  const minX = Math.min(...positions.map(p => p.x))
+  const maxX = Math.max(...positions.map(p => p.x))
+  const hw = Math.max(-(minX - drumR), maxX + drumR)
+  const hh = (maxY - minY) / 2 + drumR
+
+  return { hw, hh, labelInside: false }
+}
+
+// ---------------------------------------------------------------------------
+// Mallet instrument (glock/xylo/vibes/marimba) — shorter trapezoid with the
+// wider low end on the LEFT and the narrower high end on the RIGHT, plus
+// thin white separators suggesting the bars/keys.
+// ---------------------------------------------------------------------------
+export function drawMallet(ctx: CanvasRenderingContext2D): GlyphResult {
+  const w = 90, leftH = 36, rightH = 24
+  const hw = w / 2
+
+  ctx.fillStyle = '#1a1a1a'
+  ctx.beginPath()
+  ctx.moveTo(-hw, -leftH / 2)
+  ctx.lineTo(hw, -rightH / 2)
+  ctx.lineTo(hw, rightH / 2)
+  ctx.lineTo(-hw, leftH / 2)
+  ctx.closePath()
+  ctx.fill()
+
+  // Thin white bar separators to suggest keys
+  ctx.strokeStyle = '#fff'
+  ctx.lineWidth = 0.8
+  for (let i = 1; i < 5; i++) {
+    const t = i / 5
+    const x = -hw + t * w
+    const yTop = -leftH / 2 + t * (-rightH / 2 - -leftH / 2)
+    const yBot = leftH / 2 + t * (rightH / 2 - leftH / 2)
+    ctx.beginPath()
+    ctx.moveTo(x, yTop)
+    ctx.lineTo(x, yBot)
+    ctx.stroke()
+  }
+
+  return { hw, hh: leftH / 2, labelInside: true }
+}
+
+// ---------------------------------------------------------------------------
+// Generic square / rectangle — slightly lighter grey fill, used as a
+// labelled placeholder for anything the chart doesn't have a dedicated
+// glyph for (sound desk, monitor, riser, etc.).
+// ---------------------------------------------------------------------------
+export function drawGenericRect(ctx: CanvasRenderingContext2D, hw: number, hh: number): GlyphResult {
+  ctx.fillStyle = '#3a3a3a'
+  ctx.strokeStyle = '#fff'
+  ctx.lineWidth = 1.5
+  ctx.beginPath()
+  ctx.rect(-hw, -hh, hw * 2, hh * 2)
+  ctx.fill()
+  ctx.stroke()
+  return { hw, hh, labelInside: false }
+}
+
+// ---------------------------------------------------------------------------
+// Local helper — Path2D-style rounded-rectangle path. Caller is responsible
+// for the fill/stroke after this builds the path.
+// ---------------------------------------------------------------------------
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number, r: number,
+) {
+  ctx.beginPath()
+  ctx.moveTo(x + r, y)
+  ctx.arcTo(x + w, y, x + w, y + h, r)
+  ctx.arcTo(x + w, y + h, x, y + h, r)
+  ctx.arcTo(x, y + h, x, y, r)
+  ctx.arcTo(x, y, x + w, y, r)
+  ctx.closePath()
+}

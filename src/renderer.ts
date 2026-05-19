@@ -2,6 +2,9 @@ import type {
   ChartConfig, Row, Chair, FixedInstrument,
   HitTarget, ConductorHit, InstrumentHit, RotateHandleHit, ConductorOrigin,
 } from './types'
+import {
+  drawDrumkit, drawPiano, drawAmp, drawTimpani, drawMallet, drawGenericRect,
+} from './instrument-glyphs'
 
 const CHAIR_SIZE = 30
 const CHAIR_HALF = CHAIR_SIZE / 2
@@ -493,14 +496,14 @@ export class Renderer {
 
       let hw = 0, hh = 0, labelInside = false
       switch (inst.type) {
-        case 'drumkit':    ({ hw, hh, labelInside } = this.drawDrumkit(ctx)); break
-        case 'piano':      ({ hw, hh, labelInside } = this.drawPiano(ctx)); break
-        case 'guitar-amp': ({ hw, hh, labelInside } = this.drawAmp(ctx, 32, 34)); break
-        case 'bass-amp':   ({ hw, hh, labelInside } = this.drawAmp(ctx, 40, 42)); break
-        case 'timpani':    ({ hw, hh, labelInside } = this.drawTimpani(ctx, inst)); break
-        case 'mallet':     ({ hw, hh, labelInside } = this.drawMallet(ctx)); break
-        case 'square':     ({ hw, hh, labelInside } = this.drawGenericRect(ctx, 28, 28)); break
-        case 'rectangle':  ({ hw, hh, labelInside } = this.drawGenericRect(ctx, 42, 26)); break
+        case 'drumkit':    ({ hw, hh, labelInside } = drawDrumkit(ctx)); break
+        case 'piano':      ({ hw, hh, labelInside } = drawPiano(ctx)); break
+        case 'guitar-amp': ({ hw, hh, labelInside } = drawAmp(ctx, 32, 34)); break
+        case 'bass-amp':   ({ hw, hh, labelInside } = drawAmp(ctx, 40, 42)); break
+        case 'timpani':    ({ hw, hh, labelInside } = drawTimpani(ctx, inst)); break
+        case 'mallet':     ({ hw, hh, labelInside } = drawMallet(ctx)); break
+        case 'square':     ({ hw, hh, labelInside } = drawGenericRect(ctx, 28, 28)); break
+        case 'rectangle':  ({ hw, hh, labelInside } = drawGenericRect(ctx, 42, 26)); break
       }
 
       // Selection highlight (still in rotated frame so it tracks the glyph)
@@ -611,229 +614,6 @@ export class Renderer {
   // All instrument glyphs are drawn in monochrome (black silhouettes with
   // optional white inner detail) so the chart stays a clean black & white
   // diagram.  Chair colours remain user-controlled.
-
-  private drawDrumkit(ctx: CanvasRenderingContext2D): { hw: number; hh: number; labelInside: boolean } {
-    // Bass drum (large circle), two tom tops (tilted ovals) above it,
-    // and short hardware bars connecting the toms down to the bass drum.
-    const bassR = 19
-
-    ctx.fillStyle = '#1a1a1a'
-    ctx.strokeStyle = '#fff'
-    ctx.lineWidth = 1
-
-    // Hardware first so the drums sit on top of it
-    ctx.fillRect(-13, -14, 4, 22)
-    ctx.fillRect(9, -14, 4, 22)
-
-    // Bass drum
-    ctx.beginPath()
-    ctx.arc(0, 7, bassR, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.stroke()
-
-    // Two angled tom tops (smaller filled ellipses, tilted toward the centre)
-    const drawTom = (tx: number, ty: number, tilt: number) => {
-      ctx.save()
-      ctx.translate(tx, ty)
-      ctx.rotate(tilt)
-      ctx.beginPath()
-      ctx.ellipse(0, 0, 10, 6, 0, 0, Math.PI * 2)
-      ctx.fillStyle = '#1a1a1a'
-      ctx.fill()
-      ctx.strokeStyle = '#fff'
-      ctx.stroke()
-      ctx.restore()
-    }
-    drawTom(-12, -13, -0.28)
-    drawTom(12, -13, 0.28)
-
-    return { hw: 22, hh: bassR + 7, labelInside: false }
-  }
-
-  private drawPiano(ctx: CanvasRenderingContext2D): { hw: number; hh: number; labelInside: boolean } {
-    // Grand piano top-down: straight LEFT, TOP and BOTTOM edges.  The right
-    // end is a multi-segment curve — two cubic beziers shape the rounded
-    // tail and a third gives the bass side a subtle bulge along the bottom.
-    const halfW = 55
-    const halfH = 26
-    const straightX = halfW * 0.15   // top/bottom run straight to here, then curve
-
-    ctx.fillStyle = '#1a1a1a'
-    ctx.beginPath()
-    // Top-left corner (start of straight left edge)
-    ctx.moveTo(-halfW, -halfH)
-    // Straight top edge — runs most of the way across
-    ctx.lineTo(straightX, -halfH)
-    // Top-right curve: bezier easing down to the rounded tail tip
-    ctx.bezierCurveTo(
-      halfW * 0.55, -halfH,        // c1: continues horizontal
-      halfW + 2, -halfH * 0.55,    // c2: pulls slightly past halfW
-      halfW + 2, 0,                // tip of tail (slightly beyond halfW for a fuller curve)
-    )
-    // Bottom-right curve: mirrors the top, returning to the straight bottom
-    ctx.bezierCurveTo(
-      halfW + 2, halfH * 0.55,
-      halfW * 0.55, halfH,
-      straightX, halfH,
-    )
-    // Bottom edge with a gentle bass bulge along the back portion
-    ctx.bezierCurveTo(
-      -halfW * 0.1, halfH + 4,     // c1: bulges slightly down
-      -halfW * 0.55, halfH + 3,    // c2: continues the bulge
-      -halfW, halfH,               // back to bottom-left corner
-    )
-    // closePath draws the straight left edge back to start
-    ctx.closePath()
-    ctx.fill()
-
-    return { hw: halfW + 2, hh: halfH + 4, labelInside: true }
-  }
-
-  private drawAmp(
-    ctx: CanvasRenderingContext2D,
-    w: number, h: number,
-  ): { hw: number; hh: number; labelInside: boolean } {
-    // Square-ish black cabinet with a white control strip + tiny knobs at the top.
-    const hw = w / 2, hh = h / 2
-
-    ctx.fillStyle = '#1a1a1a'
-    this.roundRect(ctx, -hw, -hh, w, h, 2)
-    ctx.fill()
-
-    // Control panel strip near the top
-    const stripPad = 3
-    const stripH = 5
-    const stripY = -hh + stripPad
-    ctx.fillStyle = '#fff'
-    ctx.fillRect(-hw + stripPad, stripY, w - stripPad * 2, stripH)
-
-    // Tiny black knobs along the strip
-    ctx.fillStyle = '#1a1a1a'
-    const knobs = 4
-    const knobY = stripY + stripH / 2
-    const usableW = w - stripPad * 2 - 4
-    for (let i = 0; i < knobs; i++) {
-      const t = (i + 0.5) / knobs
-      const knobX = -hw + stripPad + 2 + t * usableW
-      ctx.beginPath()
-      ctx.arc(knobX, knobY, 1, 0, Math.PI * 2)
-      ctx.fill()
-    }
-
-    return { hw, hh, labelInside: false }
-  }
-
-  private drawTimpani(
-    ctx: CanvasRenderingContext2D,
-    inst: FixedInstrument,
-  ): { hw: number; hh: number; labelInside: boolean } {
-    // N drums (2-6) on an arc that curves UPWARD (smile / ∪) around an
-    // implied player ABOVE the cluster.  We use a fixed total arc angle
-    // (108°) so the curvature stays clearly visible at any drum count —
-    // the radius shrinks with fewer drums and grows with more.
-    const count = Math.max(2, Math.min(6, inst.count ?? 4))
-    const drumR = 18
-    const chord = drumR * 2 + 1                      // touching with a 1px hair of gap
-    const totalAngle = (3 * Math.PI) / 5             // 108° — visibly curved at any count
-    const angleStep = count > 1 ? totalAngle / (count - 1) : 0
-    const arcR = count > 1 ? chord / (2 * Math.sin(angleStep / 2)) : drumR
-    const startAngle = Math.PI / 2 - totalAngle / 2
-
-    // Arc centre at (0, -arcR) — above the drums, so the cluster smiles upward.
-    const positions: Array<{ x: number; y: number }> = []
-    for (let i = 0; i < count; i++) {
-      const a = startAngle + i * angleStep
-      positions.push({
-        x: arcR * Math.cos(a),
-        y: -arcR + arcR * Math.sin(a),
-      })
-    }
-
-    // Re-centre vertically so the cluster sits around y=0
-    const minY = Math.min(...positions.map(p => p.y))
-    const maxY = Math.max(...positions.map(p => p.y))
-    const offsetY = -(minY + maxY) / 2
-    positions.forEach(p => { p.y += offsetY })
-
-    ctx.fillStyle = '#1a1a1a'
-    ctx.strokeStyle = '#fff'
-    ctx.lineWidth = 1
-    positions.forEach(p => {
-      ctx.beginPath()
-      ctx.arc(p.x, p.y, drumR, 0, Math.PI * 2)
-      ctx.fill()
-      ctx.stroke()
-      // Inner head ring (thin white) — gives the drum some depth detail
-      ctx.beginPath()
-      ctx.arc(p.x, p.y, drumR - 4, 0, Math.PI * 2)
-      ctx.stroke()
-    })
-
-    const minX = Math.min(...positions.map(p => p.x))
-    const maxX = Math.max(...positions.map(p => p.x))
-    const hw = Math.max(-(minX - drumR), maxX + drumR)
-    const hh = (maxY - minY) / 2 + drumR
-
-    return { hw, hh, labelInside: false }
-  }
-
-  private drawMallet(ctx: CanvasRenderingContext2D): { hw: number; hh: number; labelInside: boolean } {
-    // Shorter trapezoid (wider low end on the left, narrower high end on the right).
-    const w = 90, leftH = 36, rightH = 24
-    const hw = w / 2
-
-    ctx.fillStyle = '#1a1a1a'
-    ctx.beginPath()
-    ctx.moveTo(-hw, -leftH / 2)
-    ctx.lineTo(hw, -rightH / 2)
-    ctx.lineTo(hw, rightH / 2)
-    ctx.lineTo(-hw, leftH / 2)
-    ctx.closePath()
-    ctx.fill()
-
-    // Thin white bar separators to suggest keys
-    ctx.strokeStyle = '#fff'
-    ctx.lineWidth = 0.8
-    for (let i = 1; i < 5; i++) {
-      const t = i / 5
-      const x = -hw + t * w
-      const yTop = -leftH / 2 + t * (-rightH / 2 - -leftH / 2)
-      const yBot = leftH / 2 + t * (rightH / 2 - leftH / 2)
-      ctx.beginPath()
-      ctx.moveTo(x, yTop)
-      ctx.lineTo(x, yBot)
-      ctx.stroke()
-    }
-
-    return { hw, hh: leftH / 2, labelInside: true }
-  }
-
-  private drawGenericRect(
-    ctx: CanvasRenderingContext2D,
-    hw: number, hh: number,
-  ): { hw: number; hh: number; labelInside: boolean } {
-    ctx.fillStyle = '#3a3a3a'
-    ctx.strokeStyle = '#fff'
-    ctx.lineWidth = 1.5
-    ctx.beginPath()
-    ctx.rect(-hw, -hh, hw * 2, hh * 2)
-    ctx.fill()
-    ctx.stroke()
-    return { hw, hh, labelInside: false }
-  }
-
-  private roundRect(
-    ctx: CanvasRenderingContext2D,
-    x: number, y: number, w: number, h: number, r: number,
-  ) {
-    ctx.beginPath()
-    ctx.moveTo(x + r, y)
-    ctx.arcTo(x + w, y, x + w, y + h, r)
-    ctx.arcTo(x + w, y + h, x, y + h, r)
-    ctx.arcTo(x, y + h, x, y, r)
-    ctx.arcTo(x, y, x + w, y, r)
-    ctx.closePath()
-  }
 
   // ---------------------------------------------------------------------------
   // Title + Notes — always rendered, WYSIWYG

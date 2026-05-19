@@ -16,6 +16,7 @@ Internal notes for working on the codebase. Not user-facing.
 | `src/types.ts` | Pure data shapes — `Chair`, `Row`, `ChartConfig`, `FixedInstrument`, hit-test types. The schema. No logic. |
 | `src/state.ts` | Factory functions (`makeChair`, `makeRow`, `makeDefaultConfig`, `makeInstrument`), `cloneConfig`, and the `History` class for undo/redo. Anything that *creates* a domain object. |
 | `src/renderer.ts` | The `Renderer` class. Takes a `ChartConfig`, draws it to a `<canvas>`, exposes hit-test methods. Holds the cached background `Image`. **Zero awareness of DOM/sidebar.** |
+| `src/instrument-glyphs.ts` | Pure draw functions for each fixed-instrument glyph (drum kit, piano, amp, timpani, mallet, generic rectangle). Each draws at (0, 0) in the current canvas frame and returns its `{ hw, hh, labelInside }` bounding box. No class — just stateless functions. |
 | `src/presets.ts` | The preset library, the Boosey & Hawkes notation parser (`parseOrchestraNotation`, `describeComposition`), and the orchestra-row builder (`buildOrchestraRows`). Self-contained: input shorthand → `Row[]`. |
 | `src/serializer.ts` | Persistence — JSON save/load, URL-hash encode/decode, PNG export. The hash encoder strips `backgroundImage` (too big for a URL) and reports back. |
 | `src/main.ts` | The UI/glue. DOM refs, event handlers, init, render loop trigger, the sidebar/modal logic. Tying everything together. The largest file by far. |
@@ -158,9 +159,10 @@ through have since been done.
   ~90% duplicate~~ — done, consolidated into `renderStraightRow`.
 - ~~`readInputs()` and `updateAllInputs()` repeat the same ~14 fields
   twice~~ — done, replaced with table-driven `bindText/bindBool/bindNumber`.
-- `renderer.ts` is 1200 lines in one class. The 6 instrument-glyph methods
+- ~~`renderer.ts` is 1200 lines in one class. The 6 instrument-glyph methods
   (~250 lines) have nothing to do with row layout — splitting into
-  `src/instrument-glyphs.ts` would clean things up.
+  `src/instrument-glyphs.ts` would clean things up.~~ — done; renderer.ts
+  down to ~940 lines, glyphs now in their own module.
 - `main.ts` is ~1000 lines and has no internal structure — could split
   into `dom.ts` (refs), `events.ts` (handlers), `row-ui.ts` (row list).
 - `applyPreset` is ~270 lines doing notation/customRows/sections dispatch
