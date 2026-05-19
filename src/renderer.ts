@@ -66,7 +66,7 @@ export class Renderer {
     // Title / notes / stage-direction labels stay at canvas scale so they
     // don't shrink with chartScale and remain readable.
     this.drawTitle(ctx, config.title, w)
-    this.drawNotes(ctx, config.notes, h)
+    this.drawNotes(ctx, config.notes, h, config.showCredit ?? true)
     if (config.showStageDirections) this.drawStageDirections(ctx, w, h)
 
     // The seating chart itself is wrapped in a uniform scale transform
@@ -630,14 +630,18 @@ export class Renderer {
     ctx.restore()
   }
 
-  private drawNotes(ctx: CanvasRenderingContext2D, notes: string, h: number) {
+  private drawNotes(ctx: CanvasRenderingContext2D, notes: string, h: number, creditShown: boolean) {
     if (!notes) return
     const lines = notes.split('\n').filter(l => l.trim())
     if (lines.length === 0) return
 
     const lineHeight = 14
     const x = 12
-    const bottomY = h - 12
+    // Sit above the "Created with StagePlan" credit when it's drawn, so
+    // the two never overlap. Credit line is ~14px tall (10px font + 4px
+    // breathing room) and itself anchored at h-12.
+    const creditReserve = creditShown ? 16 : 0
+    const bottomY = h - 12 - creditReserve
 
     ctx.save()
     ctx.fillStyle = '#888'
