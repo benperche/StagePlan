@@ -173,54 +173,76 @@ function resizeCanvas() {
 
 // --- Sync inputs → config ---
 
+// --- Input ↔ config bindings ---
+//
+// Every form control in the sidebar/advanced modal is registered here with
+// a paired getter (config → string/bool/number) and setter (input → config),
+// including any unit conversion or clamping. readInputs() iterates the
+// setters, updateAllInputs() iterates the getters — so adding a new field
+// is one bind* call instead of remembering to update two unrelated blocks.
+const fieldReaders: Array<() => void> = []   // input → config
+const fieldWriters: Array<() => void> = []   // config → input
+
+function bindText(
+  el: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+  get: () => string,
+  set: (v: string) => void,
+) {
+  fieldReaders.push(() => set(el.value))
+  fieldWriters.push(() => { el.value = get() })
+}
+function bindBool(el: HTMLInputElement, get: () => boolean, set: (v: boolean) => void) {
+  fieldReaders.push(() => set(el.checked))
+  fieldWriters.push(() => { el.checked = get() })
+}
+function bindNumber(el: HTMLInputElement, get: () => number, set: (v: number) => void) {
+  fieldReaders.push(() => set(Number(el.value)))
+  fieldWriters.push(() => { el.value = String(get()) })
+}
+
+bindText(titleInput, () => config.title, v => { config.title = v })
+bindText(layoutSelect, () => config.layout, v => { config.layout = v as ChartConfig['layout'] })
+bindText(notesArea, () => config.notes, v => { config.notes = v })
+bindBool(showNumbersCheck, () => config.showNumbers, v => { config.showNumbers = v })
+bindBool(restartNumbersCheck, () => config.numberRestartPerRow, v => { config.numberRestartPerRow = v })
+bindBool(showRowLabelsCheck, () => config.showRowLabels, v => { config.showRowLabels = v })
+bindBool(conductorStandCheck, () => config.conductor.hasStand, v => { config.conductor.hasStand = v })
+bindBool(flipCheck, () => config.flipped, v => { config.flipped = v })
+bindBool(showArcCheck, () => config.showArc, v => { config.showArc = v })
+bindBool(showStageDirectionsCheck, () => config.showStageDirections, v => { config.showStageDirections = v })
+bindBool(showCreditCheck, () => config.showCredit, v => { config.showCredit = v })
+bindNumber(chartScaleInput,
+  () => Math.round(config.chartScale * 100),
+  v => { config.chartScale = Math.max(50, Math.min(200, v || 100)) / 100 })
+bindText(bgFitSelect,
+  () => config.backgroundFit,
+  v => { if (v === 'contain' || v === 'cover' || v === 'stretch') config.backgroundFit = v })
+bindNumber(straightRowsInput,
+  () => config.straightRows,
+  v => { config.straightRows = Math.max(0, Math.min(config.rows.length, v || 0)) })
+bindNumber(arcRangeInput,
+  () => Math.round((config.arcRange * 180) / Math.PI),
+  v => { config.arcRange = (Math.max(60, Math.min(180, v || 180)) * Math.PI) / 180 })
+bindNumber(rowSpacingInput,
+  () => config.rowSpacing,
+  v => { config.rowSpacing = Math.max(50, Math.min(120, v || 70)) })
+
 function readInputs() {
   history.push(config)
-  config.title = titleInput.value
-  config.layout = layoutSelect.value as ChartConfig['layout']
-  config.notes = notesArea.value
-  config.showNumbers = showNumbersCheck.checked
-  config.numberRestartPerRow = restartNumbersCheck.checked
-  config.showRowLabels = showRowLabelsCheck.checked
-  config.conductor.hasStand = conductorStandCheck.checked
-  config.flipped = flipCheck.checked
-  config.showArc = showArcCheck.checked
-  config.showStageDirections = showStageDirectionsCheck.checked
-  const scalePct = Math.max(50, Math.min(200, Number(chartScaleInput.value) || 100))
-  config.chartScale = scalePct / 100
-  const fit = bgFitSelect.value
-  if (fit === 'contain' || fit === 'cover' || fit === 'stretch') config.backgroundFit = fit
-  config.showCredit = showCreditCheck.checked
-  config.straightRows = Math.max(0, Math.min(config.rows.length, Number(straightRowsInput.value) || 0))
-  const arcDeg = Math.max(60, Math.min(180, Number(arcRangeInput.value) || 180))
-  config.arcRange = (arcDeg * Math.PI) / 180
-  config.rowSpacing = Math.max(50, Math.min(120, Number(rowSpacingInput.value) || 70))
+  fieldReaders.forEach(r => r())
 }
 
 // --- Sync config → inputs ---
 
 function updateAllInputs() {
-  titleInput.value = config.title
-  layoutSelect.value = config.layout
-  notesArea.value = config.notes
-  showNumbersCheck.checked = config.showNumbers
-  restartNumbersCheck.checked = config.numberRestartPerRow
-  showRowLabelsCheck.checked = config.showRowLabels
-  conductorStandCheck.checked = config.conductor.hasStand
-  flipCheck.checked = config.flipped
-  showArcCheck.checked = config.showArc
-  showStageDirectionsCheck.checked = config.showStageDirections ?? false
-  chartScaleInput.value = String(Math.round((config.chartScale ?? 1) * 100))
+  fieldWriters.forEach(w => w())
+  // Special cases that don't fit a simple two-way bind:
   bgClearBtn.disabled = !config.backgroundImage
   bgStatus.textContent = config.backgroundImage ? 'Background loaded.' : 'No background.'
-  bgFitSelect.value = config.backgroundFit ?? 'contain'
-  showCreditCheck.checked = config.showCredit ?? true
-  straightRowsInput.value = String(config.straightRows)
   straightRowsInput.max = String(config.rows.length)
   // Only show semicircle-specific controls in semicircle mode
   straightRowsLabel.style.display = config.layout === 'semicircle' ? '' : 'none'
   arcRangeLabel.style.display = config.layout === 'semicircle' ? '' : 'none'
-  arcRangeInput.value = String(Math.round((config.arcRange * 180) / Math.PI))
-  rowSpacingInput.value = String(config.rowSpacing)
   renderRowList()
 }
 

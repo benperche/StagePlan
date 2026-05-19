@@ -137,13 +137,34 @@ Three ways a `Preset` can specify its rows, in priority order:
 - **The advanced modal inputs and `readInputs()` must stay in sync.** Adding a new advanced setting means: update `types.ts`, `state.ts` defaults, `index.html` markup, the DOM ref + `readInputs` + `updateAllInputs` blocks in `main.ts`, and the change-listener loop in `bindEvents`.
 - **`config` is module-global in main.ts.** Reassignment (load JSON, undo/redo) does `config = newConfig`, not in-place mutation. Then `updateAllInputs()` re-syncs the sidebar.
 
+## Sidebar ↔ config bindings
+
+Every sidebar/modal input is registered with a paired `bindText` /
+`bindBool` / `bindNumber` helper at module top in `main.ts`. Each binding
+takes a getter (config → value) and a setter (value → config), including
+any clamping and unit conversion. `readInputs()` runs all setters in the
+order they were registered; `updateAllInputs()` runs all getters. **Adding
+a new sidebar field is one `bind*` call, not three separate edits.**
+
+Special cases (button enabled state, conditional visibility, the row list
+rebuild) live in `updateAllInputs` after the binding loop.
+
 ## Known cleanup opportunities (deferred)
 
-These were identified in the May 2026 code-quality audit but deferred:
+These were identified in the May 2026 code-quality audit. Items struck
+through have since been done.
 
-- `renderStraightRowInArc` and the row-loop inside `renderStraight` are ~90% duplicate (~50 lines each). One shared helper would replace both.
-- `readInputs()` and `updateAllInputs()` repeat the same ~14 fields twice with manual clamp/round. A table-driven approach would halve them.
-- `renderer.ts` is 1200 lines in one class. The 6 instrument-glyph methods (~250 lines) have nothing to do with row layout — splitting into `src/instrument-glyphs.ts` would clean things up.
-- `main.ts` is ~1000 lines and has no internal structure — could split into `dom.ts` (refs), `events.ts` (handlers), `row-ui.ts` (row list rendering).
-- `applyPreset` is ~270 lines doing notation/customRows/sections dispatch + chair construction + instrument placement. The "build rows from preset" part probably belongs in `presets.ts`.
-- State management is implicit — a `setConfig(newConfig)` wrapper that calls `renderChart` automatically would make data flow more obvious.
+- ~~`renderStraightRowInArc` and the row-loop inside `renderStraight` are
+  ~90% duplicate~~ — done, consolidated into `renderStraightRow`.
+- ~~`readInputs()` and `updateAllInputs()` repeat the same ~14 fields
+  twice~~ — done, replaced with table-driven `bindText/bindBool/bindNumber`.
+- `renderer.ts` is 1200 lines in one class. The 6 instrument-glyph methods
+  (~250 lines) have nothing to do with row layout — splitting into
+  `src/instrument-glyphs.ts` would clean things up.
+- `main.ts` is ~1000 lines and has no internal structure — could split
+  into `dom.ts` (refs), `events.ts` (handlers), `row-ui.ts` (row list).
+- `applyPreset` is ~270 lines doing notation/customRows/sections dispatch
+  + chair construction + instrument placement. The "build rows from
+  preset" part probably belongs in `presets.ts`.
+- State management is implicit — a `setConfig(newConfig)` wrapper that
+  calls `renderChart` automatically would make data flow more obvious.

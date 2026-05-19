@@ -288,7 +288,7 @@ export class Renderer {
       const r = BASE_RADIUS + rowIndex * rowSpacing
       const isStraight = rowIndex >= numRows - config.straightRows
       if (isStraight) {
-        seatNumber = this.renderStraightRowInArc(ctx, row, rowIndex, r, ox, oy, yDir, config, seatNumber, straightLabelX)
+        seatNumber = this.renderStraightRow(ctx, row, rowIndex, oy + yDir * r, ox, oy, config, seatNumber, straightLabelX)
       } else {
         seatNumber = this.renderArcRow(ctx, row, rowIndex, r, ox, oy, yDir, config, seatNumber)
       }
@@ -387,12 +387,18 @@ export class Renderer {
     return seatNumber
   }
 
-  private renderStraightRowInArc(
+  /**
+   * Draw one row's worth of chairs in a horizontal line at y = rowY,
+   * centred on `ox`. Used both by the "straight rows from back" feature in
+   * semicircle layouts and by the pure straight layout. Mutates seatNumber
+   * via the return value; pushes hit targets as a side effect.
+   */
+  private renderStraightRow(
     ctx: CanvasRenderingContext2D,
     row: Row,
     rowIndex: number,
-    r: number,
-    ox: number, oy: number, yDir: number,
+    rowY: number,
+    ox: number, oy: number,
     config: ChartConfig,
     seatNumber: number,
     labelX: number,
@@ -400,10 +406,8 @@ export class Renderer {
     const total = row.chairs.length
     if (total === 0) return seatNumber
 
-    const rowY = oy + yDir * r
     const rowWidth = (total - 1) * STRAIGHT_CHAIR_SPACING
     const startX = ox - rowWidth / 2
-
     const positions: Array<{ cx: number; cy: number }> = []
 
     row.chairs.forEach((chair, chairIndex) => {
@@ -427,7 +431,7 @@ export class Renderer {
       this.hitTargets.push({ rowIndex, chairIndex, x: cx, y: rowY, radius: CHAIR_HALF * 1.1 })
     })
 
-    // Shared stands
+    // Shared stands between desk-paired chairs
     row.chairs.forEach((chair, chairIndex) => {
       if (chair.standAfter && chairIndex + 1 < positions.length) {
         const a = positions[chairIndex]
@@ -436,9 +440,7 @@ export class Renderer {
       }
     })
 
-    if (config.showRowLabels) {
-      this.drawRowLabel(ctx, row.label, labelX, rowY)
-    }
+    if (config.showRowLabels) this.drawRowLabel(ctx, row.label, labelX, rowY)
     return seatNumber
   }
 
@@ -464,48 +466,9 @@ export class Renderer {
     const labelX = ox - maxRowWidth / 2 - CHAIR_HALF - 18
 
     let seatNumber = 1
-
     config.rows.forEach((row, rowIndex) => {
-      const total = row.chairs.length
-      if (total === 0) return
-
       const rowY = oy + yDir * (BASE_RADIUS + rowIndex * rowSpacing)
-      const rowWidth = (total - 1) * STRAIGHT_CHAIR_SPACING
-      const startX = ox - rowWidth / 2
-
-      const positions: Array<{ cx: number; cy: number }> = []
-
-      row.chairs.forEach((chair, chairIndex) => {
-        const cx = startX + chairIndex * STRAIGHT_CHAIR_SPACING
-        positions.push({ cx, cy: rowY })
-
-        if (chair.enabled) {
-          this.drawChair(ctx, chair, cx, rowY, cx, oy, row.fontSize)
-          if (chair.hasStand) this.drawStandX(ctx, cx, rowY, cx, oy)
-          if (config.showNumbers) {
-            const num = config.numberRestartPerRow
-              ? row.chairs.slice(0, chairIndex).filter(c => c.enabled).length + 1
-              : seatNumber
-            this.drawSeatNumber(ctx, cx, rowY, cx, oy, String(num), row.fontSize)
-          }
-          seatNumber++
-        } else {
-          this.drawGhostChair(ctx, cx, rowY, cx, oy)
-        }
-
-        this.hitTargets.push({ rowIndex, chairIndex, x: cx, y: rowY, radius: CHAIR_HALF * 1.1 })
-      })
-
-      // Shared stands
-      row.chairs.forEach((chair, chairIndex) => {
-        if (chair.standAfter && chairIndex + 1 < positions.length) {
-          const a = positions[chairIndex]
-          const b = positions[chairIndex + 1]
-          this.drawStandX(ctx, (a.cx + b.cx) / 2, (a.cy + b.cy) / 2, a.cx, oy)
-        }
-      })
-
-      if (config.showRowLabels) this.drawRowLabel(ctx, row.label, labelX, rowY)
+      seatNumber = this.renderStraightRow(ctx, row, rowIndex, rowY, ox, oy, config, seatNumber, labelX)
     })
   }
 
