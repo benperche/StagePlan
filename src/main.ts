@@ -69,63 +69,21 @@ let conductorDragState: ConductorDragState | null = null
 // at the end of a drag.
 let suppressConductorClick = false
 
-// --- DOM refs ---
-const canvas = document.getElementById('chart-canvas') as HTMLCanvasElement
-const titleInput = document.getElementById('title') as HTMLInputElement
-const layoutSelect = document.getElementById('layout') as HTMLSelectElement
-const notesArea = document.getElementById('notes') as HTMLTextAreaElement
-const showNumbersCheck = document.getElementById('show-numbers') as HTMLInputElement
-const restartNumbersCheck = document.getElementById('restart-numbers') as HTMLInputElement
-const showRowLabelsCheck = document.getElementById('show-row-labels') as HTMLInputElement
-const conductorStandCheck = document.getElementById('conductor-stand') as HTMLInputElement
-const showArcCheck = document.getElementById('show-arc') as HTMLInputElement
-const showStageDirectionsCheck = document.getElementById('show-stage-directions') as HTMLInputElement
-const chartScaleInput = document.getElementById('chart-scale') as HTMLInputElement
-const bgInput = document.getElementById('bg-input') as HTMLInputElement
-const bgClearBtn = document.getElementById('bg-clear-btn') as HTMLButtonElement
-const bgStatus = document.getElementById('bg-status') as HTMLElement
-const bgFitSelect = document.getElementById('bg-fit') as HTMLSelectElement
-const showCreditCheck = document.getElementById('show-credit') as HTMLInputElement
-const flipCheck = document.getElementById('flip') as HTMLInputElement
-const straightRowsInput = document.getElementById('straight-rows') as HTMLInputElement
-const straightRowsLabel = document.getElementById('straight-rows-label') as HTMLElement
-const arcRangeInput = document.getElementById('arc-range') as HTMLInputElement
-const arcRangeLabel = document.getElementById('arc-range-label') as HTMLElement
-const rowSpacingInput = document.getElementById('row-spacing') as HTMLInputElement
-const advancedBtn = document.getElementById('advanced-btn') as HTMLButtonElement
-const advancedModal = document.getElementById('advanced-modal') as HTMLElement
-const advancedCloseBtn = document.getElementById('advanced-close') as HTMLButtonElement
-const rowsContainer = document.getElementById('rows-container') as HTMLElement
-const colorPicker = document.getElementById('color-picker') as HTMLInputElement
-const colorPickerLabel = document.getElementById('color-picker-label') as HTMLElement
-const undoBtn = document.getElementById('undo-btn') as HTMLButtonElement
-const redoBtn = document.getElementById('redo-btn') as HTMLButtonElement
-const resetPositionBtn = document.getElementById('reset-position-btn') as HTMLButtonElement
-const addRowBtn = document.getElementById('add-row-btn') as HTMLButtonElement
-const saveBtn = document.getElementById('save-btn') as HTMLButtonElement
-const loadInput = document.getElementById('load-input') as HTMLInputElement
-const exportPngBtn = document.getElementById('export-png-btn') as HTMLButtonElement
-const shareLinkBtn = document.getElementById('share-link-btn') as HTMLButtonElement
-const shareUrlDisplay = document.getElementById('share-url-display') as HTMLElement
-const presetSelect = document.getElementById('preset-select') as HTMLSelectElement
-const applyPresetBtn = document.getElementById('apply-preset-btn') as HTMLButtonElement
-const customOrchestraBtn = document.getElementById('custom-orchestra-btn') as HTMLButtonElement
-const customOrchestraModal = document.getElementById('custom-orchestra-modal') as HTMLElement
-const customOrchestraTitle = document.getElementById('custom-orchestra-title') as HTMLInputElement
-const customOrchestraNotation = document.getElementById('custom-orchestra-notation') as HTMLInputElement
-const customOrchestraPreview = document.getElementById('custom-orchestra-preview') as HTMLElement
-const customOrchestraApply = document.getElementById('custom-orchestra-apply') as HTMLButtonElement
-const customOrchestraCancel = document.getElementById('custom-orchestra-cancel') as HTMLButtonElement
-const toolButtons = document.querySelectorAll<HTMLButtonElement>('[data-tool]')
-const addInstrumentButtons = document.querySelectorAll<HTMLButtonElement>('[data-add-instrument]')
-const inspector = document.getElementById('instrument-inspector') as HTMLElement
-const inspectorType = document.getElementById('inspector-type') as HTMLElement
-const inspectorLabel = document.getElementById('inspector-label') as HTMLInputElement
-const inspectorCountLabel = document.getElementById('inspector-count-label') as HTMLElement
-const inspectorCount = document.getElementById('inspector-count') as HTMLInputElement
-const inspectorRotateLeft = document.getElementById('inspector-rotate-left') as HTMLButtonElement
-const inspectorRotateRight = document.getElementById('inspector-rotate-right') as HTMLButtonElement
-const inspectorDelete = document.getElementById('inspector-delete') as HTMLButtonElement
+// All DOM refs live in dom.ts; pull them in by name.
+import {
+  canvas, titleInput, layoutSelect, notesArea, showNumbersCheck, restartNumbersCheck,
+  showRowLabelsCheck, conductorStandCheck, showArcCheck, showStageDirectionsCheck,
+  chartScaleInput, bgInput, bgClearBtn, bgStatus, bgFitSelect, showCreditCheck,
+  flipCheck, straightRowsInput, straightRowsLabel, arcRangeInput, arcRangeLabel,
+  rowSpacingInput, advancedBtn, advancedModal, advancedCloseBtn, rowsContainer,
+  colorPicker, colorPickerLabel, undoBtn, redoBtn, resetPositionBtn, addRowBtn, saveBtn,
+  loadInput, exportPngBtn, shareLinkBtn, shareUrlDisplay, presetSelect, applyPresetBtn,
+  customOrchestraBtn, customOrchestraModal, customOrchestraTitle, customOrchestraNotation,
+  customOrchestraPreview, customOrchestraApply, customOrchestraCancel,
+  toolButtons, addInstrumentButtons, inspector, inspectorType, inspectorLabel,
+  inspectorCountLabel, inspectorCount, inspectorRotateLeft, inspectorRotateRight,
+  inspectorDelete,
+} from './dom'
 
 // --- Init ---
 
@@ -140,6 +98,9 @@ function init() {
   updateAllInputs()
   renderInspector()
   bindEvents()
+  // setConfig isn't usable here yet (bindEvents hasn't wired things up
+  // until after this returns). The default/hash-loaded path is the one
+  // case where we mutate config in place and then sync everything below.
 }
 
 // Make older saved configs forward-compatible with newer schema fields.
@@ -150,6 +111,23 @@ function migrateConfig(c: ChartConfig) {
   const defaults = makeDefaultConfig()
   const merged = { ...defaults, ...c, conductor: { ...defaults.conductor, ...c.conductor } }
   Object.assign(c, merged)
+}
+
+/**
+ * Swap the entire `config` for a new one (undo, redo, load JSON, hash-load)
+ * and run the bookkeeping every replacement needs: schema migration,
+ * collapse any open row label editors / instrument selection that no
+ * longer refers to anything valid, push the new state to the sidebar, and
+ * re-render the canvas. Use this any time the whole config is replaced
+ * wholesale; for in-place mutations just call renderChart() directly.
+ */
+function setConfig(newConfig: ChartConfig) {
+  config = newConfig
+  migrateConfig(config)
+  expandedRows.clear()
+  setSelectedInstrument(null)
+  updateAllInputs()
+  renderChart()
 }
 
 // --- Render ---
@@ -761,21 +739,11 @@ function bindEvents() {
   // Undo / redo
   undoBtn.addEventListener('click', () => {
     const prev = history.undo(config)
-    if (prev) {
-      config = prev
-      migrateConfig(config)
-      setSelectedInstrument(null)
-      updateAllInputs(); renderChart()
-    }
+    if (prev) setConfig(prev)
   })
   redoBtn.addEventListener('click', () => {
     const next = history.redo(config)
-    if (next) {
-      config = next
-      migrateConfig(config)
-      setSelectedInstrument(null)
-      updateAllInputs(); renderChart()
-    }
+    if (next) setConfig(next)
   })
   resetPositionBtn.addEventListener('click', () => {
     if (config.conductor.offsetX === 0 && config.conductor.offsetY === 0) return
@@ -800,12 +768,12 @@ function bindEvents() {
     if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
       e.preventDefault()
       const prev = history.undo(config)
-      if (prev) { config = prev; migrateConfig(config); setSelectedInstrument(null); updateAllInputs(); renderChart() }
+      if (prev) setConfig(prev)
     }
     if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
       e.preventDefault()
       const next = history.redo(config)
-      if (next) { config = next; migrateConfig(config); setSelectedInstrument(null); updateAllInputs(); renderChart() }
+      if (next) setConfig(next)
     }
 
     // Delete selected instrument (Delete or Backspace) — but only when not
@@ -827,12 +795,7 @@ function bindEvents() {
     const file = loadInput.files?.[0]
     if (!file) return
     try {
-      config = await loadFromJson(file)
-      migrateConfig(config)
-      expandedRows.clear()
-      setSelectedInstrument(null)
-      updateAllInputs()
-      renderChart()
+      setConfig(await loadFromJson(file))
     } catch {
       alert('Could not load chart file.')
     }

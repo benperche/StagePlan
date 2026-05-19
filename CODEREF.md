@@ -19,7 +19,8 @@ Internal notes for working on the codebase. Not user-facing.
 | `src/instrument-glyphs.ts` | Pure draw functions for each fixed-instrument glyph (drum kit, piano, amp, timpani, mallet, generic rectangle). Each draws at (0, 0) in the current canvas frame and returns its `{ hw, hh, labelInside }` bounding box. No class — just stateless functions. |
 | `src/presets.ts` | The preset library, the Boosey & Hawkes notation parser (`parseOrchestraNotation`, `describeComposition`), and the orchestra-row builder (`buildOrchestraRows`). Self-contained: input shorthand → `Row[]`. |
 | `src/serializer.ts` | Persistence — JSON save/load, URL-hash encode/decode, PNG export. The hash encoder strips `backgroundImage` (too big for a URL) and reports back. |
-| `src/main.ts` | The UI/glue. DOM refs, event handlers, init, render loop trigger, the sidebar/modal logic. Tying everything together. The largest file by far. |
+| `src/main.ts` | The UI/glue. App state (`config`, history, drag tracking), event handlers, init, render loop trigger. The orchestration that ties everything together. |
+| `src/dom.ts` | All `document.getElementById` lookups. One file, organised by sidebar panel, so adding a new control means editing one obvious place. |
 | `index.html` | Sidebar markup, modal markup, canvas element. |
 | `src/style.css` | All styles. |
 
@@ -141,7 +142,7 @@ is then a thin wrapper that calls `buildPreset`, pushes the result into
 - **Hit targets are stored on the Renderer instance** and reset every render. Don't call hitTest before the first render.
 - **`applyPreset` calls `history.push(config)` at the top.** Don't double-push in callers.
 - **The advanced modal inputs and `readInputs()` must stay in sync.** Adding a new advanced setting means: update `types.ts`, `state.ts` defaults, `index.html` markup, the DOM ref + `readInputs` + `updateAllInputs` blocks in `main.ts`, and the change-listener loop in `bindEvents`.
-- **`config` is module-global in main.ts.** Reassignment (load JSON, undo/redo) does `config = newConfig`, not in-place mutation. Then `updateAllInputs()` re-syncs the sidebar.
+- **`config` is module-global in main.ts.** Any wholesale replacement (load JSON, undo, redo, hash-load) goes through `setConfig(newConfig)`, which migrates, clears stale UI state, syncs the sidebar, and re-renders. In-place mutations (most user actions) just call `renderChart()` directly.
 
 ## Sidebar ↔ config bindings
 
@@ -168,11 +169,15 @@ through have since been done.
   (~250 lines) have nothing to do with row layout — splitting into
   `src/instrument-glyphs.ts` would clean things up.~~ — done; renderer.ts
   down to ~940 lines, glyphs now in their own module.
-- `main.ts` is ~1000 lines and has no internal structure — could split
-  into `dom.ts` (refs), `events.ts` (handlers), `row-ui.ts` (row list).
+- ~~`main.ts` is ~1000 lines and has no internal structure — could split
+  into `dom.ts` (refs), `events.ts` (handlers), `row-ui.ts` (row list).~~
+  — partially done; `dom.ts` extracted. `events.ts` and `row-ui.ts`
+  splits deferred (the row UI is tightly coupled to the shared `config`
+  / `history` / `expandedRows` state and would need a heavy props pass).
 - ~~`applyPreset` is ~270 lines doing notation/customRows/sections dispatch
   + chair construction + instrument placement. The "build rows from
   preset" part probably belongs in `presets.ts`.~~ — done; the pure build
   is now `buildPreset` in `presets.ts`, `applyPreset` is a 17-line wrapper.
-- State management is implicit — a `setConfig(newConfig)` wrapper that
-  calls `renderChart` automatically would make data flow more obvious.
+- ~~State management is implicit — a `setConfig(newConfig)` wrapper that
+  calls `renderChart` automatically would make data flow more obvious.~~
+  — done; all wholesale config replacements go through `setConfig`.
