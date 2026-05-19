@@ -34,12 +34,12 @@ const INSTRUMENT_GROUPS: Array<{ name: string; items: string[] }> = [
   ] },
   { name: 'Brass', items: [
     'Horn', 'Trumpet', 'Cornet', 'Flugelhorn', 'Trombone', 'Bass Trombone',
-    'Euphonium', 'Baritone', 'Tuba',
+    'Baritone', 'Euphonium', 'Tuba',
   ] },
   { name: 'Strings', items: [
     'Violin', 'Viola', 'Cello', 'Double Bass',
   ] },
-  { name: 'Rhythm', items: [
+  { name: 'Rhythm and Keyboards', items: [
     'Piano', 'Keyboard', 'Organ', 'Harp', 'Celeste',
     'Guitar', 'Electric Guitar', 'Bass', 'Electric Bass',
   ] },
@@ -116,6 +116,7 @@ import {
   customOrchestraBtn, customOrchestraModal, customOrchestraTitle, customOrchestraNotation,
   customOrchestraPreview, customOrchestraApply, customOrchestraCancel,
   toolButtons, instrumentPickerPanel, instrumentPickerList, instrumentPickerStatus,
+  showTallyBtn, tallyOverlay, tallyBody, tallyTotal, tallyMinimizeBtn, tallyCloseBtn,
   addInstrumentButtons, inspector, inspectorType, inspectorLabel,
   inspectorCountLabel, inspectorCount, inspectorRotateLeft, inspectorRotateRight,
   inspectorDelete,
@@ -173,6 +174,83 @@ function renderChart() {
   renderer.render(canvas, config)
   undoBtn.disabled = !history.canUndo()
   redoBtn.disabled = !history.canRedo()
+  renderTally()
+}
+
+// --- Instrument tally overlay ---
+//
+// Walks the chart and groups each distinct enabled chair label by its
+// originating instrument's section in INSTRUMENT_GROUPS. Labels not
+// recognised as belonging to any known instrument fall through to an
+// "Other" bucket at the bottom. Re-rendered after every renderChart()
+// call, but bails out early when the overlay is hidden so there's no
+// cost while you're not looking at it.
+function renderTally() {
+  if (tallyOverlay.style.display === 'none') return
+
+  // Pre-built sorted matcher list: longer names first so "Bass Clarinet"
+  // wins over "Bass" when classifying a "Bass Clarinet 1" label.
+  const matchers: Array<{ name: string; section: string; orderInSection: number }> = []
+  INSTRUMENT_GROUPS.forEach(g => g.items.forEach((item, idx) =>
+    matchers.push({ name: item, section: g.name, orderInSection: idx })))
+  matchers.sort((a, b) => b.name.length - a.name.length)
+
+  // Count every distinct (enabled) label in the chart
+  const counts = new Map<string, number>()
+  for (const row of config.rows) {
+    for (const chair of row.chairs) {
+      if (!chair.enabled || !chair.label) continue
+      counts.set(chair.label, (counts.get(chair.label) ?? 0) + 1)
+    }
+  }
+
+  // Bucket each label by section
+  type TallyEntry = { label: string; count: number; baseOrder: number }
+  const bySection = new Map<string, TallyEntry[]>()
+  const other: TallyEntry[] = []
+  counts.forEach((count, label) => {
+    const match = matchers.find(m => label === m.name || label.startsWith(m.name + ' '))
+    if (match) {
+      if (!bySection.has(match.section)) bySection.set(match.section, [])
+      bySection.get(match.section)!.push({ label, count, baseOrder: match.orderInSection })
+    } else {
+      other.push({ label, count, baseOrder: 0 })
+    }
+  })
+
+  let totalChairs = 0
+  const parts: string[] = []
+
+  for (const group of INSTRUMENT_GROUPS) {
+    const items = bySection.get(group.name)
+    if (!items?.length) continue
+    items.sort((a, b) => a.baseOrder - b.baseOrder || a.label.localeCompare(b.label))
+    parts.push(`<div class="tally-section-heading">${group.name}</div>`)
+    for (const { label, count } of items) {
+      totalChairs += count
+      parts.push(`<div class="tally-row"><span>${escapeHtml(label)}</span><span class="tally-count">${count}</span></div>`)
+    }
+  }
+  if (other.length) {
+    other.sort((a, b) => a.label.localeCompare(b.label))
+    parts.push(`<div class="tally-section-heading">Other</div>`)
+    for (const { label, count } of other) {
+      totalChairs += count
+      parts.push(`<div class="tally-row"><span>${escapeHtml(label)}</span><span class="tally-count">${count}</span></div>`)
+    }
+  }
+
+  tallyBody.innerHTML = parts.length
+    ? parts.join('')
+    : `<p class="tally-empty">No labelled chairs yet. Pick an instrument in the panel on the left, then click chairs to assign.</p>`
+  tallyTotal.textContent = totalChairs > 0
+    ? `${totalChairs} labelled`
+    : ''
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
 }
 
 // Re-render once the background image finishes decoding.
@@ -809,6 +887,23 @@ function bindEvents() {
       })
     })
   }
+
+  // Show / hide / minimise the floating tally overlay.
+  showTallyBtn.addEventListener('click', () => {
+    // Toggle: a second click on the picker button closes the overlay too.
+    if (tallyOverlay.style.display === 'none' || !tallyOverlay.style.display) {
+      tallyOverlay.style.display = 'flex'
+      tallyOverlay.classList.remove('minimized')
+      renderTally()
+    } else {
+      tallyOverlay.style.display = 'none'
+    }
+  })
+  tallyCloseBtn.addEventListener('click', () => { tallyOverlay.style.display = 'none' })
+  tallyMinimizeBtn.addEventListener('click', () => {
+    tallyOverlay.classList.toggle('minimized')
+    tallyMinimizeBtn.textContent = tallyOverlay.classList.contains('minimized') ? '+' : '–'
+  })
 
   colorPicker.addEventListener('input', () => {
     activeColor = colorPicker.value

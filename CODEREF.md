@@ -86,6 +86,25 @@ sticks until the user picks a different instrument or switches tools.
 The picker is built lazily on first activation and cached; switching
 between tools just shows/hides the panel.
 
+### Instrument tally overlay
+
+A 📊 button at the top of the Allocate Instruments panel opens a
+floating overlay (`#tally-overlay`, top-right of the window) that
+lists every distinct enabled chair label in the chart, grouped into
+the same INSTRUMENT_GROUPS sections, with a live count per label.
+Sections with no matching labels are hidden; labels that don't match
+any canonical instrument (e.g. preset abbreviations like "Tpt 1")
+fall through to an "Other" bucket at the bottom.
+
+* Lives in the DOM, not the canvas — never appears on PNG exports.
+* `renderTally()` is called from every `renderChart()` but bails out
+  early when the overlay is hidden, so there's zero cost while closed.
+* Header bar has minimise (collapse to header) and close (hide
+  entirely). Clicking the picker's 📊 button again toggles the
+  overlay back on.
+* Labels are classified by longest-prefix match — "Bass Clarinet 1"
+  matches Bass Clarinet, not Bass.
+
 ## Music stands
 
 - `Chair.hasStand` = solo stand in front of this chair (× drawn between chair and conductor).

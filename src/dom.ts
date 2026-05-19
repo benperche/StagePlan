@@ -52,6 +52,14 @@ export const toolButtons = document.querySelectorAll<HTMLButtonElement>('[data-t
 export const instrumentPickerPanel = document.getElementById('instrument-picker-panel') as HTMLElement
 export const instrumentPickerList = document.getElementById('instrument-picker-list') as HTMLElement
 export const instrumentPickerStatus = document.getElementById('instrument-picker-status') as HTMLElement
+export const showTallyBtn = document.getElementById('show-tally-btn') as HTMLButtonElement
+
+// --- Instrument tally overlay ---
+export const tallyOverlay = document.getElementById('tally-overlay') as HTMLElement
+export const tallyBody = document.getElementById('tally-body') as HTMLElement
+export const tallyTotal = document.getElementById('tally-total') as HTMLElement
+export const tallyMinimizeBtn = document.getElementById('tally-minimize') as HTMLButtonElement
+export const tallyCloseBtn = document.getElementById('tally-close') as HTMLButtonElement
 
 // --- Fixed instruments panel ---
 export const addInstrumentButtons = document.querySelectorAll<HTMLButtonElement>('[data-add-instrument]')
