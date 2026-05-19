@@ -21,8 +21,27 @@ Internal notes for working on the codebase. Not user-facing.
 | `src/serializer.ts` | Persistence — JSON save/load, URL-hash encode/decode, PNG export. The hash encoder strips `backgroundImage` (too big for a URL) and reports back. |
 | `src/main.ts` | The UI/glue. App state (`config`, history, drag tracking), event handlers, init, render loop trigger. The orchestration that ties everything together. |
 | `src/dom.ts` | All `document.getElementById` lookups. One file, organised by sidebar panel, so adding a new control means editing one obvious place. |
-| `index.html` | Sidebar markup, modal markup, canvas element. |
+| `index.html` | Sidebar markup (organised into three tabs — Setup / Edit / Export), modal markup, canvas element + undo/redo overlay. |
 | `src/style.css` | All styles. |
+
+## Sidebar tabs
+
+The sidebar is organised into three tabs (single-button switch, no
+nested state):
+
+| Tab | Contains |
+|---|---|
+| **Setup** | Chart, Preset Arrangements, Notes, Stage Background |
+| **Edit** | Rows, Edit Chairs, Allocate Instruments (when Instrument tool is active), Large / Fixed Instruments |
+| **Export** | Save & Export |
+
+Each panel is wrapped in a `<div class="tab-content" data-tab-content="…">`
+container. Clicking a tab toggles `active` on its button and on the
+matching content wrapper; `.tab-content` defaults to `display: none`
+and `.tab-content.active` flips to flex.
+
+Undo and Redo live as **floating overlay buttons** in the top-left of
+the canvas area, not in any tab — they're always accessible.
 
 ## Architectural rules of thumb
 

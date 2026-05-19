@@ -7,6 +7,10 @@
 
 export const canvas = document.getElementById('chart-canvas') as HTMLCanvasElement
 
+// --- Tab bar ---
+export const tabButtons = document.querySelectorAll<HTMLButtonElement>('[data-tab]')
+export const tabContents = document.querySelectorAll<HTMLElement>('[data-tab-content]')
+
 // --- Chart panel ---
 export const titleInput = document.getElementById('title') as HTMLInputElement
 export const layoutSelect = document.getElementById('layout') as HTMLSelectElement

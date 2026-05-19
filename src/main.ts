@@ -106,7 +106,8 @@ let suppressConductorClick = false
 
 // All DOM refs live in dom.ts; pull them in by name.
 import {
-  canvas, titleInput, layoutSelect, notesArea, showNumbersCheck, restartNumbersCheck,
+  canvas, tabButtons, tabContents,
+  titleInput, layoutSelect, notesArea, showNumbersCheck, restartNumbersCheck,
   showRowLabelsCheck, conductorStandCheck, showArcCheck, showStageDirectionsCheck,
   chartScaleInput, bgInput, bgClearBtn, bgStatus, bgFitSelect, showCreditCheck,
   flipCheck, straightRowsInput, straightRowsLabel, arcRangeInput, arcRangeLabel,
@@ -837,6 +838,15 @@ function bindEvents() {
     config.rows.push(makeRow(8, label))
     updateAllInputs()
     renderChart()
+  })
+
+  // Sidebar tab navigation (Setup / Edit / Export)
+  tabButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset['tab']
+      tabButtons.forEach(b => b.classList.toggle('active', b === btn))
+      tabContents.forEach(c => c.classList.toggle('active', c.dataset['tabContent'] === tab))
+    })
   })
 
   // Tool selection

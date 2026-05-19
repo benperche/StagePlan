@@ -11,146 +11,160 @@
     <aside id="sidebar">
       <h1>StagePlan <span class="h1-sub">Seating Chart Generator</span></h1>
 
-      <section class="panel">
-        <h2>Chart</h2>
-        <label>Title
-          <input type="text" id="title" value="Seating Chart" />
-        </label>
-        <label>Layout
-          <select id="layout">
-            <option value="semicircle">Semicircle</option>
-            <option value="straight">Straight rows</option>
-          </select>
-        </label>
-        <label id="straight-rows-label">Straight rows from back
-          <input type="number" id="straight-rows" min="0" value="0" />
-        </label>
-        <div class="checkbox-row">
-          <label><input type="checkbox" id="show-numbers" checked /> Seat numbers</label>
-          <label><input type="checkbox" id="restart-numbers" /> Restart per row</label>
-        </div>
-        <div class="checkbox-row">
-          <label><input type="checkbox" id="show-row-labels" /> Row labels</label>
-          <label><input type="checkbox" id="flip" /> Flip layout</label>
-        </div>
-        <div class="checkbox-row">
-          <label><input type="checkbox" id="conductor-stand" checked /> Conductor stand</label>
-        </div>
-        <button id="advanced-btn" class="secondary">⚙ Advanced layout…</button>
-      </section>
+      <nav class="tab-bar">
+        <button data-tab="setup" class="tab-btn active">Setup</button>
+        <button data-tab="edit" class="tab-btn">Edit</button>
+        <button data-tab="export" class="tab-btn">Export</button>
+      </nav>
 
-      <section class="panel">
-        <h2>Preset Arrangements</h2>
-        <div class="row-controls">
-          <select id="preset-select">
-            <option value="" disabled selected>Choose a preset…</option>
-          </select>
-          <button id="apply-preset-btn">Apply</button>
-        </div>
-        <button id="custom-orchestra-btn" class="secondary">+ Custom orchestra…</button>
-        <p class="hint">Applies a standard layout — you can edit it after.</p>
-      </section>
-
-      <section class="panel">
-        <h2>Rows</h2>
-        <div id="rows-container"></div>
-        <button id="add-row-btn" class="secondary">+ Add row</button>
-      </section>
-
-      <section class="panel">
-        <h2>Edit Chairs</h2>
-        <div class="tool-group">
-          <button data-tool="toggle" class="tool-btn active">Enable</button>
-          <button data-tool="stand" class="tool-btn">Stand</button>
-          <button data-tool="color" class="tool-btn">Colour</button>
-          <button data-tool="label" class="tool-btn">Instrument</button>
-        </div>
-        <label id="color-picker-label" style="display:none">Colour
-          <input type="color" id="color-picker" value="#a8d8ea" />
-        </label>
-        <p class="hint">Click a chair to apply the selected tool. Enable hides chairs without shifting the row. Stand cycles solo × → shared × → none. Colour opens a picker. Instrument shows the allocate-instruments list below.</p>
-      </section>
-
-      <section class="panel" id="instrument-picker-panel" style="display:none">
-        <h2>Allocate Instruments</h2>
-        <p class="hint" id="instrument-picker-status">Pick an instrument or part below, then click any chair to label it.</p>
-        <button id="show-tally-btn" class="secondary">📊 Show instrument tally</button>
-        <div id="instrument-picker-list"></div>
-      </section>
-
-      <section class="panel">
-        <h2>Large / Fixed Instruments</h2>
-        <div class="instrument-add-grid">
-          <button data-add-instrument="drumkit">+ Drum Kit</button>
-          <button data-add-instrument="piano">+ Grand Piano</button>
-          <button data-add-instrument="guitar-amp">+ Guitar Amp</button>
-          <button data-add-instrument="bass-amp">+ Bass Amp</button>
-          <button data-add-instrument="timpani">+ Timpani</button>
-          <button data-add-instrument="mallet">+ Mallets</button>
-          <button data-add-instrument="square">+ Square</button>
-          <button data-add-instrument="rectangle">+ Rectangle</button>
-        </div>
-        <p class="hint">Click an instrument on the canvas to select it, then drag to move. Press Delete or Backspace to remove.</p>
-        <div id="instrument-inspector" class="inspector" style="display:none">
-          <div class="inspector-header"><span id="inspector-type"></span></div>
-          <label>Label
-            <input type="text" id="inspector-label" maxlength="20">
+      <!-- =================  SETUP TAB  ================= -->
+      <div class="tab-content active" data-tab-content="setup">
+        <section class="panel">
+          <h2>Chart</h2>
+          <label>Title
+            <input type="text" id="title" value="Seating Chart" />
           </label>
-          <label id="inspector-count-label" style="display:none">Drums (2–6)
-            <input type="number" id="inspector-count" min="2" max="6">
+          <label>Layout
+            <select id="layout">
+              <option value="semicircle">Semicircle</option>
+              <option value="straight">Straight rows</option>
+            </select>
           </label>
-          <div class="row-controls">
-            <button id="inspector-rotate-left" title="Rotate -15°">↺</button>
-            <button id="inspector-rotate-right" title="Rotate +15°">↻</button>
-            <button id="inspector-delete" class="danger">✕ Delete</button>
+          <label id="straight-rows-label">Straight rows from back
+            <input type="number" id="straight-rows" min="0" value="0" />
+          </label>
+          <div class="checkbox-row">
+            <label><input type="checkbox" id="show-numbers" checked /> Seat numbers</label>
+            <label><input type="checkbox" id="restart-numbers" /> Restart per row</label>
           </div>
-        </div>
-      </section>
+          <div class="checkbox-row">
+            <label><input type="checkbox" id="show-row-labels" /> Row labels</label>
+            <label><input type="checkbox" id="flip" /> Flip layout</label>
+          </div>
+          <div class="checkbox-row">
+            <label><input type="checkbox" id="conductor-stand" checked /> Conductor stand</label>
+          </div>
+          <button id="advanced-btn" class="secondary">⚙ Advanced layout…</button>
+        </section>
 
-      <section class="panel">
-        <h2>Notes</h2>
-        <textarea id="notes" rows="3" placeholder="Notes for this chart…"></textarea>
-      </section>
+        <section class="panel">
+          <h2>Preset Arrangements</h2>
+          <div class="row-controls">
+            <select id="preset-select">
+              <option value="" disabled selected>Choose a preset…</option>
+            </select>
+            <button id="apply-preset-btn">Apply</button>
+          </div>
+          <button id="custom-orchestra-btn" class="secondary">+ Custom orchestra…</button>
+          <p class="hint">Applies a standard layout — you can edit it after.</p>
+        </section>
 
-      <section class="panel">
-        <h2>History</h2>
-        <div class="row-controls">
-          <button id="undo-btn" disabled>↩ Undo</button>
-          <button id="redo-btn" disabled>↪ Redo</button>
-        </div>
-      </section>
+        <section class="panel">
+          <h2>Notes</h2>
+          <textarea id="notes" rows="3" placeholder="Notes for this chart…"></textarea>
+        </section>
 
-      <section class="panel">
-        <h2>Stage Background</h2>
-        <label class="file-label">
-          ⬆ Upload image
-          <input type="file" id="bg-input" accept="image/*" />
-        </label>
-        <button id="bg-clear-btn" class="secondary" disabled>✕ Clear background</button>
-        <label>Fit
-          <select id="bg-fit">
-            <option value="contain">Contain (letterbox)</option>
-            <option value="cover">Cover (crop edges)</option>
-            <option value="stretch">Stretch (fill)</option>
-          </select>
-        </label>
-        <p class="hint" id="bg-status">No background.</p>
-      </section>
+        <section class="panel">
+          <h2>Stage Background</h2>
+          <label class="file-label">
+            ⬆ Upload image
+            <input type="file" id="bg-input" accept="image/*" />
+          </label>
+          <button id="bg-clear-btn" class="secondary" disabled>✕ Clear background</button>
+          <label>Fit
+            <select id="bg-fit">
+              <option value="contain">Contain (letterbox)</option>
+              <option value="cover">Cover (crop edges)</option>
+              <option value="stretch">Stretch (fill)</option>
+            </select>
+          </label>
+          <p class="hint" id="bg-status">No background.</p>
+        </section>
+      </div>
 
-      <section class="panel">
-        <h2>Save &amp; Export</h2>
-        <button id="save-btn">⬇ Save JSON</button>
-        <label class="file-label">
-          ⬆ Load JSON
-          <input type="file" id="load-input" accept=".json" />
-        </label>
-        <button id="export-png-btn">🖼 Export PNG</button>
-        <button id="share-link-btn">🔗 Copy share link</button>
-        <div id="share-url-display" style="display:none"></div>
-      </section>
+      <!-- =================  EDIT TAB  ================= -->
+      <div class="tab-content" data-tab-content="edit">
+        <section class="panel">
+          <h2>Rows</h2>
+          <div id="rows-container"></div>
+          <button id="add-row-btn" class="secondary">+ Add row</button>
+        </section>
+
+        <section class="panel">
+          <h2>Edit Chairs</h2>
+          <div class="tool-group">
+            <button data-tool="toggle" class="tool-btn active">Enable</button>
+            <button data-tool="stand" class="tool-btn">Stand</button>
+            <button data-tool="color" class="tool-btn">Colour</button>
+            <button data-tool="label" class="tool-btn">Instrument</button>
+          </div>
+          <label id="color-picker-label" style="display:none">Colour
+            <input type="color" id="color-picker" value="#a8d8ea" />
+          </label>
+          <p class="hint">Click a chair to apply the selected tool. Enable hides chairs without shifting the row. Stand cycles solo × → shared × → none. Colour opens a picker. Instrument shows the allocate-instruments list below.</p>
+        </section>
+
+        <section class="panel" id="instrument-picker-panel" style="display:none">
+          <h2>Allocate Instruments</h2>
+          <p class="hint" id="instrument-picker-status">Pick an instrument or part below, then click any chair to label it.</p>
+          <button id="show-tally-btn" class="secondary">📊 Show instrument tally</button>
+          <div id="instrument-picker-list"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Large / Fixed Instruments</h2>
+          <div class="instrument-add-grid">
+            <button data-add-instrument="drumkit">+ Drum Kit</button>
+            <button data-add-instrument="piano">+ Grand Piano</button>
+            <button data-add-instrument="guitar-amp">+ Guitar Amp</button>
+            <button data-add-instrument="bass-amp">+ Bass Amp</button>
+            <button data-add-instrument="timpani">+ Timpani</button>
+            <button data-add-instrument="mallet">+ Mallets</button>
+            <button data-add-instrument="square">+ Square</button>
+            <button data-add-instrument="rectangle">+ Rectangle</button>
+          </div>
+          <p class="hint">Click an instrument on the canvas to select it, then drag to move. Press Delete or Backspace to remove.</p>
+          <div id="instrument-inspector" class="inspector" style="display:none">
+            <div class="inspector-header"><span id="inspector-type"></span></div>
+            <label>Label
+              <input type="text" id="inspector-label" maxlength="20">
+            </label>
+            <label id="inspector-count-label" style="display:none">Drums (2–6)
+              <input type="number" id="inspector-count" min="2" max="6">
+            </label>
+            <div class="row-controls">
+              <button id="inspector-rotate-left" title="Rotate -15°">↺</button>
+              <button id="inspector-rotate-right" title="Rotate +15°">↻</button>
+              <button id="inspector-delete" class="danger">✕ Delete</button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- =================  EXPORT TAB  ================= -->
+      <div class="tab-content" data-tab-content="export">
+        <section class="panel">
+          <h2>Save &amp; Export</h2>
+          <button id="save-btn">⬇ Save JSON</button>
+          <label class="file-label">
+            ⬆ Load JSON
+            <input type="file" id="load-input" accept=".json" />
+          </label>
+          <button id="export-png-btn">🖼 Export PNG</button>
+          <button id="share-link-btn">🔗 Copy share link</button>
+          <div id="share-url-display" style="display:none"></div>
+        </section>
+      </div>
     </aside>
 
     <main id="canvas-area">
+      <!-- Undo/redo overlay sits in the top-left of the canvas so the
+           controls are always visible regardless of which sidebar tab
+           is showing. -->
+      <div class="canvas-overlay-controls">
+        <button id="undo-btn" disabled title="Undo (Cmd/Ctrl + Z)">↩</button>
+        <button id="redo-btn" disabled title="Redo (Cmd/Ctrl + Shift + Z)">↪</button>
+      </div>
       <canvas id="chart-canvas"></canvas>
     </main>
   </div>
