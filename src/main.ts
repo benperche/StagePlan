@@ -97,6 +97,7 @@ const advancedModal = document.getElementById('advanced-modal') as HTMLElement
 const advancedCloseBtn = document.getElementById('advanced-close') as HTMLButtonElement
 const rowsContainer = document.getElementById('rows-container') as HTMLElement
 const colorPicker = document.getElementById('color-picker') as HTMLInputElement
+const colorPickerLabel = document.getElementById('color-picker-label') as HTMLElement
 const undoBtn = document.getElementById('undo-btn') as HTMLButtonElement
 const redoBtn = document.getElementById('redo-btn') as HTMLButtonElement
 const resetPositionBtn = document.getElementById('reset-position-btn') as HTMLButtonElement
@@ -775,6 +776,7 @@ function bindEvents() {
       activeTool = btn.dataset['tool'] as typeof activeTool
       toolButtons.forEach(b => b.classList.remove('active'))
       btn.classList.add('active')
+      colorPickerLabel.style.display = activeTool === 'color' ? '' : 'none'
       if (activeTool === 'color') colorPicker.click()
     })
   })
