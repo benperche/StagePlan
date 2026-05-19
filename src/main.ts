@@ -859,10 +859,15 @@ function bindEvents() {
   function renderInstrumentPicker() {
     if (instrumentPickerList.children.length > 0) return   // already built
     INSTRUMENT_GROUPS.forEach(group => {
-      const heading = document.createElement('div')
-      heading.className = 'instrument-group-heading'
-      heading.textContent = group.name
-      instrumentPickerList.appendChild(heading)
+      // Native <details> gives us a free toggle + keyboard accessibility.
+      // All sections start collapsed — open the one you want and the rest
+      // stay tucked away.
+      const details = document.createElement('details')
+      details.className = 'instrument-group'
+      const summary = document.createElement('summary')
+      summary.className = 'instrument-group-heading'
+      summary.textContent = group.name
+      details.appendChild(summary)
       group.items.forEach(name => {
         const row = document.createElement('div')
         row.className = 'instrument-row'
@@ -883,8 +888,9 @@ function bindEvents() {
         for (const n of [1, 2, 3]) {
           row.appendChild(makeBtn(String(n), `${name} ${n}`, false))
         }
-        instrumentPickerList.appendChild(row)
+        details.appendChild(row)
       })
+      instrumentPickerList.appendChild(details)
     })
   }
 
