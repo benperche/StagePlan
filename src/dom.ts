@@ -23,6 +23,7 @@ export const conductorStandCheck = document.getElementById('conductor-stand') as
 export const flipCheck = document.getElementById('flip') as HTMLInputElement
 export const straightRowsInput = document.getElementById('straight-rows') as HTMLInputElement
 export const straightRowsLabel = document.getElementById('straight-rows-label') as HTMLElement
+export const rowCountInput = document.getElementById('row-count') as HTMLInputElement
 
 // --- Advanced layout modal ---
 export const advancedBtn = document.getElementById('advanced-btn') as HTMLButtonElement

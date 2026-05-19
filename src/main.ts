@@ -111,7 +111,7 @@ import {
   showRowLabelsCheck, conductorStandCheck, showArcCheck, showStageDirectionsCheck,
   chartScaleInput, bgInput, bgClearBtn, bgStatus, bgFitSelect, showCreditCheck,
   flipCheck, straightRowsInput, straightRowsLabel, arcRangeInput, arcRangeLabel,
-  rowSpacingInput, advancedBtn, advancedModal, advancedCloseBtn, rowsContainer,
+  rowSpacingInput, rowCountInput, advancedBtn, advancedModal, advancedCloseBtn, rowsContainer,
   colorPicker, colorPickerLabel, undoBtn, redoBtn, resetPositionBtn, addRowBtn, saveBtn,
   loadInput, exportPngBtn, printBtn, shareLinkBtn, shareUrlDisplay, presetSelect, applyPresetBtn,
   customOrchestraBtn, customOrchestraModal, customOrchestraTitle, customOrchestraNotation,
@@ -311,7 +311,24 @@ bindText(bgFitSelect,
   v => { if (v === 'contain' || v === 'cover' || v === 'stretch') config.backgroundFit = v })
 bindNumber(straightRowsInput,
   () => config.straightRows,
-  v => { config.straightRows = Math.max(0, Math.min(config.rows.length, v || 0)) })
+  v => {
+    config.straightRows = Math.max(0, Math.min(config.rows.length, v || 0))
+    // Clear all per-row isStraight overrides so the new global default
+    // takes effect everywhere — otherwise a user who had toggled
+    // individual rows would see a stale state.
+    for (const row of config.rows) delete row.isStraight
+  })
+bindNumber(rowCountInput,
+  () => config.rows.length,
+  v => {
+    const target = Math.max(1, Math.min(20, v || 1))
+    while (config.rows.length < target) {
+      config.rows.push(makeRow(8, String(config.rows.length + 1)))
+    }
+    while (config.rows.length > target) {
+      config.rows.pop()
+    }
+  })
 bindNumber(arcRangeInput,
   () => Math.round((config.arcRange * 180) / Math.PI),
   v => { config.arcRange = (Math.max(60, Math.min(180, v || 180)) * Math.PI) / 180 })
@@ -345,10 +362,34 @@ function renderRowList() {
   const scrollTop = rowsContainer.scrollTop
   rowsContainer.innerHTML = ''
 
+  const numRows = config.rows.length
+  // For each row, decide whether it currently renders as straight, taking
+  // both the per-row override and the global "last N from back" into account.
+  const straightFlags = config.rows.map((row, i) =>
+    row.isStraight ?? (i >= numRows - config.straightRows))
+
+  // Warn if a straight row sits in front of an arc row (i.e. straight rows
+  // are not all at the back). That layout can produce visual clashes
+  // because the wider arc behind a straight row sweeps past its chairs.
+  let seenStraight = false
+  let interleaved = false
+  for (const s of straightFlags) {
+    if (s) seenStraight = true
+    else if (seenStraight) { interleaved = true; break }
+  }
+
+  if (interleaved && config.layout === 'semicircle') {
+    const warn = document.createElement('p')
+    warn.className = 'row-warning'
+    warn.textContent = '⚠ Some straight rows sit in front of arc rows — the arcs may visually clash with the straight rows behind them.'
+    rowsContainer.appendChild(warn)
+  }
+
   config.rows.forEach((row, i) => {
     const isExpanded = expandedRows.has(i)
     const labelsText = row.chairs.map(c => c.label).join('\n')
     const taRows = Math.min(12, Math.max(3, row.chairs.length))
+    const isStraight = straightFlags[i]
 
     const div = document.createElement('div')
     div.className = 'row-item'
@@ -361,9 +402,12 @@ function renderRowList() {
           <input type="number" min="1" max="30" value="${row.chairs.length}" data-row="${i}" class="chair-count">
         </label>
         <label>Label
-          <input type="text" maxlength="4" value="${row.label}" data-row="${i}" class="row-label-input">
+          <input type="text" maxlength="6" value="${row.label}" data-row="${i}" class="row-label-input">
         </label>
         <button data-row="${i}" class="remove-row-btn" ${config.rows.length <= 1 ? 'disabled' : ''}>✕</button>
+      </div>
+      <div class="row-item-meta">
+        <label class="row-straight-toggle"><input type="checkbox" data-row="${i}" class="row-straight-check" ${isStraight ? 'checked' : ''}> Straight row</label>
       </div>
       <div class="row-item-labels" ${isExpanded ? '' : 'style="display:none"'}>
         <p class="label-editor-hint">One label per line · use % for a line‑break within a label · Tab/Shift‑Tab to move between rows</p>
@@ -678,8 +722,8 @@ canvas.addEventListener('click', (e) => {
 function bindEvents() {
   for (const el of [titleInput, layoutSelect, notesArea, showNumbersCheck,
     restartNumbersCheck, showRowLabelsCheck, conductorStandCheck, flipCheck,
-    straightRowsInput, showArcCheck, arcRangeInput, rowSpacingInput, showStageDirectionsCheck,
-    chartScaleInput, bgFitSelect, showCreditCheck]) {
+    straightRowsInput, rowCountInput, showArcCheck, arcRangeInput, rowSpacingInput,
+    showStageDirectionsCheck, chartScaleInput, bgFitSelect, showCreditCheck]) {
     el.addEventListener('change', () => { readInputs(); updateAllInputs(); renderChart() })
   }
 
@@ -702,6 +746,11 @@ function bindEvents() {
       }
     } else if (target.classList.contains('row-label-input')) {
       config.rows[rowIdx].label = target.value
+      renderRowList()
+    } else if (target.classList.contains('row-straight-check')) {
+      // Per-row straight/arc override. Setting this wins over the global
+      // "straight rows from back" default in the Setup tab.
+      config.rows[rowIdx].isStraight = target.checked
       renderRowList()
     }
     renderChart()
@@ -833,9 +882,7 @@ function bindEvents() {
 
   addRowBtn.addEventListener('click', () => {
     history.push(config)
-    const labels = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-    const label = labels[config.rows.length] ?? String(config.rows.length + 1)
-    config.rows.push(makeRow(8, label))
+    config.rows.push(makeRow(8, String(config.rows.length + 1)))
     updateAllInputs()
     renderChart()
   })

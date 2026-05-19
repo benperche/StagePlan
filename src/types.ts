@@ -12,8 +12,13 @@ export interface Chair {
 export interface Row {
   id: string
   chairs: Chair[]
-  label: string        // e.g. "A", "B", or custom
+  label: string        // e.g. "1", "2", or custom
   fontSize: number
+  // Per-row "render this as a straight horizontal line instead of an arc"
+  // override. When undefined, the renderer falls back to the global
+  // ChartConfig.straightRows ("last N rows from the back are straight")
+  // setting. When set to true/false, this row's value wins over the global.
+  isStraight?: boolean
 }
 
 export interface ConductorConfig {

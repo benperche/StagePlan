@@ -33,9 +33,9 @@ export function makeDefaultConfig(): ChartConfig {
     title: 'Seating Chart',
     layout: 'semicircle',
     rows: [
-      makeRow(8, 'A'),
-      makeRow(10, 'B'),
-      makeRow(12, 'C'),
+      makeRow(8, '1'),
+      makeRow(10, '2'),
+      makeRow(12, '3'),
     ],
     straightRows: 0,
     conductor: { show: true, hasStand: true, offsetX: 0, offsetY: 0 },

@@ -276,7 +276,40 @@ button.secondary { border-style: dashed; }
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 8px;
+  padding: 5px 8px 3px;
+}
+
+/* Second line of the row item, shown even when collapsed */
+.row-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px 6px 12px;
+  color: var(--text-muted);
+}
+.row-straight-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text);
+}
+.row-straight-toggle input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+/* Warning banner at the top of the rows list */
+.row-warning {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 5px;
+  padding: 6px 8px;
+  margin-bottom: 4px;
 }
 
 .row-edit-toggle {

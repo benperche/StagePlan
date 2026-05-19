@@ -263,7 +263,7 @@ export class Renderer {
       const arcStart = Math.PI / 2 + arcRange / 2
       const arcEnd = Math.PI / 2 - arcRange / 2
       config.rows.forEach((_row, rowIndex) => {
-        const isStraight = rowIndex >= numRows - config.straightRows
+        const isStraight = config.rows[rowIndex].isStraight ?? (rowIndex >= numRows - config.straightRows)
         if (isStraight) return
         const r = BASE_RADIUS + rowIndex * rowSpacing
         ctx.save()
@@ -280,10 +280,12 @@ export class Renderer {
 
     this.drawConductor(ctx, ox, oy, yDir, config)
 
-    // Consistent label x for straight-in-arc rows
-    const straightStart = numRows - config.straightRows
-    const maxStraightWidth = config.rows.slice(straightStart).reduce((mx, r) =>
-      Math.max(mx, (r.chairs.length - 1) * STRAIGHT_CHAIR_SPACING), 0)
+    // Consistent label x for every row that's rendered as straight (whether
+    // via the per-row override or the "last N from back" global default).
+    const isStraightRow = (rowIndex: number) =>
+      config.rows[rowIndex].isStraight ?? (rowIndex >= numRows - config.straightRows)
+    const maxStraightWidth = config.rows.reduce((mx, r, i) =>
+      isStraightRow(i) ? Math.max(mx, (r.chairs.length - 1) * STRAIGHT_CHAIR_SPACING) : mx, 0)
     const straightLabelX = ox - maxStraightWidth / 2 - CHAIR_HALF - 18
 
     let seatNumber = 1
