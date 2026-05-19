@@ -1087,7 +1087,11 @@ export class Renderer {
 
     ctx.save()
     ctx.translate(sx, sy)
-    ctx.rotate(angle + Math.PI / 4)
+    // Rotate so the diagonals stay as diagonals relative to the chair —
+    // the stand reads as × not +. (Adding π/4 here would align an arm
+    // with the chair→conductor radial line and make the symbol look
+    // like + when the chair sits at the front of an arc.)
+    ctx.rotate(angle)
     ctx.strokeStyle = '#555'
     ctx.lineWidth = 2
     ctx.lineCap = 'round'
