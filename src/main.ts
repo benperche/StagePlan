@@ -14,7 +14,42 @@ const history = new History()
 const renderer = new Renderer()
 
 let activeColor = '#a8d8ea'
-let activeTool: 'color' | 'toggle' | 'stand' = 'toggle'
+let activeTool: 'color' | 'toggle' | 'stand' | 'label' = 'toggle'
+
+// When activeTool === 'label', clicking a chair sets its label to this string.
+// Picked from the Allocate Instruments panel; null = nothing selected yet.
+let selectedLabel: string | null = null
+
+// Canonical instrument list, grouped by section (rough score order).
+// Each instrument appears once — synonyms and instrument-key variants
+// (Eb / Bb, TC / BC, etc.) are collapsed since the seating chart only
+// needs one of each.
+const INSTRUMENT_GROUPS: Array<{ name: string; items: string[] }> = [
+  { name: 'Woodwinds', items: [
+    'Piccolo', 'Flute', 'Oboe', 'Cor Anglais', 'Eb Clarinet', 'Clarinet',
+    'Alto Clarinet', 'Bass Clarinet', 'Contrabass Clarinet', 'Bassoon', 'Contrabassoon',
+  ] },
+  { name: 'Saxophones', items: [
+    'Soprano Sax', 'Alto Sax', 'Tenor Sax', 'Bari Sax', 'Bass Sax',
+  ] },
+  { name: 'Brass', items: [
+    'Horn', 'Trumpet', 'Cornet', 'Flugelhorn', 'Trombone', 'Bass Trombone',
+    'Euphonium', 'Baritone', 'Tuba',
+  ] },
+  { name: 'Strings', items: [
+    'Violin', 'Viola', 'Cello', 'Double Bass',
+  ] },
+  { name: 'Rhythm', items: [
+    'Piano', 'Keyboard', 'Organ', 'Harp', 'Celeste',
+    'Guitar', 'Electric Guitar', 'Bass', 'Electric Bass',
+  ] },
+  { name: 'Percussion', items: [
+    'Timpani', 'Drums', 'Snare Drum', 'Bass Drum', 'Cymbals', 'Tambourine',
+    'Glockenspiel', 'Xylophone', 'Vibraphone', 'Marimba', 'Mallets',
+    'Percussion', 'Auxiliary',
+  ] },
+  { name: 'Voice', items: ['Voice'] },
+]
 
 // Track which rows have their label editor open
 const expandedRows = new Set<number>()
@@ -80,7 +115,8 @@ import {
   loadInput, exportPngBtn, shareLinkBtn, shareUrlDisplay, presetSelect, applyPresetBtn,
   customOrchestraBtn, customOrchestraModal, customOrchestraTitle, customOrchestraNotation,
   customOrchestraPreview, customOrchestraApply, customOrchestraCancel,
-  toolButtons, addInstrumentButtons, inspector, inspectorType, inspectorLabel,
+  toolButtons, instrumentPickerPanel, instrumentPickerList, instrumentPickerStatus,
+  addInstrumentButtons, inspector, inspectorType, inspectorLabel,
   inspectorCountLabel, inspectorCount, inspectorRotateLeft, inspectorRotateRight,
   inspectorDelete,
 } from './dom'
@@ -523,11 +559,15 @@ canvas.addEventListener('click', (e) => {
 
   const hit = renderer.hitTest(x, y)
   if (!hit) return
+  // Label tool with no instrument picked yet — no-op (don't pollute undo).
+  if (activeTool === 'label' && selectedLabel === null) return
 
   history.push(config)
   const chair = config.rows[hit.rowIndex].chairs[hit.chairIndex]
 
-  if (activeTool === 'color') {
+  if (activeTool === 'label') {
+    chair.label = selectedLabel!
+  } else if (activeTool === 'color') {
     chair.color = activeColor
   } else if (activeTool === 'toggle') {
     chair.enabled = !chair.enabled
@@ -728,9 +768,47 @@ function bindEvents() {
       toolButtons.forEach(b => b.classList.remove('active'))
       btn.classList.add('active')
       colorPickerLabel.style.display = activeTool === 'color' ? '' : 'none'
+      instrumentPickerPanel.style.display = activeTool === 'label' ? '' : 'none'
       if (activeTool === 'color') colorPicker.click()
+      if (activeTool === 'label') renderInstrumentPicker()
     })
   })
+
+  // Build the Allocate Instruments panel: one row per instrument with a
+  // wide [Name] button and three narrow [1] [2] [3] part-number buttons.
+  // Clicking any button sets `selectedLabel` and highlights itself; the
+  // next chair click in label mode writes that string into chair.label.
+  function renderInstrumentPicker() {
+    if (instrumentPickerList.children.length > 0) return   // already built
+    INSTRUMENT_GROUPS.forEach(group => {
+      const heading = document.createElement('div')
+      heading.className = 'instrument-group-heading'
+      heading.textContent = group.name
+      instrumentPickerList.appendChild(heading)
+      group.items.forEach(name => {
+        const row = document.createElement('div')
+        row.className = 'instrument-row'
+        const makeBtn = (text: string, label: string, isName: boolean) => {
+          const b = document.createElement('button')
+          b.textContent = text
+          b.className = isName ? 'instrument-name' : 'instrument-num'
+          b.dataset['label'] = label
+          b.addEventListener('click', () => {
+            selectedLabel = label
+            instrumentPickerList.querySelectorAll('.active').forEach(el => el.classList.remove('active'))
+            b.classList.add('active')
+            instrumentPickerStatus.textContent = `Selected: "${label}". Click any chair to apply.`
+          })
+          return b
+        }
+        row.appendChild(makeBtn(name, name, true))
+        for (const n of [1, 2, 3]) {
+          row.appendChild(makeBtn(String(n), `${name} ${n}`, false))
+        }
+        instrumentPickerList.appendChild(row)
+      })
+    })
+  }
 
   colorPicker.addEventListener('input', () => {
     activeColor = colorPicker.value

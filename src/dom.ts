@@ -49,6 +49,9 @@ export const addRowBtn = document.getElementById('add-row-btn') as HTMLButtonEle
 export const colorPicker = document.getElementById('color-picker') as HTMLInputElement
 export const colorPickerLabel = document.getElementById('color-picker-label') as HTMLElement
 export const toolButtons = document.querySelectorAll<HTMLButtonElement>('[data-tool]')
+export const instrumentPickerPanel = document.getElementById('instrument-picker-panel') as HTMLElement
+export const instrumentPickerList = document.getElementById('instrument-picker-list') as HTMLElement
+export const instrumentPickerStatus = document.getElementById('instrument-picker-status') as HTMLElement
 
 // --- Fixed instruments panel ---
 export const addInstrumentButtons = document.querySelectorAll<HTMLButtonElement>('[data-add-instrument]')

@@ -68,6 +68,24 @@ Hit tests are populated as a side effect of (6) and (7). `main.ts` calls `render
 - `effectiveRowSpacing` shrinks it if the chart would overflow the canvas, floored at 40 so it stays legible.
 - Sized so the seat number behind one row doesn't collide with the shared stand drawn in front of the row behind (stand reaches ~35 px forward, number ~28 px behind — 65 px floor; 70 gives a small gap).
 
+## Allocate Instruments tool
+
+The fourth chair tool ("Instrument") opens a sidebar panel
+(`#instrument-picker-panel`) holding the canonical instrument list
+grouped by section (Woodwinds / Saxes / Brass / Strings / Rhythm /
+Percussion / Voice). Each instrument is one row with a `[Name]` button
+plus three numbered `[1] [2] [3]` part buttons — clicking any of them
+sets `selectedLabel` in main.ts to the chosen string (e.g. `"Flute"`,
+`"Flute 2"`) and highlights that button.
+
+Then any chair click (while the Instrument tool is still active) writes
+`selectedLabel` into `chair.label`. Multiple chairs can be labelled in
+quick succession without having to re-pick the instrument. The label
+sticks until the user picks a different instrument or switches tools.
+
+The picker is built lazily on first activation and cached; switching
+between tools just shows/hides the panel.
+
 ## Music stands
 
 - `Chair.hasStand` = solo stand in front of this chair (× drawn between chair and conductor).

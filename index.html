@@ -60,14 +60,21 @@
       <section class="panel">
         <h2>Edit Chairs</h2>
         <div class="tool-group">
-          <button data-tool="toggle" class="tool-btn active">Enable/Disable</button>
-          <button data-tool="stand" class="tool-btn">Music Stand</button>
+          <button data-tool="toggle" class="tool-btn active">Enable</button>
+          <button data-tool="stand" class="tool-btn">Stand</button>
           <button data-tool="color" class="tool-btn">Colour</button>
+          <button data-tool="label" class="tool-btn">Instrument</button>
         </div>
         <label id="color-picker-label" style="display:none">Colour
           <input type="color" id="color-picker" value="#a8d8ea" />
         </label>
-        <p class="hint">Click a chair to apply the selected tool. Enable/Disable hides the selected chair without changing the position of the other chairs in the row (for offset or gaps in rows.) Music Stand cycles: solo × → shared × (with next chair) → none.</p>
+        <p class="hint">Click a chair to apply the selected tool. Enable hides chairs without shifting the row. Stand cycles solo × → shared × → none. Colour opens a picker. Instrument shows the allocate-instruments list below.</p>
+      </section>
+
+      <section class="panel" id="instrument-picker-panel" style="display:none">
+        <h2>Allocate Instruments</h2>
+        <p class="hint" id="instrument-picker-status">Pick an instrument or part below, then click any chair to label it.</p>
+        <div id="instrument-picker-list"></div>
       </section>
 
       <section class="panel">
