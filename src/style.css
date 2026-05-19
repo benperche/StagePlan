@@ -716,27 +716,33 @@ button.danger:hover { background: #fff0f0; }
   padding: 8px 0;
 }
 
-/* Print: hide every piece of UI chrome, leave only the canvas itself
-   centred on the page. The print dialog's "Save as PDF" option then
-   produces a clean PDF without any of the editor controls. */
+/* Print: force landscape A4, hide every piece of UI chrome, scale the
+   canvas to fit the page in both dimensions. The print dialog's "Save
+   as PDF" option then produces a clean single-page PDF without any of
+   the editor controls. */
+@page {
+  size: A4 landscape;
+  margin: 8mm;
+}
+
 @media print {
-  body { background: #fff; }
+  html, body { margin: 0; padding: 0; background: #fff; height: 100%; }
   #sidebar,
   .canvas-overlay-controls,
   #tally-overlay,
   .modal-overlay { display: none !important; }
-  #app { height: auto; }
+  #app { height: 100%; display: block; }
   #canvas-area {
     width: 100%;
-    height: auto;
-    overflow: visible;
+    height: 100%;
+    overflow: hidden;
+    background: #fff;
+    position: static;
   }
   #chart-canvas {
-    width: 100% !important;
-    height: auto !important;
-    max-height: 95vh;
-    object-fit: contain;
     display: block;
-    margin: 0 auto;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain;
   }
 }

@@ -640,9 +640,9 @@ export class Renderer {
     const x = 12
     // Sit above the "Created with StagePlan" credit when it's drawn, so
     // the two never overlap. Credit line is ~14px tall (10px font + 4px
-    // breathing room) and itself anchored at h-12.
+    // breathing room) and itself anchored at the bottom-text baseline.
     const creditReserve = creditShown ? 16 : 0
-    const bottomY = h - 12 - creditReserve
+    const bottomY = h - 24 - creditReserve
 
     ctx.save()
     ctx.fillStyle = '#888'
@@ -713,7 +713,7 @@ export class Renderer {
 
     const lineHeight = 15
     const x = w - 12
-    const bottomY = h - 12
+    const bottomY = h - 24
 
     ctx.save()
     ctx.fillStyle = '#888'
