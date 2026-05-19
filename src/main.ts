@@ -580,12 +580,20 @@ canvas.addEventListener('click', (e) => {
   } else if (activeTool === 'toggle') {
     chair.enabled = !chair.enabled
   } else if (activeTool === 'stand') {
-    const isLast = hit.chairIndex === config.rows[hit.rowIndex].chairs.length - 1
+    const rowChairs = config.rows[hit.rowIndex].chairs
+    const isLast = hit.chairIndex === rowChairs.length - 1
     if (!chair.hasStand && !chair.standAfter) {
       chair.hasStand = true
     } else if (chair.hasStand) {
+      // Solo → shared with next. Drop the next chair's own stand, since
+      // they're now sharing this one — otherwise you'd see both a stand
+      // between the two chairs AND a stand in front of the next chair.
       chair.hasStand = false
-      if (!isLast) chair.standAfter = true
+      if (!isLast) {
+        chair.standAfter = true
+        const nextChair = rowChairs[hit.chairIndex + 1]
+        if (nextChair) nextChair.hasStand = false
+      }
     } else {
       chair.standAfter = false
     }
