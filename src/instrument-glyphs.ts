@@ -242,22 +242,26 @@ export function drawHarp(ctx: CanvasRenderingContext2D): GlyphResult {
   ctx.closePath()
   ctx.fill()
 
-  // Strings — thin near-vertical white lines from neck down to soundboard
+  // Strings — vertical white lines from neck down to the soundboard.
+  // Strings on the left are LONGEST (bass end), right are shortest
+  // (treble), all roughly parallel — the actual physics of a harp.
   ctx.strokeStyle = '#fff'
   ctx.lineWidth = 0.7
-  const n = 6
+  const n = 7
+  const xStart = -hw + 6     // leftmost string sits just inside the pillar
+  const xEnd = hw - 4        // rightmost string sits just inside the neck
+  const yTop = -hh + 8       // string anchor on the neck (just below the curve)
+  // Soundboard line: from (xEnd, -hh + 6) at the top-right corner down
+  // to (-hw + 6, hh) at the bottom-left corner. y as a function of x:
+  //   slope = (hh - (-hh + 6)) / ((-hw + 6) - xEnd) = (2hh - 6) / (-2hw + 10)
+  //   y = (-hh + 6) + slope * (x - xEnd)
+  const slope = (hh - (-hh + 6)) / ((-hw + 6) - xEnd)
   for (let i = 0; i < n; i++) {
-    const t = (i + 1) / (n + 1)
-    // Top point on the neck (slight downward slope to the right)
-    const xTop = -hw + 4 + t * (hw - 4 - (-hw + 4))
-    const yTop = -hh + 8
-    // Bottom point on the soundboard (which goes from x=hw at y=-hh+6 to
-    // x=-hw+6 at y=hh). Linear interpolation in y produces the matching x.
-    const xBot = -hw + 6 + (1 - t) * (hw - (-hw + 6))
-    const yBot = hh - 2
+    const x = xStart + (i / (n - 1)) * (xEnd - xStart)
+    const yBot = (-hh + 6) + slope * (x - xEnd) - 1   // -1 to sit just above the soundboard line
     ctx.beginPath()
-    ctx.moveTo(xTop, yTop)
-    ctx.lineTo(xBot, yBot)
+    ctx.moveTo(x, yTop)
+    ctx.lineTo(x, yBot)
     ctx.stroke()
   }
 
