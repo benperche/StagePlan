@@ -39,6 +39,7 @@ export type InstrumentType =
   | 'bass-amp'
   | 'timpani'
   | 'mallet'
+  | 'harp'
   | 'square'
   | 'rectangle'
 

@@ -3,7 +3,7 @@ import type {
   HitTarget, ConductorHit, InstrumentHit, RotateHandleHit, ConductorOrigin,
 } from './types'
 import {
-  drawDrumkit, drawPiano, drawAmp, drawTimpani, drawMallet, drawGenericRect,
+  drawDrumkit, drawPiano, drawAmp, drawTimpani, drawMallet, drawHarp, drawGenericRect,
 } from './instrument-glyphs'
 
 const CHAIR_SIZE = 30
@@ -38,6 +38,9 @@ export class Renderer {
   conductorOrigin: ConductorOrigin = { ox: 0, oy: 0, yDir: -1, flipped: false }
   selectedInstrumentId: string | null = null
   rotateHandleHit: RotateHandleHit | null = null
+  // Same-shape hit-test target for the red ✕ delete button drawn next to
+  // the selected instrument.
+  deleteHandleHit: RotateHandleHit | null = null
 
   // Background image cache + async-load callback so main.ts can trigger
   // a re-render once a newly-uploaded image is decoded.
@@ -56,6 +59,7 @@ export class Renderer {
     this.instrumentHits = []
     this.conductorHit = null
     this.rotateHandleHit = null
+    this.deleteHandleHit = null
 
     const w = canvas.width / scale
     const h = canvas.height / scale
@@ -177,6 +181,13 @@ export class Renderer {
 
   rotateHandleHitTest(x: number, y: number): RotateHandleHit | null {
     const h = this.rotateHandleHit
+    if (!h) return null
+    if (Math.hypot(x - h.cx, y - h.cy) <= h.radius) return h
+    return null
+  }
+
+  deleteHandleHitTest(x: number, y: number): RotateHandleHit | null {
+    const h = this.deleteHandleHit
     if (!h) return null
     if (Math.hypot(x - h.cx, y - h.cy) <= h.radius) return h
     return null
@@ -500,14 +511,16 @@ export class Renderer {
     const { ox, oy, flipped } = this.conductorOrigin
     // Flipped chart is a 180° rotation around the conductor. For fixed
     // instruments, both the position (dx, dy from conductor) and the
-    // glyph's local rotation rotate by π.
+    // glyph's local rotation rotate by π — except for visually-symmetric
+    // hardware (drum kit, amps) where flipping the rotation just makes
+    // them look upside-down without communicating anything useful.
     const mirror = flipped ? -1 : 1
-    const rotateBy = flipped ? Math.PI : 0
 
     instruments.forEach(inst => {
       const cx = ox + mirror * inst.distance * Math.cos(inst.angle)
       const cy = oy + mirror * inst.distance * Math.sin(inst.angle)
-      const worldRotation = inst.rotation + rotateBy
+      const keepUpright = inst.type === 'drumkit' || inst.type === 'guitar-amp' || inst.type === 'bass-amp'
+      const worldRotation = inst.rotation + (flipped && !keepUpright ? Math.PI : 0)
       const isSelected = inst.id === this.selectedInstrumentId
 
       // 1) Draw the glyph in the rotated frame (no label!)
@@ -523,6 +536,7 @@ export class Renderer {
         case 'bass-amp':   ({ hw, hh, labelInside } = drawAmp(ctx, 40, 42)); break
         case 'timpani':    ({ hw, hh, labelInside } = drawTimpani(ctx, inst)); break
         case 'mallet':     ({ hw, hh, labelInside } = drawMallet(ctx)); break
+        case 'harp':       ({ hw, hh, labelInside } = drawHarp(ctx)); break
         case 'square':     ({ hw, hh, labelInside } = drawGenericRect(ctx, 28, 28)); break
         case 'rectangle':  ({ hw, hh, labelInside } = drawGenericRect(ctx, 42, 26)); break
       }
@@ -562,9 +576,10 @@ export class Renderer {
         ctx.restore()
       }
 
-      // 3) Rotate handle (selected instruments only) — also outside rotated frame
+      // 3) Selection adornments (only on the selected instrument)
       if (isSelected) {
         this.drawRotateHandle(ctx, cx, cy, hh, worldRotation, inst.id)
+        this.drawDeleteHandle(ctx, cx, cy, hw, hh, worldRotation, inst.id)
       }
 
       // 4) Hit target for the body — uses the rendered (post-flip) position
@@ -586,6 +601,7 @@ export class Renderer {
       case 'bass-amp':   return 'Bass'
       case 'timpani':    return `Timpani (${inst.count ?? 4})`
       case 'mallet':     return 'Mallets'
+      case 'harp':       return 'Harp'
       case 'square':     return 'Square'
       case 'rectangle':  return 'Rectangle'
     }
@@ -628,6 +644,50 @@ export class Renderer {
     ctx.restore()
 
     this.rotateHandleHit = { id: instId, cx: hx, cy: hy, radius: handleR + 4 }
+  }
+
+  // Red ✕ disc sitting at the top-right corner of the selected instrument's
+  // rotated bounding box. Click to delete — same as the inspector's Delete
+  // button or pressing Backspace, but discoverable straight from the canvas.
+  private drawDeleteHandle(
+    ctx: CanvasRenderingContext2D,
+    cx: number, cy: number,
+    hw: number, hh: number, rotation: number,
+    instId: string,
+  ) {
+    const handleR = 9
+    const margin = 6
+    // Local top-right corner (hw, -hh) rotated into world coords
+    const dx = cx + hw * Math.cos(rotation) - (-hh) * Math.sin(rotation)
+    const dy = cy + hw * Math.sin(rotation) + (-hh) * Math.cos(rotation)
+    // Nudge a little further out along the (hw, -hh) diagonal so the button
+    // sits just outside the bounding box rather than overlapping the glyph
+    const len = Math.hypot(hw, hh)
+    const nx = (hw / len) * Math.cos(rotation) - (-hh / len) * Math.sin(rotation)
+    const ny = (hw / len) * Math.sin(rotation) + (-hh / len) * Math.cos(rotation)
+    const px = dx + nx * margin
+    const py = dy + ny * margin
+
+    ctx.save()
+    ctx.fillStyle = '#dc2626'         // red-600
+    ctx.strokeStyle = '#fff'
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.arc(px, py, handleR, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.stroke()
+    // White × inside the disc
+    ctx.strokeStyle = '#fff'
+    ctx.lineWidth = 2
+    ctx.lineCap = 'round'
+    const s = handleR * 0.45
+    ctx.beginPath()
+    ctx.moveTo(px - s, py - s); ctx.lineTo(px + s, py + s)
+    ctx.moveTo(px + s, py - s); ctx.lineTo(px - s, py + s)
+    ctx.stroke()
+    ctx.restore()
+
+    this.deleteHandleHit = { id: instId, cx: px, cy: py, radius: handleR + 3 }
   }
 
   // Each glyph returns its half-width / half-height for the hit box.

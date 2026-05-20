@@ -218,7 +218,50 @@ export function drawMallet(ctx: CanvasRenderingContext2D): GlyphResult {
     ctx.stroke()
   }
 
-  return { hw, hh: leftH / 2, labelInside: true }
+  return { hw, hh: leftH / 2, labelInside: false }
+}
+
+// ---------------------------------------------------------------------------
+// Harp — stylised side-on profile. Pillar on the left, arched neck across
+// the top, diagonal soundboard sloping down to the bottom-left. Vertical
+// white string lines fill the body cavity.
+// ---------------------------------------------------------------------------
+export function drawHarp(ctx: CanvasRenderingContext2D): GlyphResult {
+  const hw = 22, hh = 28
+
+  ctx.fillStyle = '#1a1a1a'
+  ctx.beginPath()
+  // Pillar on the left, going up
+  ctx.moveTo(-hw, hh)
+  ctx.lineTo(-hw, -hh + 6)
+  // Neck arching across the top to the right
+  ctx.quadraticCurveTo(-hw, -hh, -hw + 10, -hh)
+  ctx.lineTo(hw, -hh + 6)
+  // Soundboard sloping down-left toward the base
+  ctx.lineTo(-hw + 6, hh)
+  ctx.closePath()
+  ctx.fill()
+
+  // Strings — thin near-vertical white lines from neck down to soundboard
+  ctx.strokeStyle = '#fff'
+  ctx.lineWidth = 0.7
+  const n = 6
+  for (let i = 0; i < n; i++) {
+    const t = (i + 1) / (n + 1)
+    // Top point on the neck (slight downward slope to the right)
+    const xTop = -hw + 4 + t * (hw - 4 - (-hw + 4))
+    const yTop = -hh + 8
+    // Bottom point on the soundboard (which goes from x=hw at y=-hh+6 to
+    // x=-hw+6 at y=hh). Linear interpolation in y produces the matching x.
+    const xBot = -hw + 6 + (1 - t) * (hw - (-hw + 6))
+    const yBot = hh - 2
+    ctx.beginPath()
+    ctx.moveTo(xTop, yTop)
+    ctx.lineTo(xBot, yBot)
+    ctx.stroke()
+  }
+
+  return { hw, hh, labelInside: false }
 }
 
 // ---------------------------------------------------------------------------

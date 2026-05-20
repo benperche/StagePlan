@@ -581,6 +581,7 @@ const INSTRUMENT_LABEL: Record<InstrumentType, string> = {
   'bass-amp': 'Bass Amp',
   'timpani': 'Timpani',
   'mallet': 'Mallets',
+  'harp': 'Harp',
   'square': 'Square',
   'rectangle': 'Rectangle',
 }
@@ -665,6 +666,16 @@ const DRAG_THRESHOLD = 4   // pixels before a mousedown is treated as a drag
 canvas.addEventListener('mousedown', (e) => {
   const cv = pointerCanvasCoords(e)
   const { x, y } = canvasToChart(cv.x, cv.y)
+
+  // Red ✕ delete handle (present only on the selected instrument) takes
+  // first priority so it isn't blocked by the rotate handle or the body.
+  if (renderer.deleteHandleHitTest(x, y) && selectedInstrumentId) {
+    history.push(config)
+    config.instruments = config.instruments.filter(i => i.id !== selectedInstrumentId)
+    setSelectedInstrument(null)
+    renderChart()
+    return
+  }
 
   // Rotate handle (only present for the selected instrument) takes priority
   if (renderer.rotateHandleHitTest(x, y)) {
@@ -825,6 +836,7 @@ window.addEventListener('mouseup', () => {
 canvas.addEventListener('click', (e) => {
   const cv = pointerCanvasCoords(e)
   const { x, y } = canvasToChart(cv.x, cv.y)
+  if (renderer.deleteHandleHitTest(x, y)) return
   if (renderer.rotateHandleHitTest(x, y)) return
   if (renderer.instrumentHitTest(x, y)) return
 
@@ -1387,7 +1399,9 @@ function bindEvents() {
       canvas.style.cursor = 'grabbing'
       return
     }
-    if (renderer.rotateHandleHitTest(x, y)) {
+    if (renderer.deleteHandleHitTest(x, y)) {
+      canvas.style.cursor = 'pointer'
+    } else if (renderer.rotateHandleHitTest(x, y)) {
       canvas.style.cursor = 'grab'
     } else if (renderer.instrumentHitTest(x, y)) {
       canvas.style.cursor = 'move'
