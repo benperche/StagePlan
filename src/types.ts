@@ -7,6 +7,7 @@ export interface Chair {
   label: string
   hasStand: boolean      // solo stand in front of this chair
   standAfter?: boolean   // shared stand between this chair and the next
+  isStool?: boolean      // render as a double-bass stool (round) instead of a chair
 }
 
 export interface Row {
@@ -42,6 +43,7 @@ export type InstrumentType =
   | 'harp'
   | 'chair'
   | 'stand'
+  | 'stool'
   | 'square'
   | 'rectangle'
 

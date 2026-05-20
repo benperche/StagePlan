@@ -4,7 +4,7 @@ import type {
 } from './types'
 import {
   drawDrumkit, drawPiano, drawAmp, drawTimpani, drawMallet, drawHarp,
-  drawSingleChair, drawSingleStand, drawGenericRect,
+  drawSingleChair, drawSingleStand, drawStool, drawGenericRect,
 } from './instrument-glyphs'
 
 const CHAIR_SIZE = 30
@@ -525,6 +525,7 @@ export class Renderer {
       // upside-down for no benefit.
       const keepUpright = inst.type === 'drumkit' || inst.type === 'guitar-amp'
         || inst.type === 'bass-amp' || inst.type === 'stand'
+        || inst.type === 'stool'
       const worldRotation = inst.rotation + (flipped && !keepUpright ? Math.PI : 0)
       const isSelected = inst.id === this.selectedInstrumentId
 
@@ -544,6 +545,7 @@ export class Renderer {
         case 'harp':       ({ hw, hh, labelInside } = drawHarp(ctx)); break
         case 'chair':      ({ hw, hh, labelInside } = drawSingleChair(ctx)); break
         case 'stand':      ({ hw, hh, labelInside } = drawSingleStand(ctx)); break
+        case 'stool':      ({ hw, hh, labelInside } = drawStool(ctx)); break
         case 'square':     ({ hw, hh, labelInside } = drawGenericRect(ctx, 28, 28)); break
         case 'rectangle':  ({ hw, hh, labelInside } = drawGenericRect(ctx, 42, 26)); break
       }
@@ -624,6 +626,7 @@ export class Renderer {
       // type a label in the inspector if they want one.
       case 'chair':      return ''
       case 'stand':      return ''
+      case 'stool':      return ''
       case 'square':     return 'Square'
       case 'rectangle':  return 'Rectangle'
     }
@@ -857,21 +860,48 @@ export class Renderer {
     ctx.translate(cx, cy)
     ctx.rotate(faceAngle + Math.PI / 2)
 
-    ctx.beginPath()
-    ctx.rect(-CHAIR_HALF, -CHAIR_HALF, CHAIR_SIZE, CHAIR_SIZE)
-    ctx.fillStyle = chair.color
-    ctx.fill()
-    ctx.strokeStyle = '#555'
-    ctx.lineWidth = 1.5
-    ctx.stroke()
+    if (chair.isStool) {
+      // Round seat with four small legs poking out at the diagonals —
+      // a double-bass stool. Keeps the chair's colour so colour-coding
+      // (e.g. principals) still applies.
+      const r = CHAIR_HALF - 2
+      const legLen = 5
+      const legW = 3
+      ctx.fillStyle = '#333'
+      for (let i = 0; i < 4; i++) {
+        const a = Math.PI / 4 + i * Math.PI / 2
+        const lx = Math.cos(a) * (r - 1)
+        const ly = Math.sin(a) * (r - 1)
+        ctx.save()
+        ctx.translate(lx, ly)
+        ctx.rotate(a)
+        ctx.fillRect(0, -legW / 2, legLen, legW)
+        ctx.restore()
+      }
+      ctx.beginPath()
+      ctx.arc(0, 0, r, 0, Math.PI * 2)
+      ctx.fillStyle = chair.color
+      ctx.fill()
+      ctx.strokeStyle = '#555'
+      ctx.lineWidth = 1.5
+      ctx.stroke()
+    } else {
+      ctx.beginPath()
+      ctx.rect(-CHAIR_HALF, -CHAIR_HALF, CHAIR_SIZE, CHAIR_SIZE)
+      ctx.fillStyle = chair.color
+      ctx.fill()
+      ctx.strokeStyle = '#555'
+      ctx.lineWidth = 1.5
+      ctx.stroke()
 
-    // Back rail on the outer edge (away from conductor)
-    ctx.beginPath()
-    ctx.moveTo(-CHAIR_HALF, CHAIR_HALF)
-    ctx.lineTo(CHAIR_HALF, CHAIR_HALF)
-    ctx.strokeStyle = '#333'
-    ctx.lineWidth = 4
-    ctx.stroke()
+      // Back rail on the outer edge (away from conductor)
+      ctx.beginPath()
+      ctx.moveTo(-CHAIR_HALF, CHAIR_HALF)
+      ctx.lineTo(CHAIR_HALF, CHAIR_HALF)
+      ctx.strokeStyle = '#333'
+      ctx.lineWidth = 4
+      ctx.stroke()
+    }
 
     ctx.restore()
 

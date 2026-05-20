@@ -311,6 +311,43 @@ export function drawSingleStand(ctx: CanvasRenderingContext2D): GlyphResult {
 }
 
 // ---------------------------------------------------------------------------
+// Double bass stool — round seat with four small legs poking out at the
+// diagonals. Rotationally symmetric, so flipping the chart leaves it
+// unchanged. Used by bassists (and anyone else playing tall instruments
+// who prefers perching to sitting).
+// ---------------------------------------------------------------------------
+export function drawStool(ctx: CanvasRenderingContext2D): GlyphResult {
+  const r = 13                  // seat radius
+  const legLen = 5              // how far each leg sticks past the seat
+  const legW = 3                // leg thickness
+
+  // Legs first so the seat sits on top of them
+  ctx.fillStyle = '#333'
+  for (let i = 0; i < 4; i++) {
+    const a = Math.PI / 4 + i * Math.PI / 2
+    const lx = Math.cos(a) * (r - 1)
+    const ly = Math.sin(a) * (r - 1)
+    ctx.save()
+    ctx.translate(lx, ly)
+    ctx.rotate(a)
+    ctx.fillRect(0, -legW / 2, legLen, legW)
+    ctx.restore()
+  }
+
+  // Round seat
+  ctx.beginPath()
+  ctx.arc(0, 0, r, 0, Math.PI * 2)
+  ctx.fillStyle = '#e8e8e8'
+  ctx.fill()
+  ctx.strokeStyle = '#555'
+  ctx.lineWidth = 1.5
+  ctx.stroke()
+
+  const halfBound = r + legLen
+  return { hw: halfBound, hh: halfBound, labelInside: false }
+}
+
+// ---------------------------------------------------------------------------
 // Generic square / rectangle — slightly lighter grey fill, used as a
 // labelled placeholder for anything the chart doesn't have a dedicated
 // glyph for (sound desk, monitor, riser, etc.).

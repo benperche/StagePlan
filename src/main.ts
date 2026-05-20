@@ -15,7 +15,7 @@ const history = new History()
 const renderer = new Renderer()
 
 let activeColor = '#a8d8ea'
-let activeTool: 'color' | 'toggle' | 'stand' | 'label' = 'toggle'
+let activeTool: 'color' | 'toggle' | 'stand' | 'stool' | 'label' = 'toggle'
 
 // When activeTool === 'label', clicking a chair sets its label to this string.
 // Picked from the Allocate Instruments panel; null = nothing selected yet.
@@ -584,6 +584,7 @@ const INSTRUMENT_LABEL: Record<InstrumentType, string> = {
   'harp': 'Harp',
   'chair': 'Chair',
   'stand': 'Stand',
+  'stool': 'Stool',
   'square': 'Square',
   'rectangle': 'Rectangle',
 }
@@ -883,6 +884,8 @@ canvas.addEventListener('click', (e) => {
     chair.color = activeColor
   } else if (activeTool === 'toggle') {
     chair.enabled = !chair.enabled
+  } else if (activeTool === 'stool') {
+    chair.isStool = !chair.isStool
   } else if (activeTool === 'stand') {
     const rowChairs = config.rows[hit.rowIndex].chairs
     const isLast = hit.chairIndex === rowChairs.length - 1
