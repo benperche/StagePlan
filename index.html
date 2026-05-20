@@ -168,6 +168,10 @@
             <button id="library-new-chart-btn" class="secondary">+ New blank chart</button>
             <button id="library-new-folder-btn" class="secondary">+ Folder</button>
           </div>
+          <label class="file-label">
+            ⬆ Import JSON file
+            <input type="file" id="load-input" accept=".json" />
+          </label>
           <input type="search" id="library-search" placeholder="Search charts…" />
           <div id="library-list"></div>
         </section>
@@ -191,11 +195,7 @@
       <div class="tab-content" data-tab-content="export">
         <section class="panel">
           <h2>Save &amp; Export</h2>
-          <button id="save-btn">⬇ Save JSON</button>
-          <label class="file-label">
-            ⬆ Load JSON
-            <input type="file" id="load-input" accept=".json" />
-          </label>
+          <button id="save-btn">⬇ Save JSON file</button>
           <button id="export-png-btn">🖼 Export PNG</button>
           <button id="print-btn">🖨 Print / Save as PDF</button>
           <p class="hint">📄 The chart is sized for <strong>A4 landscape</strong> — pick that in the print dialog (it's usually the default) for a clean single-page result.</p>
