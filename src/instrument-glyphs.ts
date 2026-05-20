@@ -265,6 +265,48 @@ export function drawHarp(ctx: CanvasRenderingContext2D): GlyphResult {
 }
 
 // ---------------------------------------------------------------------------
+// Single chair — same look as in-row chairs (grey square with a darker
+// back rail). Used as a backup for stragglers who don't fit a row
+// (extra player, off-row chair, etc.). At rotation 0 the back rail is
+// at the top of the local frame, matching the back-away-from-conductor
+// convention of in-row chairs in the unflipped layout.
+// ---------------------------------------------------------------------------
+export function drawSingleChair(ctx: CanvasRenderingContext2D): GlyphResult {
+  const size = 30
+  const hw = size / 2
+  ctx.fillStyle = '#e8e8e8'
+  ctx.fillRect(-hw, -hw, size, size)
+  ctx.strokeStyle = '#555'
+  ctx.lineWidth = 1.5
+  ctx.strokeRect(-hw, -hw, size, size)
+  // Back rail along the top edge
+  ctx.beginPath()
+  ctx.moveTo(-hw, -hw)
+  ctx.lineTo(hw, -hw)
+  ctx.strokeStyle = '#333'
+  ctx.lineWidth = 4
+  ctx.stroke()
+  return { hw, hh: hw, labelInside: false }
+}
+
+// ---------------------------------------------------------------------------
+// Single stand — just the × symbol, sized to match the row stands. Hit
+// box is slightly larger than the visual × so the user can grab it
+// without having to click pixel-perfectly on a line.
+// ---------------------------------------------------------------------------
+export function drawSingleStand(ctx: CanvasRenderingContext2D): GlyphResult {
+  const armLen = 8
+  ctx.strokeStyle = '#555'
+  ctx.lineWidth = 2.5
+  ctx.lineCap = 'round'
+  ctx.beginPath()
+  ctx.moveTo(-armLen, -armLen); ctx.lineTo(armLen, armLen)
+  ctx.moveTo(armLen, -armLen); ctx.lineTo(-armLen, armLen)
+  ctx.stroke()
+  return { hw: 12, hh: 12, labelInside: false }
+}
+
+// ---------------------------------------------------------------------------
 // Generic square / rectangle — slightly lighter grey fill, used as a
 // labelled placeholder for anything the chart doesn't have a dedicated
 // glyph for (sound desk, monitor, riser, etc.).

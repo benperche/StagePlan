@@ -3,7 +3,8 @@ import type {
   HitTarget, ConductorHit, InstrumentHit, RotateHandleHit, ConductorOrigin,
 } from './types'
 import {
-  drawDrumkit, drawPiano, drawAmp, drawTimpani, drawMallet, drawHarp, drawGenericRect,
+  drawDrumkit, drawPiano, drawAmp, drawTimpani, drawMallet, drawHarp,
+  drawSingleChair, drawSingleStand, drawGenericRect,
 } from './instrument-glyphs'
 
 const CHAIR_SIZE = 30
@@ -519,7 +520,11 @@ export class Renderer {
     instruments.forEach(inst => {
       const cx = ox + mirror * inst.distance * Math.cos(inst.angle)
       const cy = oy + mirror * inst.distance * Math.sin(inst.angle)
-      const keepUpright = inst.type === 'drumkit' || inst.type === 'guitar-amp' || inst.type === 'bass-amp'
+      // Symmetric / orientation-neutral glyphs stay upright in canvas
+      // coords when the chart is flipped — rotating them just looks
+      // upside-down for no benefit.
+      const keepUpright = inst.type === 'drumkit' || inst.type === 'guitar-amp'
+        || inst.type === 'bass-amp' || inst.type === 'stand'
       const worldRotation = inst.rotation + (flipped && !keepUpright ? Math.PI : 0)
       const isSelected = inst.id === this.selectedInstrumentId
 
@@ -537,6 +542,8 @@ export class Renderer {
         case 'timpani':    ({ hw, hh, labelInside } = drawTimpani(ctx, inst)); break
         case 'mallet':     ({ hw, hh, labelInside } = drawMallet(ctx)); break
         case 'harp':       ({ hw, hh, labelInside } = drawHarp(ctx)); break
+        case 'chair':      ({ hw, hh, labelInside } = drawSingleChair(ctx)); break
+        case 'stand':      ({ hw, hh, labelInside } = drawSingleStand(ctx)); break
         case 'square':     ({ hw, hh, labelInside } = drawGenericRect(ctx, 28, 28)); break
         case 'rectangle':  ({ hw, hh, labelInside } = drawGenericRect(ctx, 42, 26)); break
       }
@@ -576,7 +583,17 @@ export class Renderer {
         ctx.restore()
       }
 
-      // 3) Selection adornments (only on the selected instrument)
+      // 3) Optional music stand attached to this instrument — drawn
+      // between the instrument body and the conductor regardless of
+      // the glyph's own rotation. Sized so it sits just outside the
+      // instrument's bounding-circle radius so it never overlaps the
+      // glyph itself.
+      if (inst.hasStand) {
+        const standDist = Math.max(hw, hh) + STAND_GAP + STAND_SIZE
+        this.drawStandX(ctx, cx, cy, ox, oy, standDist)
+      }
+
+      // 4) Selection adornments (only on the selected instrument)
       if (isSelected) {
         this.drawRotateHandle(ctx, cx, cy, hh, worldRotation, inst.id)
         this.drawDeleteHandle(ctx, cx, cy, hw, hh, worldRotation, inst.id)
@@ -602,6 +619,11 @@ export class Renderer {
       case 'timpani':    return `Timpani (${inst.count ?? 4})`
       case 'mallet':     return 'Mallets'
       case 'harp':       return 'Harp'
+      // Single chair / single stand default to no label — they're often
+      // used as decorations rather than annotated items. Users can still
+      // type a label in the inspector if they want one.
+      case 'chair':      return ''
+      case 'stand':      return ''
       case 'square':     return 'Square'
       case 'rectangle':  return 'Rectangle'
     }
@@ -900,6 +922,7 @@ export class Renderer {
     ctx: CanvasRenderingContext2D,
     cx: number, cy: number,
     condX: number, condY: number,
+    distOverride?: number,
   ) {
     const dx = condX - cx
     const dy = condY - cy
@@ -908,7 +931,7 @@ export class Renderer {
     const nx = dx / len
     const ny = dy / len
 
-    const dist = CHAIR_HALF + STAND_GAP + STAND_SIZE
+    const dist = distOverride ?? (CHAIR_HALF + STAND_GAP + STAND_SIZE)
     const sx = cx + nx * dist
     const sy = cy + ny * dist
 

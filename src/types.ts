@@ -40,6 +40,8 @@ export type InstrumentType =
   | 'timpani'
   | 'mallet'
   | 'harp'
+  | 'chair'
+  | 'stand'
   | 'square'
   | 'rectangle'
 
@@ -53,6 +55,10 @@ export interface FixedInstrument {
   rotation: number    // local rotation in radians (0 = default orientation)
   count?: number      // timpani: 2-6 drums (default 4)
   label?: string      // optional override for the displayed label
+  // When true, a music stand × is drawn between this instrument and the
+  // conductor (toggleable by clicking the instrument while the Music
+  // Stand tool is active in the Edit tab).
+  hasStand?: boolean
 }
 
 export interface ChartConfig {

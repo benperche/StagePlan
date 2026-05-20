@@ -582,6 +582,8 @@ const INSTRUMENT_LABEL: Record<InstrumentType, string> = {
   'timpani': 'Timpani',
   'mallet': 'Mallets',
   'harp': 'Harp',
+  'chair': 'Chair',
+  'stand': 'Stand',
   'square': 'Square',
   'rectangle': 'Rectangle',
 }
@@ -704,6 +706,20 @@ canvas.addEventListener('mousedown', (e) => {
   // Instrument body hit takes priority over chairs (drawn on top)
   const instHit = renderer.instrumentHitTest(x, y)
   if (instHit) {
+    // Music Stand tool + click on a fixed instrument = toggle a stand
+    // attached to that instrument (drawn between it and the conductor).
+    // Don't start a drag in this mode — the user's intent is clearly to
+    // place/remove the stand.
+    if (activeTool === 'stand') {
+      const inst = config.instruments.find(i => i.id === instHit.id)
+      if (inst) {
+        history.push(config)
+        inst.hasStand = !inst.hasStand
+        setSelectedInstrument(inst.id)
+        renderChart()
+      }
+      return
+    }
     setSelectedInstrument(instHit.id)
     dragState = {
       instrumentId: instHit.id,
