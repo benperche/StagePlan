@@ -35,7 +35,7 @@ export class Renderer {
   private hitTargets: HitTarget[] = []
   private instrumentHits: InstrumentHit[] = []
   conductorHit: ConductorHit | null = null
-  conductorOrigin: ConductorOrigin = { ox: 0, oy: 0, yDir: -1 }
+  conductorOrigin: ConductorOrigin = { ox: 0, oy: 0, yDir: -1, flipped: false }
   selectedInstrumentId: string | null = null
   rotateHandleHit: RotateHandleHit | null = null
 
@@ -255,7 +255,7 @@ export class Renderer {
     const ox = w / 2 + offX
     const oy = this.computeOy(h, numRows, config.flipped, rowSpacing) + offY
     const yDir = config.flipped ? 1 : -1
-    this.conductorOrigin = { ox, oy, yDir }
+    this.conductorOrigin = { ox, oy, yDir, flipped: config.flipped }
 
     // Draw arcs first (behind chairs)
     if (config.showArc) {
@@ -286,7 +286,9 @@ export class Renderer {
       config.rows[rowIndex].isStraight ?? (rowIndex >= numRows - config.straightRows)
     const maxStraightWidth = config.rows.reduce((mx, r, i) =>
       isStraightRow(i) ? Math.max(mx, (r.chairs.length - 1) * STRAIGHT_CHAIR_SPACING) : mx, 0)
-    const straightLabelX = ox - maxStraightWidth / 2 - CHAIR_HALF - 18
+    // Mirror the label x with the rest of the chart when flipped (row label
+    // sits past the conductor's centre on the chair side).
+    const straightLabelX = ox + (config.flipped ? 1 : -1) * (maxStraightWidth / 2 + CHAIR_HALF + 18)
 
     let seatNumber = 1
     config.rows.forEach((row, rowIndex) => {
@@ -327,6 +329,12 @@ export class Renderer {
     // If their natural separation is already tighter than that, they stay
     // put — we never push chairs apart.
     const desiredHalfOffset = DESK_PAIR_SPACING / 2 / r
+    // When the chart is flipped, mirror chairs left↔right as well as the
+    // existing top↔bottom flip — flipping is a 180° rotation around the
+    // conductor, not just a vertical reflection. Chair 0 (leftmost in the
+    // unflipped view) ends up rightmost so the layout looks identical from
+    // the conductor's perspective regardless of which side you're viewing.
+    const xDir = -yDir
 
     const positions: Array<{ cx: number; cy: number }> = new Array(N)
     let i = 0
@@ -341,12 +349,12 @@ export class Renderer {
         const halfSep = Math.min(naturalStep / 2, desiredHalfOffset)
         const angleA = midpoint + halfSep
         const angleB = midpoint - halfSep
-        positions[i]     = { cx: ox + r * Math.cos(angleA), cy: oy + yDir * r * Math.sin(angleA) }
-        positions[i + 1] = { cx: ox + r * Math.cos(angleB), cy: oy + yDir * r * Math.sin(angleB) }
+        positions[i]     = { cx: ox + xDir * r * Math.cos(angleA), cy: oy + yDir * r * Math.sin(angleA) }
+        positions[i + 1] = { cx: ox + xDir * r * Math.cos(angleB), cy: oy + yDir * r * Math.sin(angleB) }
         i += 2
       } else {
         const angle = startAngle - i * naturalStep
-        positions[i] = { cx: ox + r * Math.cos(angle), cy: oy + yDir * r * Math.sin(angle) }
+        positions[i] = { cx: ox + xDir * r * Math.cos(angle), cy: oy + yDir * r * Math.sin(angle) }
         i += 1
       }
     }
@@ -381,9 +389,10 @@ export class Renderer {
     })
 
     if (config.showRowLabels) {
-      // Label to the left of the leftmost chair position, pushed past the
+      // Label to the left of the leftmost chair (or right of the rightmost
+      // when flipped, since "leftmost" mirrors across), pushed past the
       // conductor line so it sits "behind" the row rather than beside it.
-      const lx = ox - r - CHAIR_HALF - 6
+      const lx = ox + xDir * (-r - CHAIR_HALF - 6)
       const ly = oy - yDir * (CHAIR_HALF + 8)
       this.drawRowLabel(ctx, row.label, lx, ly)
     }
@@ -411,11 +420,15 @@ export class Renderer {
     if (total === 0) return seatNumber
 
     const rowWidth = (total - 1) * STRAIGHT_CHAIR_SPACING
-    const startX = ox - rowWidth / 2
+    // Flip mirrors left↔right around the conductor (the renderer's whole
+    // notion of "flipped" is a 180° rotation around the conductor, not just
+    // a vertical flip). xDir is the x-axis equivalent of the existing yDir.
+    const xDir = config.flipped ? -1 : 1
     const positions: Array<{ cx: number; cy: number }> = []
 
     row.chairs.forEach((chair, chairIndex) => {
-      const cx = startX + chairIndex * STRAIGHT_CHAIR_SPACING
+      // Chair distance from ox, with mirror baked in
+      const cx = ox + xDir * (chairIndex * STRAIGHT_CHAIR_SPACING - rowWidth / 2)
       positions.push({ cx, cy: rowY })
 
       if (chair.enabled) {
@@ -460,14 +473,15 @@ export class Renderer {
     const ox = w / 2 + offX
     const oy = this.computeOy(h, numRows, config.flipped, rowSpacing) + offY
     const yDir = config.flipped ? 1 : -1
-    this.conductorOrigin = { ox, oy, yDir }
+    this.conductorOrigin = { ox, oy, yDir, flipped: config.flipped }
 
     this.drawConductor(ctx, ox, oy, yDir, config)
 
-    // Consistent label x: align all labels to left edge of widest row
+    // Consistent label x: align all labels to the left edge of the widest
+    // row (or right edge when flipped, mirrored around the conductor).
     const maxRowWidth = config.rows.reduce((mx, r) =>
       Math.max(mx, (r.chairs.length - 1) * STRAIGHT_CHAIR_SPACING), 0)
-    const labelX = ox - maxRowWidth / 2 - CHAIR_HALF - 18
+    const labelX = ox + (config.flipped ? 1 : -1) * (maxRowWidth / 2 + CHAIR_HALF + 18)
 
     let seatNumber = 1
     config.rows.forEach((row, rowIndex) => {
@@ -483,17 +497,23 @@ export class Renderer {
   private renderInstruments(ctx: CanvasRenderingContext2D, config: ChartConfig) {
     const instruments = config.instruments ?? []
     if (instruments.length === 0) return
-    const { ox, oy } = this.conductorOrigin
+    const { ox, oy, flipped } = this.conductorOrigin
+    // Flipped chart is a 180° rotation around the conductor. For fixed
+    // instruments, both the position (dx, dy from conductor) and the
+    // glyph's local rotation rotate by π.
+    const mirror = flipped ? -1 : 1
+    const rotateBy = flipped ? Math.PI : 0
 
     instruments.forEach(inst => {
-      const cx = ox + inst.distance * Math.cos(inst.angle)
-      const cy = oy + inst.distance * Math.sin(inst.angle)
+      const cx = ox + mirror * inst.distance * Math.cos(inst.angle)
+      const cy = oy + mirror * inst.distance * Math.sin(inst.angle)
+      const worldRotation = inst.rotation + rotateBy
       const isSelected = inst.id === this.selectedInstrumentId
 
       // 1) Draw the glyph in the rotated frame (no label!)
       ctx.save()
       ctx.translate(cx, cy)
-      ctx.rotate(inst.rotation)
+      ctx.rotate(worldRotation)
 
       let hw = 0, hh = 0, labelInside = false
       switch (inst.type) {
@@ -532,7 +552,7 @@ export class Renderer {
         ctx.restore()
       } else {
         // Below the rotated bounding box's lowest point
-        const drop = Math.abs(hw * Math.sin(inst.rotation)) + Math.abs(hh * Math.cos(inst.rotation))
+        const drop = Math.abs(hw * Math.sin(worldRotation)) + Math.abs(hh * Math.cos(worldRotation))
         ctx.save()
         ctx.fillStyle = '#222'
         ctx.font = 'bold 11px sans-serif'
@@ -544,14 +564,15 @@ export class Renderer {
 
       // 3) Rotate handle (selected instruments only) — also outside rotated frame
       if (isSelected) {
-        this.drawRotateHandle(ctx, cx, cy, hh, inst.rotation, inst.id)
+        this.drawRotateHandle(ctx, cx, cy, hh, worldRotation, inst.id)
       }
 
-      // 4) Hit target for the body
+      // 4) Hit target for the body — uses the rendered (post-flip) position
+      // and rotation, so click hit-tests match what the user actually sees.
       this.instrumentHits.push({
         id: inst.id,
         cx, cy, hw, hh,
-        rotation: inst.rotation,
+        rotation: worldRotation,
       })
     })
   }

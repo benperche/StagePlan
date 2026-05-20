@@ -670,9 +670,13 @@ canvas.addEventListener('mousedown', (e) => {
   if (renderer.rotateHandleHitTest(x, y)) {
     const inst = config.instruments.find(i => i.id === selectedInstrumentId)
     if (inst) {
-      const { ox, oy } = renderer.conductorOrigin
-      const cx = ox + inst.distance * Math.cos(inst.angle)
-      const cy = oy + inst.distance * Math.sin(inst.angle)
+      const { ox, oy, flipped } = renderer.conductorOrigin
+      // When the chart is flipped, the instrument is rendered at the
+      // 180°-rotated position around the conductor. Recompute the rendered
+      // centre so the rotate handle's pivot matches what the user sees.
+      const mirror = flipped ? -1 : 1
+      const cx = ox + mirror * inst.distance * Math.cos(inst.angle)
+      const cy = oy + mirror * inst.distance * Math.sin(inst.angle)
       rotateState = {
         instrumentId: inst.id,
         centerX: cx,
@@ -784,13 +788,18 @@ window.addEventListener('mousemove', (e) => {
   // New instrument centre = pointer minus the grab offset
   const newCx = x - drag.offsetX
   const newCy = y - drag.offsetY
-  const { ox, oy } = renderer.conductorOrigin
+  const { ox, oy, flipped } = renderer.conductorOrigin
+  // Stored polar (angle, distance) is in the unflipped frame. When the
+  // chart is flipped (180° rotation around the conductor), the rendered
+  // position is the negated polar offset, so we negate the canvas-space
+  // dx/dy before computing the stored angle.
+  const mirror = flipped ? -1 : 1
 
   // Threshold check: only treat as drag (and push history) once we've
   // moved meaningfully from the original instrument centre.
   if (!drag.moved) {
-    const oldCx = ox + inst.distance * Math.cos(inst.angle)
-    const oldCy = oy + inst.distance * Math.sin(inst.angle)
+    const oldCx = ox + mirror * inst.distance * Math.cos(inst.angle)
+    const oldCy = oy + mirror * inst.distance * Math.sin(inst.angle)
     if (Math.hypot(newCx - oldCx, newCy - oldCy) < DRAG_THRESHOLD) return
     history.push(drag.preDragConfig)
     drag.moved = true
@@ -798,7 +807,7 @@ window.addEventListener('mousemove', (e) => {
 
   const dx = newCx - ox
   const dy = newCy - oy
-  inst.angle = Math.atan2(dy, dx)
+  inst.angle = Math.atan2(mirror * dy, mirror * dx)
   inst.distance = Math.hypot(dx, dy)
   renderChart()
 })

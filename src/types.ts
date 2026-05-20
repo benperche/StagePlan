@@ -135,6 +135,7 @@ export interface RotateHandleHit {
 export interface ConductorOrigin {
   ox: number
   oy: number
-  yDir: number     // +1 if conductor is above chairs (flipped), -1 otherwise
+  yDir: number       // +1 if conductor is above chairs (flipped), -1 otherwise
+  flipped: boolean   // convenience: same as yDir > 0
 }
 
