@@ -716,6 +716,111 @@ button.danger:hover { background: #fff0f0; }
   padding: 8px 0;
 }
 
+/* Library tab — chart list */
+#library-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.lib-folder {
+  margin-top: 4px;
+  background: #fafafa;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.lib-folder > summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  padding: 6px 8px 6px 22px;
+  position: relative;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.lib-folder > summary::-webkit-details-marker { display: none; }
+.lib-folder > summary::before {
+  content: '▸';
+  position: absolute;
+  left: 8px;
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: transform 0.1s ease;
+}
+.lib-folder[open] > summary::before { transform: rotate(90deg); }
+.lib-folder-name { flex: 1; }
+.lib-folder-count {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.lib-folder-delete {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 0 4px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.lib-folder-delete:hover { color: #c00; background: transparent; }
+
+.lib-chart-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px 4px 22px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  background: #fff;
+}
+.lib-chart-row.current { background: #eff6ff; }
+.lib-chart-open {
+  flex: 1;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 2px 4px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 3px;
+}
+.lib-chart-open:hover { background: rgba(0, 0, 0, 0.04); color: var(--accent); }
+.lib-chart-date {
+  color: var(--text-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.lib-chart-action {
+  border: none;
+  background: transparent;
+  padding: 2px 4px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-radius: 3px;
+}
+.lib-chart-action:hover { background: rgba(0, 0, 0, 0.06); color: var(--text); }
+.lib-chart-action.danger:hover { color: #c00; }
+
+.lib-empty {
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+  padding: 16px 0;
+  font-style: italic;
+}
+
 /* Print: force landscape A4, hide every piece of UI chrome, scale the
    canvas to fit the page in both dimensions. The print dialog's "Save
    as PDF" option then produces a clean single-page PDF without any of

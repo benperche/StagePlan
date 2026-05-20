@@ -6,6 +6,7 @@ import {
   type Preset,
 } from './presets'
 import { saveToJson, loadFromJson, encodeToHash, decodeFromHash, exportToPng } from './serializer'
+import * as library from './library'
 import type { ChartConfig, InstrumentType } from './types'
 
 // --- App state ---
@@ -114,6 +115,8 @@ import {
   rowSpacingInput, rowCountInput, advancedBtn, advancedModal, advancedCloseBtn, rowsContainer,
   colorPicker, colorPickerLabel, undoBtn, redoBtn, resetPositionBtn, addRowBtn, saveBtn,
   loadInput, exportPngBtn, printBtn, shareLinkBtn, shareUrlDisplay, presetSelect, applyPresetBtn,
+  libraryCurrentTitle, librarySaveBtn, libraryNewChartBtn, libraryNewFolderBtn,
+  librarySearch, libraryList,
   customOrchestraBtn, customOrchestraModal, customOrchestraTitle, customOrchestraNotation,
   customOrchestraPreview, customOrchestraApply, customOrchestraCancel,
   toolButtons, instrumentPickerPanel, instrumentPickerList, instrumentPickerStatus,
@@ -166,6 +169,19 @@ function setConfig(newConfig: ChartConfig) {
   setSelectedInstrument(null)
   updateAllInputs()
   renderChart()
+}
+
+// --- Library state ---
+// The id of the chart currently loaded from the browser library, or null
+// if the user is editing an unsaved/fresh chart. Used by the Save button
+// to decide between "update in place" and "create new entry".
+let currentChartId: string | null = null
+let librarySearchText = ''
+
+function updateLibraryCurrentTitle() {
+  libraryCurrentTitle.textContent = currentChartId
+    ? `My Charts — Editing "${config.title}"`
+    : 'My Charts'
 }
 
 // --- Render ---
@@ -261,6 +277,142 @@ function resizeCanvas() {
   const container = canvas.parentElement!
   canvas.width = container.clientWidth
   canvas.height = Math.max(500, container.clientHeight)
+}
+
+// --- Library tab rendering ---
+
+function fmtDate(t: number): string {
+  const d = new Date(t)
+  return d.toLocaleDateString(undefined, { day: '2-digit', month: 'short' })
+}
+
+function escapeText(s: string): string {
+  return s.replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
+}
+
+/**
+ * Rebuild the My Charts list from IndexedDB. Charts are grouped by
+ * folder (with explicit empty folders shown too); the current loaded
+ * chart is highlighted. Per-chart action buttons emit
+ * `[data-lib-action]` so the click handler can dispatch by name.
+ */
+async function renderLibrary() {
+  const [charts, folders] = await Promise.all([library.listCharts(), library.listFolders()])
+  updateLibraryCurrentTitle()
+
+  // Filter by search text
+  const q = librarySearchText.trim().toLowerCase()
+  const visible = q ? charts.filter(c => c.title.toLowerCase().includes(q)) : charts
+
+  if (charts.length === 0 && folders.length === 0) {
+    libraryList.innerHTML = '<p class="lib-empty">No saved charts yet. Click "Save current chart" above.</p>'
+    return
+  }
+
+  // Bucket charts by folder
+  const byFolder = new Map<string, library.SavedChart[]>()
+  byFolder.set('', [])
+  for (const f of folders) byFolder.set(f, [])
+  for (const c of visible) {
+    if (!byFolder.has(c.folder)) byFolder.set(c.folder, [])
+    byFolder.get(c.folder)!.push(c)
+  }
+
+  // Build HTML — unfiled (root) first, then folders alphabetically
+  const folderOrder = ['', ...Array.from(byFolder.keys()).filter(f => f !== '').sort()]
+  const parts: string[] = []
+  for (const folder of folderOrder) {
+    const items = byFolder.get(folder) ?? []
+    if (folder === '' && items.length === 0 && folders.length > 0) continue   // skip empty unfiled when folders exist
+    const displayName = folder === '' ? 'Unfiled' : folder
+    parts.push(`<details class="lib-folder" ${items.length > 0 || folder === '' ? 'open' : ''}>
+      <summary>
+        <span class="lib-folder-name">${escapeText(displayName)}</span>
+        <span class="lib-folder-count">${items.length}</span>
+        ${folder !== '' ? `<button class="lib-folder-delete" data-lib-action="delete-folder" data-folder="${escapeText(folder)}" title="Delete folder">✕</button>` : ''}
+      </summary>`)
+    if (items.length === 0) {
+      parts.push('<div class="lib-chart-row"><span class="lib-empty" style="padding:6px 0">Empty</span></div>')
+    }
+    for (const c of items) {
+      const current = c.id === currentChartId
+      parts.push(`<div class="lib-chart-row${current ? ' current' : ''}">
+        <button class="lib-chart-open" data-lib-action="open" data-id="${c.id}" title="Open ${escapeText(c.title)}">${escapeText(c.title)}</button>
+        <span class="lib-chart-date">${fmtDate(c.updatedAt)}</span>
+        <button class="lib-chart-action" data-lib-action="rename" data-id="${c.id}" title="Rename">✏</button>
+        <button class="lib-chart-action" data-lib-action="duplicate" data-id="${c.id}" title="Duplicate">⎘</button>
+        <button class="lib-chart-action" data-lib-action="move" data-id="${c.id}" title="Move to folder">📁</button>
+        <button class="lib-chart-action danger" data-lib-action="delete" data-id="${c.id}" title="Delete">🗑</button>
+      </div>`)
+    }
+    parts.push('</details>')
+  }
+  libraryList.innerHTML = parts.join('')
+}
+
+async function handleLibraryAction(action: string, id: string | null, folder: string | null) {
+  if (action === 'open' && id) {
+    const chart = await library.loadChart(id)
+    if (!chart) return
+    setConfig(chart.config)
+    currentChartId = id
+    updateLibraryCurrentTitle()
+    await renderLibrary()
+    return
+  }
+  if (action === 'rename' && id) {
+    const chart = await library.loadChart(id)
+    if (!chart) return
+    const next = window.prompt('Rename chart:', chart.title)
+    if (next === null || !next.trim()) return
+    await library.renameChart(id, next.trim())
+    if (id === currentChartId) config.title = next.trim()
+    updateAllInputs()
+    await renderLibrary()
+    return
+  }
+  if (action === 'duplicate' && id) {
+    await library.duplicateChart(id)
+    await renderLibrary()
+    return
+  }
+  if (action === 'move' && id) {
+    const folders = await library.listFolders()
+    const options = ['(unfiled)', ...folders]
+    const choice = window.prompt(
+      `Move to which folder?\n\nExisting folders:\n${options.map((f, i) => `  ${i + 1}. ${f}`).join('\n')}\n\nType the number, the folder name, or a new folder name:`)
+    if (choice === null) return
+    let target: string
+    const num = Number(choice)
+    if (!isNaN(num) && num >= 1 && num <= options.length) {
+      target = num === 1 ? '' : options[num - 1]
+    } else if (choice.trim().toLowerCase() === '(unfiled)' || choice.trim() === '') {
+      target = ''
+    } else {
+      target = choice.trim()
+      if (target && !folders.includes(target)) await library.createFolder(target)
+    }
+    await library.moveChart(id, target)
+    await renderLibrary()
+    return
+  }
+  if (action === 'delete' && id) {
+    const chart = await library.loadChart(id)
+    if (!chart) return
+    if (!window.confirm(`Delete "${chart.title}"? This cannot be undone.`)) return
+    await library.deleteChart(id)
+    if (currentChartId === id) currentChartId = null
+    updateLibraryCurrentTitle()
+    await renderLibrary()
+    return
+  }
+  if (action === 'delete-folder' && folder !== null) {
+    if (!window.confirm(`Delete folder "${folder}"? Any charts inside will become Unfiled.`)) return
+    await library.deleteFolder(folder)
+    await renderLibrary()
+    return
+  }
 }
 
 // --- Sync inputs → config ---
@@ -896,6 +1048,9 @@ function bindEvents() {
     // Scroll the sidebar back to the top so Next/Back doesn't strand the
     // user partway down the new tab.
     document.getElementById('sidebar')?.scrollTo({ top: 0 })
+    // Library tab is async: refresh the list whenever it becomes visible
+    // so any saves made elsewhere show up.
+    if (tab === 'library') renderLibrary()
   }
   tabButtons.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset['tab'])))
   tabNavButtons.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset['tabNav'])))
@@ -1036,6 +1191,9 @@ function bindEvents() {
     if (!file) return
     try {
       setConfig(await loadFromJson(file))
+      // Loaded from disk → no library entry yet. Next Save creates one.
+      currentChartId = null
+      updateLibraryCurrentTitle()
     } catch {
       alert('Could not load chart file.')
     }
@@ -1079,6 +1237,60 @@ function bindEvents() {
   // the page. Users can then pick "Save as PDF" from the print dialog to
   // get a PDF for free with no extra dependencies.
   printBtn.addEventListener('click', () => window.print())
+
+  // --- Library tab ---
+  librarySaveBtn.addEventListener('click', async () => {
+    // If we have a current chart loaded, update it in place. Otherwise
+    // create a new entry — title defaults to config.title but the user
+    // gets a quick prompt so they can adjust.
+    let title = config.title || 'Untitled'
+    let folder = ''
+    if (currentChartId) {
+      const existing = await library.loadChart(currentChartId)
+      if (existing) {
+        title = config.title || existing.title
+        folder = existing.folder
+      }
+    } else {
+      const next = window.prompt('Save chart as:', title)
+      if (next === null) return
+      title = next.trim() || 'Untitled'
+    }
+    const id = await library.saveChart(currentChartId, title, folder, config)
+    currentChartId = id
+    updateLibraryCurrentTitle()
+    await renderLibrary()
+  })
+
+  libraryNewChartBtn.addEventListener('click', () => {
+    if (currentChartId && !window.confirm('Discard current chart and start a new blank one? Anything unsaved here will be lost — use Save first if you want to keep it.')) return
+    setConfig(makeDefaultConfig())
+    currentChartId = null
+    updateLibraryCurrentTitle()
+    renderLibrary()
+  })
+
+  libraryNewFolderBtn.addEventListener('click', async () => {
+    const name = window.prompt('Folder name:')
+    if (name === null || !name.trim()) return
+    await library.createFolder(name.trim())
+    await renderLibrary()
+  })
+
+  librarySearch.addEventListener('input', () => {
+    librarySearchText = librarySearch.value
+    renderLibrary()
+  })
+
+  // Delegated click handler for all per-chart and per-folder action buttons.
+  libraryList.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('[data-lib-action]') as HTMLElement | null
+    if (!btn) return
+    const action = btn.dataset['libAction'] ?? ''
+    const id = btn.dataset['id'] ?? null
+    const folder = btn.dataset['folder'] ?? null
+    handleLibraryAction(action, id, folder)
+  })
 
   shareLinkBtn.addEventListener('click', () => {
     const { hash, strippedBackground } = encodeToHash(config)

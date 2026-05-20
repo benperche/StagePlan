@@ -19,6 +19,7 @@ Internal notes for working on the codebase. Not user-facing.
 | `src/instrument-glyphs.ts` | Pure draw functions for each fixed-instrument glyph (drum kit, piano, amp, timpani, mallet, generic rectangle). Each draws at (0, 0) in the current canvas frame and returns its `{ hw, hh, labelInside }` bounding box. No class — just stateless functions. |
 | `src/presets.ts` | The preset library, the Boosey & Hawkes notation parser (`parseOrchestraNotation`, `describeComposition`), and the orchestra-row builder (`buildOrchestraRows`). Self-contained: input shorthand → `Row[]`. |
 | `src/serializer.ts` | Persistence — JSON save/load, URL-hash encode/decode, PNG export. The hash encoder strips `backgroundImage` (too big for a URL) and reports back. |
+| `src/library.ts` | Browser-only chart library backed by IndexedDB (DB `stageplan`, stores `charts` and `folders`). Exposes CRUD: `listCharts/loadChart/saveChart/deleteChart/duplicateChart/renameChart/moveChart` and `listFolders/createFolder/deleteFolder`. Pure storage — no UI. |
 | `src/main.ts` | The UI/glue. App state (`config`, history, drag tracking), event handlers, init, render loop trigger. The orchestration that ties everything together. |
 | `src/dom.ts` | All `document.getElementById` lookups. One file, organised by sidebar panel, so adding a new control means editing one obvious place. |
 | `index.html` | Sidebar markup (organised into three tabs — Setup / Edit / Export), modal markup, canvas element + undo/redo overlay. |
@@ -31,9 +32,10 @@ nested state):
 
 | Tab | Contains |
 |---|---|
-| **Setup** | Chart, Preset Arrangements, Notes, Stage Background |
+| **Setup** | Chart, Preset Arrangements, Stage Background, Notes |
 | **Edit** | Rows, Edit Chairs, Allocate Instruments (when Instrument tool is active), Large / Fixed Instruments |
-| **Export** | Save & Export |
+| **Library** | My Charts (browser-only IndexedDB store with folders + per-chart actions: open / duplicate / rename / move / delete). Save button updates the currently-open chart, or prompts for a title to create a new entry. |
+| **Export** | Save JSON, Load JSON, Export PNG, Print/PDF, Copy share link |
 
 Each panel is wrapped in a `<div class="tab-content" data-tab-content="…">`
 container. Clicking a tab toggles `active` on its button and on the

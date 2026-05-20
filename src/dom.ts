@@ -88,6 +88,14 @@ export const bgFitSelect = document.getElementById('bg-fit') as HTMLSelectElemen
 export const undoBtn = document.getElementById('undo-btn') as HTMLButtonElement
 export const redoBtn = document.getElementById('redo-btn') as HTMLButtonElement
 
+// --- Library tab ---
+export const libraryCurrentTitle = document.getElementById('library-current-title') as HTMLElement
+export const librarySaveBtn = document.getElementById('library-save-btn') as HTMLButtonElement
+export const libraryNewChartBtn = document.getElementById('library-new-chart-btn') as HTMLButtonElement
+export const libraryNewFolderBtn = document.getElementById('library-new-folder-btn') as HTMLButtonElement
+export const librarySearch = document.getElementById('library-search') as HTMLInputElement
+export const libraryList = document.getElementById('library-list') as HTMLElement
+
 // --- Save & export panel ---
 export const saveBtn = document.getElementById('save-btn') as HTMLButtonElement
 export const loadInput = document.getElementById('load-input') as HTMLInputElement
