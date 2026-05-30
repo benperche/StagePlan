@@ -119,7 +119,8 @@ import {
   librarySearch, libraryList,
   customOrchestraBtn, customOrchestraModal, customOrchestraTitle, customOrchestraNotation,
   customOrchestraPreview, customOrchestraApply, customOrchestraCancel,
-  toolButtons, instrumentPickerPanel, instrumentPickerList, instrumentPickerStatus,
+  toolButtons, standBulkPanel, stoolBulkPanel, standBulkButtons, stoolBulkButtons,
+  instrumentPickerPanel, instrumentPickerList, instrumentPickerStatus,
   showTallyBtn, tallyOverlay, tallyBody, tallyTotal, tallyMinimizeBtn, tallyCloseBtn,
   addInstrumentButtons, inspector, inspectorType, inspectorLabel,
   inspectorCountLabel, inspectorCount, inspectorRotateLeft, inspectorRotateRight,
@@ -1128,9 +1129,52 @@ function bindEvents() {
       toolButtons.forEach(b => b.classList.remove('active'))
       btn.classList.add('active')
       colorPickerLabel.style.display = activeTool === 'color' ? '' : 'none'
+      standBulkPanel.style.display = activeTool === 'stand' ? '' : 'none'
+      stoolBulkPanel.style.display = activeTool === 'stool' ? '' : 'none'
       instrumentPickerPanel.style.display = activeTool === 'label' ? '' : 'none'
-      if (activeTool === 'color') colorPicker.click()
       if (activeTool === 'label') renderInstrumentPicker()
+    })
+  })
+
+  // Stand bulk actions (apply to every chair in every row)
+  standBulkButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const mode = btn.dataset['standBulk']
+      history.push(config)
+      config.rows.forEach(row => {
+        // Start from a clean slate, then apply the chosen pattern.
+        row.chairs.forEach(c => { c.hasStand = false; c.standAfter = false })
+        if (mode === 'per-chair') {
+          row.chairs.forEach(c => { if (c.enabled) c.hasStand = true })
+        } else if (mode === 'per-desk') {
+          // Pair up consecutive enabled chairs into desks (a shared × in the
+          // gap). A leftover single enabled chair gets its own solo stand.
+          let i = 0
+          while (i < row.chairs.length) {
+            if (!row.chairs[i].enabled) { i++; continue }
+            const next = row.chairs[i + 1]
+            if (next && next.enabled) {
+              row.chairs[i].standAfter = true
+              i += 2
+            } else {
+              row.chairs[i].hasStand = true
+              i += 1
+            }
+          }
+        }
+        // mode === 'remove' leaves the cleared slate as-is.
+      })
+      renderChart()
+    })
+  })
+
+  // Stool bulk actions — convert every chair in the chart to/from a stool.
+  stoolBulkButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const toStool = btn.dataset['stoolBulk'] === 'stools'
+      history.push(config)
+      config.rows.forEach(row => row.chairs.forEach(c => { c.isStool = toStool }))
+      renderChart()
     })
   })
 

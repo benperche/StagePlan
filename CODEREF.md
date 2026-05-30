@@ -133,6 +133,8 @@ fall through to an "Other" bucket at the bottom.
 - The Music Stand tool cycles: `none → solo → shared-with-next → none`. When going to shared, the next chair's `hasStand` is automatically cleared.
 - Stand × is drawn by `drawStandX`. Rotated by the chair→conductor angle so the diagonals stay diagonal (not aligned with the radial — that would look like `+`).
 - Default `makeChair()` returns `hasStand: true`.
+- The Stand tool also exposes chart-wide bulk actions (`#stand-bulk`): **One per chair** (solo × on every enabled chair), **One per desk** (pairs consecutive enabled chairs into a shared `standAfter`, leftover singles get a solo stand), **Remove all** (clears both flags). The Stool tool has a matching pair (`#stool-bulk`) to convert every chair to/from `isStool`. All operate on every row and push one undo snapshot.
+- The Colour tool just reveals the swatch (`#color-picker-label`); it no longer auto-opens the native picker — the user clicks the swatch when they want to change the colour.
 
 ## Orchestra preset (notation → rows)
 
@@ -202,6 +204,7 @@ is then a thin wrapper that calls `buildPreset`, pushes the result into
 - **Hit targets are stored on the Renderer instance** and reset every render. Don't call hitTest before the first render.
 - **`applyPreset` calls `history.push(config)` at the top.** Don't double-push in callers.
 - **The advanced modal inputs and `readInputs()` must stay in sync.** Adding a new advanced setting means: update `types.ts`, `state.ts` defaults, `index.html` markup, the DOM ref + `readInputs` + `updateAllInputs` blocks in `main.ts`, and the change-listener loop in `bindEvents`.
+- **`tsconfig.json` sets `noEmit: true`.** Vite/esbuild does the actual transpile; the `tsc` in `npm run build` is a type-check only. Without `noEmit`, `tsc` dumps compiled `.js` next to every `.ts` in `src/`, and the dev server then serves those stale `.js` instead of transforming the live `.ts` — silently running old code. The `.js` files are gitignored (`src/*.js`); if you ever see them, delete them.
 - **`config` is module-global in main.ts.** Any wholesale replacement (load JSON, undo, redo, hash-load) goes through `setConfig(newConfig)`, which migrates, clears stale UI state, syncs the sidebar, and re-renders. In-place mutations (most user actions) just call `renderChart()` directly.
 
 ## Sidebar ↔ config bindings

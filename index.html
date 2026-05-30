@@ -142,7 +142,18 @@
           <label id="color-picker-label" style="display:none">Colour
             <input type="color" id="color-picker" value="#a8d8ea" />
           </label>
-          <p class="hint">Click a chair to apply the selected tool. Enable hides chairs without shifting the row. Stand cycles solo × → shared × → none. Colour opens a picker. Instrument shows the allocate-instruments list below.</p>
+          <div id="stand-bulk" class="bulk-actions" style="display:none">
+            <span class="bulk-actions-label">All chairs:</span>
+            <button data-stand-bulk="per-chair">One per chair</button>
+            <button data-stand-bulk="per-desk">One per desk</button>
+            <button data-stand-bulk="remove">Remove all</button>
+          </div>
+          <div id="stool-bulk" class="bulk-actions" style="display:none">
+            <span class="bulk-actions-label">Convert all:</span>
+            <button data-stool-bulk="stools">Chairs → stools</button>
+            <button data-stool-bulk="chairs">Stools → chairs</button>
+          </div>
+          <p class="hint">Click a chair to apply the selected tool. Enable hides chairs without shifting the row. Stand cycles solo × → shared × → none. Colour applies the swatch colour — click the swatch to change it. Instrument shows the allocate-instruments list below.</p>
         </section>
 
         <section class="panel" id="instrument-picker-panel" style="display:none">

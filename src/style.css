@@ -256,6 +256,24 @@ button.secondary { border-style: dashed; }
   border-color: var(--accent);
 }
 
+/* Bulk-action rows shown under the Edit Chairs tools (Stand / Stool). */
+.bulk-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.bulk-actions-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-right: 2px;
+}
+.bulk-actions button {
+  font-size: 12px;
+  padding: 4px 7px;
+}
+
 /* Row list */
 #rows-container {
   display: flex;
