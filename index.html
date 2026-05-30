@@ -131,14 +131,18 @@
         </section>
 
         <section class="panel">
-          <h2>Edit Chairs</h2>
+          <h2>Edit chairs</h2>
+          <p class="hint">Pick what a chair click does, then click chairs on the chart.</p>
           <div class="tool-group">
             <button data-tool="toggle" class="tool-btn active">Hide</button>
             <button data-tool="stand" class="tool-btn">Stand</button>
             <button data-tool="stool" class="tool-btn">Stool</button>
             <button data-tool="color" class="tool-btn">Colour</button>
             <button data-tool="label" class="tool-btn">Label</button>
+            <button data-tool="instrument" class="tool-btn">Instruments</button>
           </div>
+          <p class="hint" id="edit-chairs-hint">Click a chair to hide it — its place is kept so the row doesn't shift. Click again to bring it back.</p>
+
           <label id="color-picker-label" style="display:none">Colour
             <input type="color" id="color-picker" value="#a8d8ea" />
           </label>
@@ -153,11 +157,24 @@
             <button data-stool-bulk="stools">Stools</button>
             <button data-stool-bulk="chairs">Chairs</button>
           </div>
-          <p class="hint" id="edit-chairs-hint">Click a chair to hide it — its place is kept so the row doesn't shift. Click again to bring it back.</p>
+          <!-- Label tool: free-type + bulk paste -->
+          <div id="label-panel" style="display:none">
+            <details class="label-paste">
+              <summary>Or paste a list of labels</summary>
+              <p class="hint">One label per line · use % for a line-break within a label · Tab/Shift-Tab to move between rows.</p>
+              <div id="label-list"></div>
+            </details>
+          </div>
+          <!-- Instruments tool: the canonical instrument picker -->
+          <div id="instrument-panel" style="display:none">
+            <p class="hint" id="instrument-picker-status">Pick an instrument or part below, then click any chair to stamp it.</p>
+            <button id="show-tally-btn" class="secondary">📊 Show instrument tally</button>
+            <div id="instrument-picker-list"></div>
+          </div>
         </section>
 
         <section class="panel">
-          <h2>Labels</h2>
+          <h2>Numbers &amp; labels</h2>
           <div class="checkbox-row">
             <label><input type="checkbox" id="show-numbers" checked /> Seat numbers</label>
             <label><input type="checkbox" id="restart-numbers" /> Restart per row</label>
@@ -165,18 +182,6 @@
           <div class="checkbox-row">
             <label><input type="checkbox" id="show-row-labels" /> Row labels</label>
           </div>
-          <p class="labels-subhead">Type names</p>
-          <p class="hint">Pick the <strong>Label</strong> tool above (or click here), then click any chair to type its label. Press Enter to jump to the next chair.</p>
-          <button id="label-tool-btn" class="secondary">✎ Type labels on chairs</button>
-          <details class="label-paste">
-            <summary>Or paste a list of labels</summary>
-            <p class="hint">One label per line · use % for a line-break within a label · Tab/Shift-Tab to move between rows.</p>
-            <div id="label-list"></div>
-          </details>
-          <p class="labels-subhead">Quick-fill instruments</p>
-          <p class="hint" id="instrument-picker-status">Pick an instrument or part below, then click any chair to label it.</p>
-          <button id="show-tally-btn" class="secondary">📊 Show instrument tally</button>
-          <div id="instrument-picker-list"></div>
         </section>
 
         <section class="panel">

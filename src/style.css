@@ -311,13 +311,12 @@ button.secondary { border-style: dashed; }
 
 /* Tool buttons */
 .tool-group {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 4px;
-  flex-wrap: wrap;
 }
 
 .tool-btn {
-  flex: 1;
   font-size: 12px;
   padding: 5px 6px;
 }

@@ -15,7 +15,7 @@ const history = new History()
 const renderer = new Renderer()
 
 let activeColor = '#a8d8ea'
-type ChairTool = 'color' | 'toggle' | 'stand' | 'stool' | 'label'
+type ChairTool = 'color' | 'toggle' | 'stand' | 'stool' | 'label' | 'instrument'
 let activeTool: ChairTool = 'toggle'
 
 // One-line explanation per chair tool, shown under the Edit Chairs buttons for
@@ -25,7 +25,8 @@ const TOOL_HINTS: Record<ChairTool, string> = {
   stand: 'Click a chair to cycle its music stand: solo × → shared × with the next chair → none.',
   stool: 'Click a chair to switch it between a chair and a round stool.',
   color: 'Click a chair to paint it the swatch colour. Click the swatch to change the colour.',
-  label: 'Click a chair to type a name on it (Enter jumps to the next chair). Or quick-fill from the instrument list below.',
+  label: 'Click a chair to type a name on it (Enter jumps to the next chair), or paste a list below.',
+  instrument: 'Pick an instrument below, then click chairs to stamp it on them.',
 }
 
 // True while the Layout tab is active: the canvas shows geometry handles +
@@ -173,7 +174,7 @@ import {
   librarySearch, libraryList,
   customOrchestraBtn, customOrchestraModal, customOrchestraTitle, customOrchestraNotation,
   customOrchestraPreview, customOrchestraApply, customOrchestraCancel,
-  toolButtons, chairLabelInput, labelToolBtn, editChairsHint,
+  toolButtons, chairLabelInput, editChairsHint, labelPanel, instrumentPanel,
   standBulkPanel, stoolBulkPanel, standBulkButtons, stoolBulkButtons,
   instrumentPickerList, labelList, instrumentPickerStatus,
   showTallyBtn, tallyOverlay, tallyBody, tallyTotal, tallyMinimizeBtn, tallyCloseBtn,
@@ -1381,18 +1382,24 @@ canvas.addEventListener('click', (e) => {
 
   const hit = renderer.hitTest(x, y)
   if (!hit) return
-  // Label tool, no instrument picked → type a free-text label on the chair.
-  if (activeTool === 'label' && selectedLabel === null) {
+  // Label tool → type a free-text label right on the chair.
+  if (activeTool === 'label') {
     openChairLabelEditor(hit.rowIndex, hit.chairIndex)
+    return
+  }
+  // Instruments tool → stamp the picked instrument (no-op until one is picked).
+  if (activeTool === 'instrument') {
+    if (selectedLabel === null) return
+    history.push(config)
+    config.rows[hit.rowIndex].chairs[hit.chairIndex].label = selectedLabel
+    renderChart()
     return
   }
 
   history.push(config)
   const chair = config.rows[hit.rowIndex].chairs[hit.chairIndex]
 
-  if (activeTool === 'label') {
-    chair.label = selectedLabel!
-  } else if (activeTool === 'color') {
+  if (activeTool === 'color') {
     chair.color = activeColor
   } else if (activeTool === 'toggle') {
     chair.enabled = !chair.enabled
@@ -1607,12 +1614,12 @@ function bindEvents() {
   tabButtons.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset['tab'])))
   tabNavButtons.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset['tabNav'])))
 
-  // Clears the instrument-label selection (highlight + status + selectedLabel).
-  // Called whenever we leave label mode for one of the chair tools.
+  // Clears the armed instrument selection (highlight + status + selectedLabel).
+  // Called from setChairTool whenever the active chair tool changes.
   function clearLabelSelection() {
     selectedLabel = null
     instrumentPickerList.querySelectorAll('.active').forEach(el => el.classList.remove('active'))
-    instrumentPickerStatus.textContent = 'Pick an instrument or part below, then click any chair to label it.'
+    instrumentPickerStatus.textContent = 'Pick an instrument or part below, then click any chair to stamp it.'
   }
 
   // Single source of truth for "what does clicking a chair do". The four
@@ -1626,6 +1633,8 @@ function bindEvents() {
     colorPickerLabel.style.display = tool === 'color' ? '' : 'none'
     standBulkPanel.style.display = tool === 'stand' ? '' : 'none'
     stoolBulkPanel.style.display = tool === 'stool' ? '' : 'none'
+    labelPanel.style.display = tool === 'label' ? '' : 'none'
+    instrumentPanel.style.display = tool === 'instrument' ? '' : 'none'
     editChairsHint.textContent = TOOL_HINTS[tool]
     // Always clear the instrument selection: switching to a non-label tool
     // leaves label mode, and switching INTO the Label tool means free-type
@@ -1638,9 +1647,6 @@ function bindEvents() {
   toolButtons.forEach(btn => {
     btn.addEventListener('click', () => setChairTool(btn.dataset['tool'] as ChairTool))
   })
-
-  // "Type labels on chairs" button in the Labels panel = the Label tool.
-  labelToolBtn.addEventListener('click', () => setChairTool('label'))
 
   // Inline chair-label editor key handling.
   chairLabelInput.addEventListener('keydown', (e) => {
@@ -1720,13 +1726,12 @@ function bindEvents() {
           b.className = isName ? 'instrument-name' : 'instrument-num'
           b.dataset['label'] = label
           b.addEventListener('click', () => {
-            // Picking an instrument enters label-apply mode (and de-selects
-            // any Edit Chairs tool), then highlights this choice.
-            setChairTool('label')
+            // The picker only shows under the Instruments tool, so picking just
+            // arms the chosen label for the next chair clicks.
             selectedLabel = label
             instrumentPickerList.querySelectorAll('.active').forEach(el => el.classList.remove('active'))
             b.classList.add('active')
-            instrumentPickerStatus.textContent = `Selected: "${label}". Click any chair to apply.`
+            instrumentPickerStatus.textContent = `Selected: "${label}". Click any chair to stamp it.`
           })
           return b
         }

@@ -33,7 +33,7 @@ nested state):
 | Tab | Contains |
 |---|---|
 | **Setup** | Chart, Preset Arrangements, Stage Background, Notes |
-| **Edit** | Rows, Edit Chairs (Enable / Stand / Stool / Colour), Labels (seat-number / row-label toggles + the instrument-label picker), Large / Fixed Instruments |
+| **Edit** | Rows, Edit chairs (Hide / Stand / Stool / Colour / Label / Instruments, each with its own contextual sub-panel), Numbers & labels (display toggles), Large / Fixed Instruments |
 | **Export** | Save JSON, Load JSON, Export PNG, Print/PDF, Copy share link |
 
 Each panel is wrapped in a `<div class="tab-content" data-tab-content="…">`
@@ -120,31 +120,32 @@ Hit tests are populated as a side effect of (6) and (7). `main.ts` calls `render
 - `effectiveRowSpacing` shrinks it if the chart would overflow the canvas, floored at 40 so it stays legible.
 - Sized so the seat number behind one row doesn't collide with the shared stand drawn in front of the row behind (stand reaches ~35 px forward, number ~28 px behind — 65 px floor; 70 gives a small gap).
 
-## Labels panel & chair labelling
+## Chair tools & labelling
 
-The **Labels** panel in the Edit tab holds the seat-number / restart-per-row /
-row-label display toggles, plus three ways to set chair labels:
+The **Edit chairs** panel is the one workspace for "what a chair click does".
+`setChairTool(tool)` is the single source of truth: it sets `activeTool`,
+toggles the tool-button highlights, shows exactly one contextual sub-panel,
+clears any armed instrument selection, and closes the inline label editor. The
+six tools (`ChairTool`) and their sub-panels:
 
-1. **Label tool / click-to-type** — the `Label` chair-tool (and the "Type
-   labels on chairs" button) put `activeTool = 'label'` with no instrument
-   selected. Clicking a chair then floats `#chair-label-input` on it
-   (`openChairLabelEditor`); type, **Enter** commits + hops to the next chair
-   (`advanceChairLabel`), Esc/blur closes. The input is positioned through the
-   chartScale + view-zoom transforms (`chairScreenPos`).
-2. **Paste a list** — a `<details>` holding `#label-list`, one `<textarea>`
-   per row (one label per line, `%` for an in-label line break), rebuilt by
-   `renderLabelList()` alongside `renderRowList()`. (This used to be the
-   obscure "Row N" expander in the Rows panel — now relocated here.)
-3. **Quick-fill instruments** — the always-visible `#instrument-picker-list`
-   (built once at init), grouped by section. Clicking a picker button calls
-   `setChairTool('label')` then sets `selectedLabel`; subsequent chair clicks
-   stamp it.
+- **Hide** (`toggle`) — toggles `chair.enabled`.
+- **Stand** — cycles the music stand; reveals `#stand-bulk`.
+- **Stool** — toggles `chair.isStool`; reveals `#stool-bulk`.
+- **Colour** — paints `chair.color`; reveals the `#color-picker` swatch.
+- **Label** — reveals `#label-panel`. Clicking a chair floats
+  `#chair-label-input` on it (`openChairLabelEditor`, positioned through the
+  chartScale + view-zoom transforms via `chairScreenPos`); type, **Enter**
+  commits + hops to the next chair (`advanceChairLabel`), Esc/blur closes. The
+  panel also has the "paste a list" `<details>` (`#label-list`, one textarea
+  per row, rebuilt by `renderLabelList()` alongside `renderRowList()`).
+- **Instruments** — reveals `#instrument-panel` with the canonical picker
+  (`#instrument-picker-list`, built once at init) + tally button. Clicking a
+  picker button arms `selectedLabel`; subsequent chair clicks stamp it.
 
-`setChairTool` is the single source of truth for "what a chair click does": it
-sets `activeTool`, toggles the tool-button highlights, shows/hides the colour /
-bulk sub-panels, clears the label selection, and closes the inline editor.
-Picking an instrument re-sets `selectedLabel` after that call, so the Label
-tool with no selection = free-type, with a selection = instrument stamp.
+A one-line `#edit-chairs-hint` (`TOOL_HINTS[tool]`) explains the active tool.
+The seat-number / restart-per-row / row-label *display* toggles live in a
+separate slim **Numbers & labels** panel (they're chart-display options, not
+chair-click actions).
 
 ### Instrument tally overlay
 
