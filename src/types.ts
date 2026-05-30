@@ -8,6 +8,10 @@ export interface Chair {
   hasStand: boolean      // solo stand in front of this chair
   standAfter?: boolean   // shared stand between this chair and the next
   isStool?: boolean      // render as a double-bass stool (round) instead of a chair
+  // Layout-tab per-chair nudge: tangential displacement in px along the row
+  // (sideways along the arc / line). Converted to an angle (offset / radius)
+  // for arc rows. Default 0. Clamped so chairs never overlap.
+  offset?: number
 }
 
 export interface Row {
@@ -20,6 +24,22 @@ export interface Row {
   // ChartConfig.straightRows ("last N rows from the back are straight")
   // setting. When set to true/false, this row's value wins over the global.
   isStraight?: boolean
+
+  // --- Layout-tab per-row overrides (all optional; unset = default) ---
+  // Extra px of spacing in front of this row (the "distance handle"). Row
+  // radii are cumulative, so increasing one row's gap pushes every row
+  // behind it outward by the same amount, preserving the gaps between them.
+  gapBefore?: number
+  // Per-row arc span for curved rows, as explicit start/end angles in canvas
+  // radians (the "span handles"). Unset → derived from the global arcRange
+  // (Math.PI/2 ± arcRange/2). Stored as start+end so the span can be made
+  // asymmetric (Shift+drag one end) rather than only widened symmetrically.
+  arcStart?: number
+  arcEnd?: number
+  // Per-row chair spacing (px) for straight rows, and a sideways shift of the
+  // whole row's centre from the conductor's x. Unset → 40px / centred.
+  straightSpacing?: number
+  straightOffset?: number
 }
 
 export interface ConductorConfig {

@@ -226,6 +226,30 @@ export class Renderer {
     return Math.max(40, Math.min(userRowSpacing, fitting))
   }
 
+  // Cumulative per-row radius from the conductor. Base step is the (already
+  // fitted) row spacing; each row adds its optional `gapBefore`. Because it's
+  // cumulative, bumping one row's gap pushes every row behind it out by the
+  // same amount — the "push rows behind" distance behaviour. With all gaps 0
+  // this is exactly BASE_RADIUS + i * rowSpacing.
+  private computeRowRadii(rows: Row[], rowSpacing: number): number[] {
+    const radii: number[] = []
+    for (let i = 0; i < rows.length; i++) {
+      const base = i === 0 ? BASE_RADIUS : radii[i - 1] + rowSpacing
+      radii[i] = base + (rows[i].gapBefore ?? 0)
+    }
+    return radii
+  }
+
+  // A row's arc span as [startAngle, endAngle] in canvas radians. Per-row
+  // arcStart/arcEnd win; otherwise derived symmetrically from the global
+  // arcRange around the apex (π/2).
+  private rowArcAngles(row: Row, config: ChartConfig): [number, number] {
+    const range = config.arcRange ?? Math.PI
+    const start = row.arcStart ?? (Math.PI / 2 + range / 2)
+    const end = row.arcEnd ?? (Math.PI / 2 - range / 2)
+    return [start, end]
+  }
+
   private computeOy(h: number, numRows: number, flipped: boolean, rowSpacing: number): number {
     // Default conductor position sits in the lower (or upper, when flipped)
     // third of the canvas — the conductor is at the FRONT of the stage, with
@@ -268,16 +292,16 @@ export class Renderer {
     const oy = this.computeOy(h, numRows, config.flipped, rowSpacing) + offY
     const yDir = config.flipped ? 1 : -1
     this.conductorOrigin = { ox, oy, yDir, flipped: config.flipped }
+    const radii = this.computeRowRadii(config.rows, rowSpacing)
 
-    // Draw arcs first (behind chairs)
+    // Draw arcs first (behind chairs). Each guide spans the row's own arc
+    // range so the guide tracks any per-row span override.
     if (config.showArc) {
-      const arcRange = config.arcRange ?? Math.PI
-      const arcStart = Math.PI / 2 + arcRange / 2
-      const arcEnd = Math.PI / 2 - arcRange / 2
-      config.rows.forEach((_row, rowIndex) => {
+      config.rows.forEach((row, rowIndex) => {
         const isStraight = config.rows[rowIndex].isStraight ?? (rowIndex >= numRows - config.straightRows)
         if (isStraight) return
-        const r = BASE_RADIUS + rowIndex * rowSpacing
+        const [arcStart, arcEnd] = this.rowArcAngles(row, config)
+        const r = radii[rowIndex]
         ctx.save()
         ctx.beginPath()
         ctx.arc(ox, oy, r, arcStart, arcEnd, yDir > 0)
@@ -297,14 +321,14 @@ export class Renderer {
     const isStraightRow = (rowIndex: number) =>
       config.rows[rowIndex].isStraight ?? (rowIndex >= numRows - config.straightRows)
     const maxStraightWidth = config.rows.reduce((mx, r, i) =>
-      isStraightRow(i) ? Math.max(mx, (r.chairs.length - 1) * STRAIGHT_CHAIR_SPACING) : mx, 0)
+      isStraightRow(i) ? Math.max(mx, (r.chairs.length - 1) * (r.straightSpacing ?? STRAIGHT_CHAIR_SPACING)) : mx, 0)
     // Mirror the label x with the rest of the chart when flipped (row label
     // sits past the conductor's centre on the chair side).
     const straightLabelX = ox + (config.flipped ? 1 : -1) * (maxStraightWidth / 2 + CHAIR_HALF + 18)
 
     let seatNumber = 1
     config.rows.forEach((row, rowIndex) => {
-      const r = BASE_RADIUS + rowIndex * rowSpacing
+      const r = radii[rowIndex]
       if (isStraightRow(rowIndex)) {
         seatNumber = this.renderStraightRow(ctx, row, rowIndex, oy + yDir * r, ox, oy, config, seatNumber, straightLabelX)
       } else {
@@ -326,15 +350,19 @@ export class Renderer {
     const N = chairs.length
     if (N === 0) return seatNumber
 
-    // Arc range — by default the full 180° semicircle, but configurable so
-    // tighter ensembles can be drawn with a narrower spread.
-    const arcRange = config.arcRange ?? Math.PI
-    const startAngle = Math.PI / 2 + arcRange / 2
-    const endAngle = Math.PI / 2 - arcRange / 2
+    // Arc span — global default (full semicircle) unless this row carries its
+    // own start/end override from the Layout tab.
+    const [startAngle, endAngle] = this.rowArcAngles(row, config)
     // Every chair gets its own evenly-spread slot — toggling a shared stand
     // on a single chair never reshuffles the rest of the row. The natural
     // step is the angle between adjacent chair slots.
     const naturalStep = N > 1 ? (startAngle - endAngle) / (N - 1) : 0
+    // Per-chair sideways nudge (px tangential → angle). Positive moves the
+    // chair toward the end of the row (decreasing angle). Default 0.
+    const place = (angle: number, chair: Chair) => {
+      const a = angle - (chair.offset ?? 0) / r
+      return { cx: ox + xDir * r * Math.cos(a), cy: oy + yDir * r * Math.sin(a) }
+    }
     // When two chairs share a desk (standAfter, or two adjacent disabled
     // placeholders), the pair pulls toward the midpoint of their natural
     // slots until the chairs sit DESK_PAIR_SPACING centre-to-centre apart.
@@ -361,12 +389,12 @@ export class Renderer {
         const halfSep = Math.min(naturalStep / 2, desiredHalfOffset)
         const angleA = midpoint + halfSep
         const angleB = midpoint - halfSep
-        positions[i]     = { cx: ox + xDir * r * Math.cos(angleA), cy: oy + yDir * r * Math.sin(angleA) }
-        positions[i + 1] = { cx: ox + xDir * r * Math.cos(angleB), cy: oy + yDir * r * Math.sin(angleB) }
+        positions[i]     = place(angleA, c)
+        positions[i + 1] = place(angleB, chairs[i + 1]!)
         i += 2
       } else {
         const angle = startAngle - i * naturalStep
-        positions[i] = { cx: ox + xDir * r * Math.cos(angle), cy: oy + yDir * r * Math.sin(angle) }
+        positions[i] = place(angle, c)
         i += 1
       }
     }
@@ -431,7 +459,9 @@ export class Renderer {
     const total = row.chairs.length
     if (total === 0) return seatNumber
 
-    const rowWidth = (total - 1) * STRAIGHT_CHAIR_SPACING
+    const spacing = row.straightSpacing ?? STRAIGHT_CHAIR_SPACING
+    const centerOffset = row.straightOffset ?? 0
+    const rowWidth = (total - 1) * spacing
     // Flip mirrors left↔right around the conductor (the renderer's whole
     // notion of "flipped" is a 180° rotation around the conductor, not just
     // a vertical flip). xDir is the x-axis equivalent of the existing yDir.
@@ -439,8 +469,9 @@ export class Renderer {
     const positions: Array<{ cx: number; cy: number }> = []
 
     row.chairs.forEach((chair, chairIndex) => {
-      // Chair distance from ox, with mirror baked in
-      const cx = ox + xDir * (chairIndex * STRAIGHT_CHAIR_SPACING - rowWidth / 2)
+      // Chair distance from ox, with mirror baked in. straightOffset shifts
+      // the whole row sideways; chair.offset nudges this one chair along it.
+      const cx = ox + xDir * (chairIndex * spacing - rowWidth / 2 + centerOffset + (chair.offset ?? 0))
       positions.push({ cx, cy: rowY })
 
       if (chair.enabled) {
@@ -492,12 +523,13 @@ export class Renderer {
     // Consistent label x: align all labels to the left edge of the widest
     // row (or right edge when flipped, mirrored around the conductor).
     const maxRowWidth = config.rows.reduce((mx, r) =>
-      Math.max(mx, (r.chairs.length - 1) * STRAIGHT_CHAIR_SPACING), 0)
+      Math.max(mx, (r.chairs.length - 1) * (r.straightSpacing ?? STRAIGHT_CHAIR_SPACING)), 0)
     const labelX = ox + (config.flipped ? 1 : -1) * (maxRowWidth / 2 + CHAIR_HALF + 18)
 
+    const radii = this.computeRowRadii(config.rows, rowSpacing)
     let seatNumber = 1
     config.rows.forEach((row, rowIndex) => {
-      const rowY = oy + yDir * (BASE_RADIUS + rowIndex * rowSpacing)
+      const rowY = oy + yDir * radii[rowIndex]
       seatNumber = this.renderStraightRow(ctx, row, rowIndex, rowY, ox, oy, config, seatNumber, labelX)
     })
   }
