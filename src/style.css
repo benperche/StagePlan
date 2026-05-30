@@ -39,6 +39,78 @@ body {
   gap: 4px;
 }
 
+/* "My charts" drawer opener at the top of the sidebar */
+.sidebar-top {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.library-open-btn {
+  align-self: flex-start;
+  font-size: 12px;
+  padding: 5px 10px;
+  background: #fff;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.library-open-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Library drawer — slides in from the left over everything else */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 40;
+}
+.drawer-backdrop[hidden] { display: none; }
+.library-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100dvh;
+  width: 340px;
+  max-width: 88vw;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.12);
+  transform: translateX(-100%);
+  transition: transform 0.22s ease;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+}
+.library-drawer.open { transform: translateX(0); }
+.library-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.library-drawer-header h2 { margin: 0; font-size: 15px; }
+.drawer-close {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  font-size: 14px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+}
+.drawer-close:hover { border-color: var(--border); color: var(--text); }
+.library-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 /* Tab navigation at the top of the sidebar */
 .tab-bar {
   display: flex;
@@ -896,6 +968,8 @@ button.danger:hover { background: #fff0f0; }
   .canvas-overlay-controls,
   .canvas-zoom-controls,
   #tally-overlay,
+  #library-drawer,
+  .drawer-backdrop,
   .modal-overlay { display: none !important; }
   /* Zoom is a screen-only convenience — never let it affect print output. */
   #chart-canvas { transform: none !important; }

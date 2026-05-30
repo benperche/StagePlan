@@ -38,12 +38,14 @@
 <body>
   <div id="app">
     <aside id="sidebar">
-      <h1>StagePlan <span class="h1-sub">Seating Chart Generator</span></h1>
+      <div class="sidebar-top">
+        <h1>StagePlan <span class="h1-sub">Seating Chart Generator</span></h1>
+        <button id="library-open-btn" class="library-open-btn" title="Open your saved charts">📁 My charts</button>
+      </div>
 
       <nav class="tab-bar">
         <button data-tab="setup" class="tab-btn active">Setup</button>
         <button data-tab="edit" class="tab-btn">Edit</button>
-        <button data-tab="library" class="tab-btn">Library</button>
         <button data-tab="export" class="tab-btn">Export</button>
       </nav>
 
@@ -209,40 +211,6 @@
 
         <div class="tab-nav">
           <button data-tab-nav="setup" class="tab-nav-back">← Back: Setup</button>
-          <button data-tab-nav="library" class="tab-nav-next">Next: Library →</button>
-        </div>
-      </div>
-
-      <!-- =================  LIBRARY TAB  ================= -->
-      <div class="tab-content" data-tab-content="library">
-        <section class="panel">
-          <h2 id="library-current-title">My Charts</h2>
-          <div class="row-controls">
-            <button id="library-save-btn" class="primary">💾 Save current chart</button>
-          </div>
-          <div class="row-controls">
-            <button id="library-new-chart-btn" class="secondary">+ New blank chart</button>
-            <button id="library-new-folder-btn" class="secondary">+ Folder</button>
-          </div>
-          <label class="file-label">
-            ⬆ Import JSON file
-            <input type="file" id="load-input" accept=".json" />
-          </label>
-          <input type="search" id="library-search" placeholder="Search charts…" />
-          <div id="library-list"></div>
-        </section>
-
-        <section class="panel">
-          <p class="hint">
-            ⚠ Charts are saved <strong>in this browser only</strong>. Clearing
-            your browser data or using a different device/browser will hide
-            them. For a permanent backup, use <strong>Save JSON</strong> in
-            the Export tab to download the file to your computer.
-          </p>
-        </section>
-
-        <div class="tab-nav">
-          <button data-tab-nav="edit" class="tab-nav-back">← Back: Edit</button>
           <button data-tab-nav="export" class="tab-nav-next">Next: Export →</button>
         </div>
       </div>
@@ -260,7 +228,7 @@
         </section>
 
         <div class="tab-nav">
-          <button data-tab-nav="library" class="tab-nav-back">← Back: Library</button>
+          <button data-tab-nav="edit" class="tab-nav-back">← Back: Edit</button>
           <span></span>
         </div>
       </div>
@@ -284,6 +252,39 @@
         <button id="zoom-in-btn" title="Zoom in">+</button>
       </div>
     </main>
+
+    <!-- =================  LIBRARY DRAWER  =================
+         Slides in from the left, above everything. The library sits
+         "above" the individual chart (it's how you pick / manage which
+         chart you're editing) so it lives outside the tab system. -->
+    <div id="library-backdrop" class="drawer-backdrop" hidden></div>
+    <aside id="library-drawer" class="library-drawer" aria-hidden="true">
+      <div class="library-drawer-header">
+        <h2 id="library-current-title">My Charts</h2>
+        <button id="library-close-btn" class="drawer-close" title="Close (Esc)">✕</button>
+      </div>
+      <div class="library-drawer-body">
+        <div class="row-controls">
+          <button id="library-save-btn" class="primary">💾 Save current chart</button>
+        </div>
+        <div class="row-controls">
+          <button id="library-new-chart-btn" class="secondary">+ New blank chart</button>
+          <button id="library-new-folder-btn" class="secondary">+ Folder</button>
+        </div>
+        <label class="file-label">
+          ⬆ Import JSON file
+          <input type="file" id="load-input" accept=".json" />
+        </label>
+        <input type="search" id="library-search" placeholder="Search charts…" />
+        <div id="library-list"></div>
+        <p class="hint">
+          ⚠ Charts are saved <strong>in this browser only</strong>. Clearing
+          your browser data or using a different device/browser will hide
+          them. For a permanent backup, use <strong>Save JSON</strong> in
+          the Export tab to download the file to your computer.
+        </p>
+      </div>
+    </aside>
   </div>
 
   <!-- Floating instrument-count overlay. Toggled from the Allocate

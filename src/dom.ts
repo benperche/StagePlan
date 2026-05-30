@@ -98,7 +98,11 @@ export const zoomInBtn = document.getElementById('zoom-in-btn') as HTMLButtonEle
 export const zoomOutBtn = document.getElementById('zoom-out-btn') as HTMLButtonElement
 export const zoomResetBtn = document.getElementById('zoom-reset-btn') as HTMLButtonElement
 
-// --- Library tab ---
+// --- Library drawer ---
+export const libraryDrawer = document.getElementById('library-drawer') as HTMLElement
+export const libraryBackdrop = document.getElementById('library-backdrop') as HTMLElement
+export const libraryOpenBtn = document.getElementById('library-open-btn') as HTMLButtonElement
+export const libraryCloseBtn = document.getElementById('library-close-btn') as HTMLButtonElement
 export const libraryCurrentTitle = document.getElementById('library-current-title') as HTMLElement
 export const librarySaveBtn = document.getElementById('library-save-btn') as HTMLButtonElement
 export const libraryNewChartBtn = document.getElementById('library-new-chart-btn') as HTMLButtonElement

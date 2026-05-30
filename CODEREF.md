@@ -34,7 +34,6 @@ nested state):
 |---|---|
 | **Setup** | Chart, Preset Arrangements, Stage Background, Notes |
 | **Edit** | Rows, Edit Chairs, Allocate Instruments (when Instrument tool is active), Large / Fixed Instruments |
-| **Library** | My Charts (browser-only IndexedDB store with folders + per-chart actions: open / duplicate / rename / move / delete). Save button updates the currently-open chart, or prompts for a title to create a new entry. |
 | **Export** | Save JSON, Load JSON, Export PNG, Print/PDF, Copy share link |
 
 Each panel is wrapped in a `<div class="tab-content" data-tab-content="…">`
@@ -44,6 +43,19 @@ and `.tab-content.active` flips to flex.
 
 Undo and Redo live as **floating overlay buttons** in the top-left of
 the canvas area, not in any tab — they're always accessible.
+
+### Library drawer
+
+My Charts is **not** a tab — it's a left slide-in drawer (`#library-drawer`)
+opened by the "📁 My charts" button at the top of the sidebar, because the
+library sits *above* the individual chart (it's how you pick/manage which
+chart you're editing). It's a browser-only IndexedDB store with folders +
+per-chart actions (open / duplicate / rename / move / delete). Opening a
+chart or starting a new blank one closes the drawer; ✕, the backdrop, and
+Escape all close it. `openLibrary/closeLibrary` in `main.ts` toggle the
+`.open` class + backdrop. (Planned IA work: a "Labels" section in Edit will
+absorb the instrument labelling + seat-number/row-label toggles, and a new
+"Layout" tab will host per-row/per-chair geometry handles.)
 
 ## View zoom/pan (screen-only)
 

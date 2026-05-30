@@ -129,6 +129,7 @@ import {
   colorPicker, colorPickerLabel, undoBtn, redoBtn, zoomInBtn, zoomOutBtn, zoomResetBtn,
   resetPositionBtn, addRowBtn, saveBtn,
   loadInput, exportPngBtn, printBtn, shareLinkBtn, shareUrlDisplay, presetSelect, applyPresetBtn,
+  libraryDrawer, libraryBackdrop, libraryOpenBtn, libraryCloseBtn,
   libraryCurrentTitle, librarySaveBtn, libraryNewChartBtn, libraryNewFolderBtn,
   librarySearch, libraryList,
   customOrchestraBtn, customOrchestraModal, customOrchestraTitle, customOrchestraNotation,
@@ -197,6 +198,25 @@ function updateLibraryCurrentTitle() {
   libraryCurrentTitle.textContent = currentChartId
     ? `My Charts — Editing "${config.title}"`
     : 'My Charts'
+}
+
+// --- Library drawer open/close ---
+
+function openLibrary() {
+  libraryDrawer.classList.add('open')
+  libraryDrawer.setAttribute('aria-hidden', 'false')
+  libraryBackdrop.hidden = false
+  renderLibrary()
+}
+
+function closeLibrary() {
+  libraryDrawer.classList.remove('open')
+  libraryDrawer.setAttribute('aria-hidden', 'true')
+  libraryBackdrop.hidden = true
+}
+
+function isLibraryOpen() {
+  return libraryDrawer.classList.contains('open')
 }
 
 // --- Render ---
@@ -373,7 +393,7 @@ async function handleLibraryAction(action: string, id: string | null, folder: st
     setConfig(chart.config)
     currentChartId = id
     updateLibraryCurrentTitle()
-    await renderLibrary()
+    closeLibrary()
     return
   }
   if (action === 'rename' && id) {
@@ -1199,9 +1219,6 @@ function bindEvents() {
     // Scroll the sidebar back to the top so Next/Back doesn't strand the
     // user partway down the new tab.
     document.getElementById('sidebar')?.scrollTo({ top: 0 })
-    // Library tab is async: refresh the list whenever it becomes visible
-    // so any saves made elsewhere show up.
-    if (tab === 'library') renderLibrary()
   }
   tabButtons.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset['tab'])))
   tabNavButtons.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset['tabNav'])))
@@ -1356,7 +1373,7 @@ function bindEvents() {
     renderChart()
   })
   document.addEventListener('keydown', (e) => {
-    // Close any open modal on Escape
+    // Close any open modal / drawer on Escape
     if (e.key === 'Escape') {
       if (customOrchestraModal.style.display !== 'none') {
         customOrchestraModal.style.display = 'none'
@@ -1364,6 +1381,10 @@ function bindEvents() {
       }
       if (advancedModal.style.display !== 'none') {
         advancedModal.style.display = 'none'
+        return
+      }
+      if (isLibraryOpen()) {
+        closeLibrary()
         return
       }
     }
@@ -1446,7 +1467,11 @@ function bindEvents() {
   // get a PDF for free with no extra dependencies.
   printBtn.addEventListener('click', () => window.print())
 
-  // --- Library tab ---
+  // --- Library drawer ---
+  libraryOpenBtn.addEventListener('click', openLibrary)
+  libraryCloseBtn.addEventListener('click', closeLibrary)
+  libraryBackdrop.addEventListener('click', closeLibrary)
+
   librarySaveBtn.addEventListener('click', async () => {
     // If we have a current chart loaded, update it in place. Otherwise
     // create a new entry — title defaults to config.title but the user
@@ -1475,7 +1500,7 @@ function bindEvents() {
     setConfig(makeDefaultConfig())
     currentChartId = null
     updateLibraryCurrentTitle()
-    renderLibrary()
+    closeLibrary()
   })
 
   libraryNewFolderBtn.addEventListener('click', async () => {
