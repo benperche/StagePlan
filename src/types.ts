@@ -41,6 +41,8 @@ export type InstrumentType =
   | 'timpani'
   | 'mallet'
   | 'harp'
+  | 'microphone'
+  | 'gong'
   | 'chair'
   | 'stand'
   | 'stool'
@@ -57,6 +59,10 @@ export interface FixedInstrument {
   rotation: number    // local rotation in radians (0 = default orientation)
   count?: number      // timpani: 2-6 drums (default 4)
   label?: string      // optional override for the displayed label
+  // Microphone-only: whether the mic sits on a mic stand (default true) and
+  // whether it's a wireless unit (default false = wired, drawn with a cable).
+  micStand?: boolean
+  wireless?: boolean
   // When true, a music stand × is drawn between this instrument and the
   // conductor (toggleable by clicking the instrument while the Music
   // Stand tool is active in the Edit tab).

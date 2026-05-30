@@ -174,8 +174,10 @@ is then a thin wrapper that calls `buildPreset`, pushes the result into
 ## Fixed instruments
 
 - Stored as polar coords `{ angle, distance }` from the conductor + `rotation` in radians.
-- Eight types: drumkit, piano, guitar-amp, bass-amp, timpani (2–6 drums via `count`), mallet, square, rectangle (generic placeholders).
-- Each glyph is a `draw*` method returning `{ hw, hh, labelInside }` for the bounding box.
+- Types: drumkit, piano, guitar-amp, bass-amp, timpani (2–6 drums via `count`), mallet, harp, microphone, gong, chair, stand, stool, square, rectangle (generic placeholders).
+- **Microphone** is a slim vocal-mic silhouette (handle + slight grille bulge, not a ball mic). Carries two extra booleans: `micStand` (default true — drawn on a pole + base; false = handheld) and `wireless` (default false = wired, drawn with a trailing cable; true = radio-wave arcs above the head, no cable). Both are toggled from the instrument inspector and only shown for the microphone type, mirroring how the timpani drum-count field is gated.
+- **Gong** is a square stand frame holding a flattened disc (white rim ring + central boss). Drawn wide-and-short on purpose so it stays compact vertically in the top-down chart.
+- Each glyph is a pure `draw*` function in `instrument-glyphs.ts` returning `{ hw, hh, labelInside }` for the bounding box.
 - Drag/rotate handled by `DragState` / `RotateState` in main.ts. Selected instrument shows a green MS-Office-style rotate handle.
 
 ## Persistence

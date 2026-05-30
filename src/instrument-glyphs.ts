@@ -269,6 +269,126 @@ export function drawHarp(ctx: CanvasRenderingContext2D): GlyphResult {
 }
 
 // ---------------------------------------------------------------------------
+// Microphone — a basic vocal-mic silhouette: a slim handle topped by a
+// slightly wider, rounded grille head (the bulge), rather than a fat
+// podcast-style ball. On a stand it gets a thin pole down to a flat round
+// base; handheld it's just the mic body. Wired mics trail a short cable;
+// wireless mics show small radio-wave arcs above the head instead.
+// ---------------------------------------------------------------------------
+export function drawMicrophone(ctx: CanvasRenderingContext2D, inst: FixedInstrument): GlyphResult {
+  const onStand = inst.micStand !== false   // default: on a stand
+  const wireless = inst.wireless === true    // default: wired
+
+  ctx.lineCap = 'round'
+
+  // Vocal-mic proportions: a long handle with a marginally fatter head.
+  const headCy = -13
+  const headRx = 6, headRy = 7.5    // the slight bulge
+  const handleHw = 4.5
+  const handleBot = 12
+
+  // Stand (pole + flat round base) or nothing — drawn first so the mic
+  // body sits on top of it.
+  let bottomY: number
+  if (onStand) {
+    ctx.fillStyle = '#1a1a1a'
+    ctx.fillRect(-1.5, handleBot - 2, 3, 12)          // pole
+    ctx.beginPath()
+    ctx.ellipse(0, 22, 11, 3.5, 0, 0, Math.PI * 2)    // base
+    ctx.fill()
+    bottomY = 25.5
+  } else {
+    bottomY = handleBot
+  }
+
+  // Wired cable trailing from the bottom (handle end, or off the base).
+  if (!wireless) {
+    ctx.strokeStyle = '#1a1a1a'
+    ctx.lineWidth = 2
+    const sy = onStand ? 24 : handleBot
+    ctx.beginPath()
+    ctx.moveTo(0, sy)
+    ctx.bezierCurveTo(6, sy + 5, -6, sy + 9, 4, sy + 13)
+    ctx.stroke()
+    bottomY = Math.max(bottomY, sy + 13)
+  }
+
+  // Mic body — long handle plus the slightly wider rounded head.
+  ctx.fillStyle = '#1a1a1a'
+  roundRect(ctx, -handleHw, headCy, handleHw * 2, handleBot - headCy, handleHw)
+  ctx.fill()
+  ctx.beginPath()
+  ctx.ellipse(0, headCy, headRx, headRy, 0, 0, Math.PI * 2)
+  ctx.fill()
+
+  // Grille lines across the head.
+  ctx.strokeStyle = '#fff'
+  ctx.lineWidth = 0.8
+  for (let y = headCy - 4; y <= headCy + 3; y += 2.5) {
+    const t = (y - headCy) / headRy
+    const dx = headRx * Math.sqrt(Math.max(0, 1 - t * t)) - 1
+    if (dx <= 0) continue
+    ctx.beginPath()
+    ctx.moveTo(-dx, y)
+    ctx.lineTo(dx, y)
+    ctx.stroke()
+  }
+
+  // Wireless radio-wave arcs above the head.
+  let topY = headCy - headRy
+  if (wireless) {
+    ctx.strokeStyle = '#1a1a1a'
+    ctx.lineWidth = 1.4
+    const ay = headCy - headRy - 1
+    for (let k = 1; k <= 2; k++) {
+      ctx.beginPath()
+      ctx.arc(0, ay, k * 3.5, Math.PI * 1.18, Math.PI * 1.82)
+      ctx.stroke()
+    }
+    topY = ay - 9
+  }
+
+  const hh = Math.max(Math.abs(topY), bottomY)
+  return { hw: onStand ? 11 : 8, hh, labelInside: false }
+}
+
+// ---------------------------------------------------------------------------
+// Gong on a square stand — a top-ish view kept deliberately wide and short so
+// it doesn't eat vertical space on the chart. A square stand frame holds a
+// large disc (flattened a touch) with a white rim ring and a central boss,
+// the two details that read as "gong" rather than "cymbal" or "drum".
+// ---------------------------------------------------------------------------
+export function drawGong(ctx: CanvasRenderingContext2D): GlyphResult {
+  const fw = 42, fh = 32          // square-ish stand frame, slightly squashed
+  const hw = fw / 2, hh = fh / 2
+
+  // Square stand frame (outline) — the legs/base footprint.
+  ctx.strokeStyle = '#1a1a1a'
+  ctx.lineWidth = 2.5
+  ctx.lineJoin = 'round'
+  ctx.strokeRect(-hw, -hh, fw, fh)
+
+  // Gong disc, flattened so the whole glyph stays short.
+  const dRx = hw - 6, dRy = hh - 4
+  ctx.fillStyle = '#1a1a1a'
+  ctx.beginPath()
+  ctx.ellipse(0, 0, dRx, dRy, 0, 0, Math.PI * 2)
+  ctx.fill()
+
+  // White rim ring + central boss — the gong tells.
+  ctx.strokeStyle = '#fff'
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.ellipse(0, 0, dRx - 3, dRy - 3, 0, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.beginPath()
+  ctx.ellipse(0, 0, 4, 3, 0, 0, Math.PI * 2)
+  ctx.stroke()
+
+  return { hw, hh, labelInside: false }
+}
+
+// ---------------------------------------------------------------------------
 // Single chair — same look as in-row chairs (grey square with a darker
 // back rail). Used as a backup for stragglers who don't fit a row
 // (extra player, off-row chair, etc.). At rotation 0 the back rail is

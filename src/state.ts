@@ -69,6 +69,7 @@ export function makeInstrument(type: InstrumentType, flipped: boolean, existing:
     distance: 110 + stagger,
     rotation: 0,
     ...(type === 'timpani' ? { count: 4 } : {}),
+    ...(type === 'microphone' ? { micStand: true, wireless: false } : {}),
   }
 }
 

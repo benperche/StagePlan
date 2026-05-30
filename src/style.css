@@ -389,6 +389,13 @@ button.secondary { border-style: dashed; }
   font-size: 12px;
   padding: 5px 6px;
 }
+/* Subtle full-width divider between instrument groups (keys/perc, shapes,
+   audio, seating). Spans both columns and matches the panel border colour. */
+.instrument-add-sep {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--border);
+  margin: 2px 0;
+}
 
 .inspector {
   border-top: 1px solid var(--border);

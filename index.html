@@ -155,18 +155,25 @@
         <section class="panel">
           <h2>Large / Fixed Instruments</h2>
           <div class="instrument-add-grid">
-            <button data-add-instrument="drumkit">+ Drum Kit</button>
             <button data-add-instrument="piano">+ Grand Piano</button>
+            <button data-add-instrument="harp">+ Harp</button>
+            <div class="instrument-add-sep"></div>
             <button data-add-instrument="guitar-amp">+ Guitar Amp</button>
             <button data-add-instrument="bass-amp">+ Bass Amp</button>
+            <div class="instrument-add-sep"></div>
             <button data-add-instrument="timpani">+ Timpani</button>
             <button data-add-instrument="mallet">+ Mallets</button>
-            <button data-add-instrument="harp">+ Harp</button>
-            <button data-add-instrument="chair">+ Chair</button>
-            <button data-add-instrument="stand">+ Stand</button>
-            <button data-add-instrument="stool">+ Bass Stool</button>
+            <button data-add-instrument="drumkit">+ Drum Kit</button>
+            <button data-add-instrument="gong">+ Gong</button>
+            <div class="instrument-add-sep"></div>
             <button data-add-instrument="square">+ Square</button>
             <button data-add-instrument="rectangle">+ Rectangle</button>
+            <div class="instrument-add-sep"></div>
+            <button data-add-instrument="microphone">+ Microphone</button>
+            <button data-add-instrument="stand">+ Music Stand</button>
+            <div class="instrument-add-sep"></div>
+            <button data-add-instrument="chair">+ Chair</button>
+            <button data-add-instrument="stool">+ Bass Stool</button>
           </div>
           <p class="hint">Click an instrument on the canvas to select it, then drag to move. Press Delete or Backspace to remove.</p>
           <div id="instrument-inspector" class="inspector" style="display:none">
@@ -177,6 +184,10 @@
             <label id="inspector-count-label" style="display:none">Drums (2–6)
               <input type="number" id="inspector-count" min="2" max="6">
             </label>
+            <div id="inspector-mic-options" class="checkbox-row" style="display:none">
+              <label><input type="checkbox" id="inspector-mic-stand"> On mic stand</label>
+              <label><input type="checkbox" id="inspector-mic-wireless"> Wireless</label>
+            </div>
             <div class="row-controls">
               <button id="inspector-rotate-left" title="Rotate -15°">↺</button>
               <button id="inspector-rotate-right" title="Rotate +15°">↻</button>

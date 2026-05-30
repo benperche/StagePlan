@@ -4,7 +4,7 @@ import type {
 } from './types'
 import {
   drawDrumkit, drawPiano, drawAmp, drawTimpani, drawMallet, drawHarp,
-  drawSingleChair, drawSingleStand, drawStool, drawGenericRect,
+  drawMicrophone, drawGong, drawSingleChair, drawSingleStand, drawStool, drawGenericRect,
 } from './instrument-glyphs'
 
 const CHAIR_SIZE = 30
@@ -525,7 +525,8 @@ export class Renderer {
       // upside-down for no benefit.
       const keepUpright = inst.type === 'drumkit' || inst.type === 'guitar-amp'
         || inst.type === 'bass-amp' || inst.type === 'stand'
-        || inst.type === 'stool'
+        || inst.type === 'stool' || inst.type === 'microphone'
+        || inst.type === 'gong'
       const worldRotation = inst.rotation + (flipped && !keepUpright ? Math.PI : 0)
       const isSelected = inst.id === this.selectedInstrumentId
 
@@ -543,6 +544,8 @@ export class Renderer {
         case 'timpani':    ({ hw, hh, labelInside } = drawTimpani(ctx, inst)); break
         case 'mallet':     ({ hw, hh, labelInside } = drawMallet(ctx)); break
         case 'harp':       ({ hw, hh, labelInside } = drawHarp(ctx)); break
+        case 'microphone': ({ hw, hh, labelInside } = drawMicrophone(ctx, inst)); break
+        case 'gong':       ({ hw, hh, labelInside } = drawGong(ctx)); break
         case 'chair':      ({ hw, hh, labelInside } = drawSingleChair(ctx)); break
         case 'stand':      ({ hw, hh, labelInside } = drawSingleStand(ctx)); break
         case 'stool':      ({ hw, hh, labelInside } = drawStool(ctx)); break
@@ -621,6 +624,8 @@ export class Renderer {
       case 'timpani':    return `Timpani (${inst.count ?? 4})`
       case 'mallet':     return 'Mallets'
       case 'harp':       return 'Harp'
+      case 'microphone': return 'Mic'
+      case 'gong':       return 'Gong'
       // Single chair / single stand default to no label — they're often
       // used as decorations rather than annotated items. Users can still
       // type a label in the inspector if they want one.

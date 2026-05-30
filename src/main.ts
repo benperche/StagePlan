@@ -123,7 +123,7 @@ import {
   showTallyBtn, tallyOverlay, tallyBody, tallyTotal, tallyMinimizeBtn, tallyCloseBtn,
   addInstrumentButtons, inspector, inspectorType, inspectorLabel,
   inspectorCountLabel, inspectorCount, inspectorRotateLeft, inspectorRotateRight,
-  inspectorDelete,
+  inspectorDelete, inspectorMicOptions, inspectorMicStand, inspectorMicWireless,
 } from './dom'
 
 // --- Init ---
@@ -582,8 +582,10 @@ const INSTRUMENT_LABEL: Record<InstrumentType, string> = {
   'timpani': 'Timpani',
   'mallet': 'Mallets',
   'harp': 'Harp',
+  'microphone': 'Microphone',
+  'gong': 'Gong',
   'chair': 'Chair',
-  'stand': 'Stand',
+  'stand': 'Music Stand',
   'stool': 'Stool',
   'square': 'Square',
   'rectangle': 'Rectangle',
@@ -605,6 +607,14 @@ function renderInspector() {
     inspectorCount.value = String(inst.count ?? 4)
   } else {
     inspectorCountLabel.style.display = 'none'
+  }
+
+  if (inst.type === 'microphone') {
+    inspectorMicOptions.style.display = ''
+    inspectorMicStand.checked = inst.micStand !== false
+    inspectorMicWireless.checked = inst.wireless === true
+  } else {
+    inspectorMicOptions.style.display = 'none'
   }
 }
 
@@ -1049,6 +1059,22 @@ function bindEvents() {
     if (!inst || inst.type !== 'timpani') return
     history.push(config)
     inst.count = Math.max(2, Math.min(6, Number(inspectorCount.value) || 4))
+    renderChart()
+  })
+
+  // Inspector — microphone toggles (on a stand? wireless?)
+  inspectorMicStand.addEventListener('change', () => {
+    const inst = config.instruments.find(i => i.id === selectedInstrumentId)
+    if (!inst || inst.type !== 'microphone') return
+    history.push(config)
+    inst.micStand = inspectorMicStand.checked
+    renderChart()
+  })
+  inspectorMicWireless.addEventListener('change', () => {
+    const inst = config.instruments.find(i => i.id === selectedInstrumentId)
+    if (!inst || inst.type !== 'microphone') return
+    history.push(config)
+    inst.wireless = inspectorMicWireless.checked
     renderChart()
   })
 
