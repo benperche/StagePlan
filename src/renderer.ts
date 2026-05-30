@@ -656,6 +656,15 @@ export class Renderer {
     return null
   }
 
+  // The drawn centre of a specific chair (for clamping a per-chair nudge
+  // against its neighbours). Reads this frame's hit targets.
+  chairCenter(rowIndex: number, chairIndex: number): { x: number; y: number } | null {
+    for (const t of this.hitTargets) {
+      if (t.rowIndex === rowIndex && t.chairIndex === chairIndex) return { x: t.x, y: t.y }
+    }
+    return null
+  }
+
   // ---------------------------------------------------------------------------
   // Fixed instruments (rhythm section, timpani, mallets, etc.)
   // ---------------------------------------------------------------------------

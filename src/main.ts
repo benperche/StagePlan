@@ -49,6 +49,21 @@ let layoutDrag: {
   moved: boolean
 } | null = null
 
+// Active Layout-tab per-chair nudge. naturalAngle (arc) / base (straight) are
+// the chair's position with its current offset backed out, so the new offset
+// is just (natural − target).
+let chairDrag: {
+  rowIndex: number
+  chairIndex: number
+  isStraight: boolean
+  r: number
+  naturalAngle: number
+  base: number
+  start: { x: number; y: number }
+  preDragConfig: ChartConfig
+  moved: boolean
+} | null = null
+
 // Canonical instrument list, grouped by section (rough score order).
 // Each instrument appears once — synonyms and instrument-key variants
 // (Eb / Bb, TC / BC, etc.) are collapsed since the seating chart only
@@ -244,16 +259,18 @@ function renderChart() {
   renderTally()
   // Keep the Layout tab's per-row boxes in sync with the geometry the render
   // just produced (renderer.layoutRows). Mid-drag we only sync the numbers in
-  // place (no DOM rebuild) so the boxes track the drag live without churn.
+  // place (no DOM rebuild) so the boxes track the drag live without churn; a
+  // per-chair nudge doesn't change row geometry, so the boxes are left as-is.
   if (layoutMode) {
     if (layoutDrag && layoutDrag.moved) syncLayoutRowValues()
-    else updateLayoutRowList()
+    else if (!(chairDrag && chairDrag.moved)) updateLayoutRowList()
   }
 }
 
 function rowHasLayoutTweak(r: typeof config.rows[number]): boolean {
   return r.gapBefore !== undefined || r.arcStart !== undefined || r.arcEnd !== undefined ||
-    r.straightSpacing !== undefined || r.straightOffset !== undefined
+    r.straightSpacing !== undefined || r.straightOffset !== undefined ||
+    r.chairs.some(c => c.offset !== undefined)
 }
 
 // The per-row spread value as shown in its box (arc degrees / straight spacing).
@@ -880,6 +897,48 @@ function applyLayoutDrag(e: MouseEvent) {
   renderChart()
 }
 
+// Slides the grabbed chair along its row to follow the pointer, clamped so it
+// can't get within LAYOUT_MIN_SPACING of either neighbour (no overlap). Edge
+// chairs are unbounded on their open side. Stores the result as chair.offset.
+function applyChairDrag(e: MouseEvent) {
+  if (!chairDrag) return
+  const cv = pointerCanvasCoords(e)
+  const { x, y } = canvasToChart(cv.x, cv.y)
+  if (!chairDrag.moved) {
+    if (Math.hypot(x - chairDrag.start.x, y - chairDrag.start.y) < DRAG_THRESHOLD) return
+    history.push(chairDrag.preDragConfig)
+    chairDrag.moved = true
+  }
+
+  const { ox, oy, yDir } = renderer.conductorOrigin
+  const xDir = -yDir
+  const { rowIndex, chairIndex: i } = chairDrag
+  const row = config.rows[rowIndex]
+  const chair = row.chairs[i]
+  const N = row.chairs.length
+
+  if (chairDrag.isStraight) {
+    const exOf = (px: number) => (px - ox) / xDir
+    let exT = exOf(x)
+    const left = i > 0 ? renderer.chairCenter(rowIndex, i - 1) : null    // smaller x
+    const right = i < N - 1 ? renderer.chairCenter(rowIndex, i + 1) : null // larger x
+    if (left) exT = Math.max(exOf(left.x) + LAYOUT_MIN_SPACING, exT)
+    if (right) exT = Math.min(exOf(right.x) - LAYOUT_MIN_SPACING, exT)
+    chair.offset = exT - chairDrag.base
+  } else {
+    const r = chairDrag.r
+    const angOf = (px: number, py: number) => Math.atan2((py - oy) / yDir, (px - ox) / xDir)
+    let aT = angOf(x, y)
+    const minGap = LAYOUT_MIN_SPACING / r
+    const left = i > 0 ? renderer.chairCenter(rowIndex, i - 1) : null    // larger angle
+    const right = i < N - 1 ? renderer.chairCenter(rowIndex, i + 1) : null // smaller angle
+    if (left) aT = Math.min(angOf(left.x, left.y) - minGap, aT)
+    if (right) aT = Math.max(angOf(right.x, right.y) + minGap, aT)
+    chair.offset = (chairDrag.naturalAngle - aT) * r
+  }
+  renderChart()
+}
+
 // --- Presets ---
 
 function populatePresets() {
@@ -920,8 +979,8 @@ canvas.addEventListener('mousedown', (e) => {
   const { x, y } = canvasToChart(cv.x, cv.y)
 
   // Layout tab: content editing (chairs / instruments / conductor) is
-  // suspended. Grab a geometry handle to drag it; otherwise pan the zoomed
-  // view. (Per-chair nudging is added in the next step.)
+  // suspended. Grab a geometry handle to drag it; else grab a chair to nudge
+  // it along its row; else pan the zoomed view.
   if (layoutMode) {
     const handle = renderer.layoutHandleHitTest(x, y)
     if (handle) {
@@ -937,6 +996,25 @@ canvas.addEventListener('mousedown', (e) => {
         }
         return
       }
+    }
+    const hit = renderer.hitTest(x, y)
+    const g = hit ? renderer.layoutRows[hit.rowIndex] : null
+    if (hit && g) {
+      const chair = config.rows[hit.rowIndex].chairs[hit.chairIndex]
+      const off0 = chair.offset ?? 0
+      const { ox, oy, yDir } = renderer.conductorOrigin
+      const xDir = -yDir
+      // Back the current offset out of the drawn position to recover the
+      // chair's natural slot, so the new offset is just (natural − target).
+      const naturalAngle = g.isStraight ? 0
+        : Math.atan2((hit.y - oy) / yDir, (hit.x - ox) / xDir) + off0 / g.r
+      const base = g.isStraight ? (hit.x - ox) / xDir - off0 : 0
+      chairDrag = {
+        rowIndex: hit.rowIndex, chairIndex: hit.chairIndex,
+        isStraight: g.isStraight, r: g.r, naturalAngle, base,
+        start: { x, y }, preDragConfig: cloneConfig(config), moved: false,
+      }
+      return
     }
     if (viewZoom > 1) {
       panState = { startX: e.clientX, startY: e.clientY, panX0: viewPanX, panY0: viewPanY, moved: false }
@@ -1048,6 +1126,11 @@ window.addEventListener('mousemove', (e) => {
     applyLayoutDrag(e)
     return
   }
+  // Layout-tab per-chair nudge.
+  if (chairDrag) {
+    applyChairDrag(e)
+    return
+  }
 
   // View pan — drag empty space while zoomed in. Works in raw screen pixels
   // (the CSS transform's own units), independent of chart coords.
@@ -1146,12 +1229,13 @@ window.addEventListener('mousemove', (e) => {
 window.addEventListener('mouseup', () => {
   if (conductorDragState?.moved) suppressConductorClick = true
   if (panState?.moved) suppressClickAfterPan = true
-  const finishedLayoutDrag = layoutDrag?.moved
+  const finishedLayoutDrag = layoutDrag?.moved || chairDrag?.moved
   dragState = null
   rotateState = null
   conductorDragState = null
   panState = null
   layoutDrag = null
+  chairDrag = null
   canvas.classList.remove('panning')
   // The per-row boxes are skipped mid-drag; refresh them now the drag is done.
   if (finishedLayoutDrag && layoutMode) updateLayoutRowList()
@@ -1166,18 +1250,30 @@ canvas.addEventListener('dblclick', (e) => {
   const cv = pointerCanvasCoords(e)
   const { x, y } = canvasToChart(cv.x, cv.y)
   const handle = renderer.layoutHandleHitTest(x, y)
-  if (!handle) return
-  const row = config.rows[handle.rowIndex]
-  history.push(config)
-  if (handle.kind === 'distance') {
-    delete row.gapBefore
-  } else {
-    delete row.arcStart
-    delete row.arcEnd
-    delete row.straightSpacing
-    delete row.straightOffset
+  if (handle) {
+    const row = config.rows[handle.rowIndex]
+    history.push(config)
+    if (handle.kind === 'distance') {
+      delete row.gapBefore
+    } else {
+      delete row.arcStart
+      delete row.arcEnd
+      delete row.straightSpacing
+      delete row.straightOffset
+    }
+    renderChart()
+    return
   }
-  renderChart()
+  // Double-click a chair to clear its sideways nudge.
+  const hit = renderer.hitTest(x, y)
+  if (hit) {
+    const chair = config.rows[hit.rowIndex].chairs[hit.chairIndex]
+    if (chair.offset !== undefined) {
+      history.push(config)
+      delete chair.offset
+      renderChart()
+    }
+  }
 })
 
 canvas.addEventListener('click', (e) => {
@@ -1669,6 +1765,7 @@ function bindEvents() {
     history.push(config)
     delete row.gapBefore; delete row.arcStart; delete row.arcEnd
     delete row.straightSpacing; delete row.straightOffset
+    for (const chair of row.chairs) delete chair.offset
     renderChart()
   })
   document.addEventListener('keydown', (e) => {
