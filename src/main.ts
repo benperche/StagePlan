@@ -142,7 +142,7 @@ import {
   flipCheck, straightRowsInput, straightRowsLabel, arcRangeInput, arcRangeLabel,
   rowSpacingInput, rowCountInput, advancedBtn, advancedModal, advancedCloseBtn, rowsContainer,
   colorPicker, colorPickerLabel, undoBtn, redoBtn, zoomInBtn, zoomOutBtn, zoomResetBtn,
-  resetPositionBtn, resetLayoutBtn, addRowBtn, saveBtn,
+  resetPositionBtn, resetLayoutBtn, layoutRowList, addRowBtn, saveBtn,
   loadInput, exportPngBtn, printBtn, shareLinkBtn, shareUrlDisplay, presetSelect, applyPresetBtn,
   libraryDrawer, libraryBackdrop, libraryOpenBtn, libraryCloseBtn,
   libraryCurrentTitle, librarySaveBtn, libraryNewChartBtn, libraryNewFolderBtn,
@@ -242,6 +242,38 @@ function renderChart() {
   undoBtn.disabled = !history.canUndo()
   redoBtn.disabled = !history.canRedo()
   renderTally()
+  // Keep the Layout tab's per-row boxes in sync with the geometry the render
+  // just produced (renderer.layoutRows). Skipped mid-drag — the chair is the
+  // focus then, and the numbers refresh on mouse-up.
+  if (layoutMode && !(layoutDrag && layoutDrag.moved)) updateLayoutRowList()
+}
+
+// Builds the Layout tab's per-row editor: one box per row showing its distance
+// from the conductor and its spread (arc range for curved rows, chair spacing
+// for straight), each editable, with a per-row reset. Reads the geometry the
+// renderer computed this frame (renderer.layoutRows).
+function updateLayoutRowList() {
+  const geoms = renderer.layoutRows
+  if (geoms.length !== config.rows.length) { layoutRowList.innerHTML = ''; return }
+
+  const hasTweak = (r: typeof config.rows[number]) =>
+    r.gapBefore !== undefined || r.arcStart !== undefined || r.arcEnd !== undefined ||
+    r.straightSpacing !== undefined || r.straightOffset !== undefined
+
+  layoutRowList.innerHTML = config.rows.map((row, i) => {
+    const g = geoms[i]
+    const dist = Math.round(g.r)
+    const label = config.showRowLabels ? `Row ${row.label}` : `Row ${i + 1}`
+    const spread = g.isStraight
+      ? `<label>Spacing<input type="number" class="lay-spread" data-row="${i}" min="20" max="200" step="1" value="${Math.round(g.spacing)}"></label>`
+      : `<label>Arc°<input type="number" class="lay-spread" data-row="${i}" min="10" max="350" step="1" value="${Math.round((g.arcStart - g.arcEnd) * 180 / Math.PI)}"></label>`
+    return `<div class="layout-row-item">
+      <span class="layout-row-name">${label}</span>
+      <label>Dist<input type="number" class="lay-dist" data-row="${i}" min="40" max="2000" step="1" value="${dist}"></label>
+      ${spread}
+      <button class="lay-reset" data-row="${i}" title="Reset this row"${hasTweak(row) ? '' : ' disabled'}>↺</button>
+    </div>`
+  }).join('')
 }
 
 // --- Instrument tally overlay ---
@@ -783,9 +815,11 @@ function applyLayoutDrag(e: MouseEvent) {
       row.straightOffset = g.centerOffset
     }
   } else {
-    // Arc span — work in the row's angle space.
+    // Arc span — work in the row's angle space. The left end sits at ~π, on
+    // the atan2 ±π seam, so the raw delta can jump by 2π; wrap it to (-π, π].
     const angOf = (px: number, py: number) => Math.atan2((py - oy) / yDir, (px - ox) / xDir)
-    const dA = angOf(x, y) - angOf(layoutDrag.start.x, layoutDrag.start.y)
+    let dA = angOf(x, y) - angOf(layoutDrag.start.x, layoutDrag.start.y)
+    dA = Math.atan2(Math.sin(dA), Math.cos(dA))
     let start = g.arcStart
     let end = g.arcEnd
     if (e.shiftKey) {
@@ -796,11 +830,21 @@ function applyLayoutDrag(e: MouseEvent) {
     } else {
       start = g.arcStart + dA; end = g.arcEnd - dA
     }
-    const minSpan = 0.15, maxSpan = Math.PI * 1.96
-    const mid = (start + end) / 2
-    const half = Math.min(maxSpan, Math.max(minSpan, start - end)) / 2
-    row.arcStart = mid + half
-    row.arcEnd = mid - half
+    // Min span = where the chairs would touch at this radius (so you can keep
+    // narrowing until they meet); max ≈ a near-full circle.
+    const minSpan = Math.min(Math.PI * 0.98, ((N - 1) * LAYOUT_MIN_SPACING) / g.r)
+    const maxSpan = Math.PI * 1.95
+    if (e.shiftKey && layoutDrag.kind === 'span-end') {
+      end = Math.min(start - minSpan, Math.max(start - maxSpan, end))
+    } else if (e.shiftKey) {
+      start = Math.max(end + minSpan, Math.min(end + maxSpan, start))
+    } else {
+      const mid = (start + end) / 2
+      const half = Math.min(maxSpan, Math.max(minSpan, start - end)) / 2
+      start = mid + half; end = mid - half
+    }
+    row.arcStart = start
+    row.arcEnd = end
   }
   renderChart()
 }
@@ -1071,12 +1115,15 @@ window.addEventListener('mousemove', (e) => {
 window.addEventListener('mouseup', () => {
   if (conductorDragState?.moved) suppressConductorClick = true
   if (panState?.moved) suppressClickAfterPan = true
+  const finishedLayoutDrag = layoutDrag?.moved
   dragState = null
   rotateState = null
   conductorDragState = null
   panState = null
   layoutDrag = null
   canvas.classList.remove('panning')
+  // The per-row boxes are skipped mid-drag; refresh them now the drag is done.
+  if (finishedLayoutDrag && layoutMode) updateLayoutRowList()
 })
 
 // Click handler runs after mouseup. Skip if the click landed on an instrument
@@ -1555,6 +1602,42 @@ function bindEvents() {
       delete row.straightOffset
       for (const chair of row.chairs) delete chair.offset
     }
+    renderChart()
+  })
+
+  // Per-row inspector (Layout tab): edit distance / spread numerically.
+  layoutRowList.addEventListener('change', (e) => {
+    const input = (e.target as HTMLElement).closest('input') as HTMLInputElement | null
+    if (!input) return
+    const i = Number(input.dataset['row'])
+    const g = renderer.layoutRows[i]
+    const row = config.rows[i]
+    if (!g || !row) return
+    history.push(config)
+    if (input.classList.contains('lay-dist')) {
+      const minR = i === 0 ? 60 : g.prevR + 44
+      const newR = Math.max(minR, Number(input.value) || g.r)
+      row.gapBefore = newR - g.base
+    } else if (g.isStraight) {
+      row.straightSpacing = Math.max(LAYOUT_MIN_SPACING, Number(input.value) || g.spacing)
+    } else {
+      const N = row.chairs.length
+      const minSpan = Math.min(Math.PI * 0.98, ((N - 1) * LAYOUT_MIN_SPACING) / g.r)
+      const span = Math.max(minSpan, Math.min(Math.PI * 1.95, ((Number(input.value) || 180) * Math.PI) / 180))
+      const center = (g.arcStart + g.arcEnd) / 2
+      row.arcStart = center + span / 2
+      row.arcEnd = center - span / 2
+    }
+    renderChart()
+  })
+  layoutRowList.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('.lay-reset') as HTMLElement | null
+    if (!btn) return
+    const row = config.rows[Number(btn.dataset['row'])]
+    if (!row) return
+    history.push(config)
+    delete row.gapBefore; delete row.arcStart; delete row.arcEnd
+    delete row.straightSpacing; delete row.straightOffset
     renderChart()
   })
   document.addEventListener('keydown', (e) => {

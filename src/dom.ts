@@ -38,6 +38,7 @@ export const rowSpacingInput = document.getElementById('row-spacing') as HTMLInp
 export const showCreditCheck = document.getElementById('show-credit') as HTMLInputElement
 export const resetPositionBtn = document.getElementById('reset-position-btn') as HTMLButtonElement
 export const resetLayoutBtn = document.getElementById('reset-layout-btn') as HTMLButtonElement
+export const layoutRowList = document.getElementById('layout-row-list') as HTMLElement
 
 // --- Preset panel + custom orchestra modal ---
 export const presetSelect = document.getElementById('preset-select') as HTMLSelectElement

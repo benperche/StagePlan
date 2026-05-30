@@ -328,6 +328,47 @@ button.secondary { border-style: dashed; }
   border-color: var(--accent);
 }
 
+/* Layout-tab per-row inspector boxes */
+#layout-row-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.layout-row-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.layout-row-name {
+  font-weight: 600;
+  font-size: 12px;
+  min-width: 42px;
+}
+.layout-row-item label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text-muted);
+  flex: 1;
+}
+.layout-row-item input {
+  width: 100%;
+  min-width: 0;
+  padding: 3px 4px;
+  font-size: 12px;
+}
+.layout-row-item .lay-reset {
+  padding: 2px 7px;
+  font-size: 13px;
+  background: #fff;
+}
+.layout-row-item .lay-reset:disabled { opacity: 0.35; }
+
 /* Subheading inside the Labels panel separating display toggles from the
    instrument-label picker. */
 .labels-subhead {
