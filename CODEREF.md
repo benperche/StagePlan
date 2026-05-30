@@ -120,27 +120,31 @@ Hit tests are populated as a side effect of (6) and (7). `main.ts` calls `render
 - `effectiveRowSpacing` shrinks it if the chart would overflow the canvas, floored at 40 so it stays legible.
 - Sized so the seat number behind one row doesn't collide with the shared stand drawn in front of the row behind (stand reaches ~35 px forward, number ~28 px behind — 65 px floor; 70 gives a small gap).
 
-## Labels panel & instrument labelling
+## Labels panel & chair labelling
 
-The **Labels** panel in the Edit tab holds the seat-number / restart-per-row
-/ row-label display toggles plus the **instrument-label picker** (always
-visible — `#instrument-picker-list`, built once at init). The picker holds
-the canonical instrument list grouped by section (Woodwinds / Saxes / Brass
-/ Strings / Rhythm / Percussion / Voice). Each instrument is one row with a
-`[Name]` button plus three numbered `[1] [2] [3]` part buttons.
+The **Labels** panel in the Edit tab holds the seat-number / restart-per-row /
+row-label display toggles, plus three ways to set chair labels:
 
-Clicking any picker button calls `setChairTool('label')` — the single source
-of truth for "what does clicking a chair do" — which sets `activeTool =
-'label'`, de-highlights the Edit Chairs tool buttons, and hides the colour /
-bulk sub-panels. It then sets `selectedLabel` (e.g. `"Flute 2"`) and
-highlights the choice. Any subsequent chair click writes `selectedLabel`
-into `chair.label`; multiple chairs can be labelled in a row.
+1. **Label tool / click-to-type** — the `Label` chair-tool (and the "Type
+   labels on chairs" button) put `activeTool = 'label'` with no instrument
+   selected. Clicking a chair then floats `#chair-label-input` on it
+   (`openChairLabelEditor`); type, **Enter** commits + hops to the next chair
+   (`advanceChairLabel`), Esc/blur closes. The input is positioned through the
+   chartScale + view-zoom transforms (`chairScreenPos`).
+2. **Paste a list** — a `<details>` holding `#label-list`, one `<textarea>`
+   per row (one label per line, `%` for an in-label line break), rebuilt by
+   `renderLabelList()` alongside `renderRowList()`. (This used to be the
+   obscure "Row N" expander in the Rows panel — now relocated here.)
+3. **Quick-fill instruments** — the always-visible `#instrument-picker-list`
+   (built once at init), grouped by section. Clicking a picker button calls
+   `setChairTool('label')` then sets `selectedLabel`; subsequent chair clicks
+   stamp it.
 
-Clicking one of the four Edit Chairs tools (Enable / Stand / Stool / Colour)
-also goes through `setChairTool`, which calls `clearLabelSelection()` to drop
-the label highlight + `selectedLabel`. So the chair-edit tools and the label
-picker are mutually exclusive ways of choosing the active chair action, with
-no separate "Instrument" tool button anymore.
+`setChairTool` is the single source of truth for "what a chair click does": it
+sets `activeTool`, toggles the tool-button highlights, shows/hides the colour /
+bulk sub-panels, clears the label selection, and closes the inline editor.
+Picking an instrument re-sets `selectedLabel` after that call, so the Label
+tool with no selection = free-type, with a selection = instrument stamp.
 
 ### Instrument tally overlay
 

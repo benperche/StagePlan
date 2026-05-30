@@ -101,9 +101,6 @@ const INSTRUMENT_GROUPS: Array<{ name: string; items: string[] }> = [
   { name: 'Voices', items: ['Voice', 'Soprano', 'Alto', 'Tenor', 'Bass', 'Solo'] },
 ]
 
-// Track which rows have their label editor open
-const expandedRows = new Set<number>()
-
 // Currently selected fixed instrument (for drag/inspector/delete)
 let selectedInstrumentId: string | null = null
 
@@ -167,7 +164,7 @@ import {
   customOrchestraPreview, customOrchestraApply, customOrchestraCancel,
   toolButtons, chairLabelInput, labelToolBtn,
   standBulkPanel, stoolBulkPanel, standBulkButtons, stoolBulkButtons,
-  instrumentPickerList, instrumentPickerStatus,
+  instrumentPickerList, labelList, instrumentPickerStatus,
   showTallyBtn, tallyOverlay, tallyBody, tallyTotal, tallyMinimizeBtn, tallyCloseBtn,
   addInstrumentButtons, inspector, inspectorType, inspectorLabel,
   inspectorCountLabel, inspectorCount, inspectorRotateLeft, inspectorRotateRight,
@@ -213,7 +210,6 @@ function migrateConfig(c: ChartConfig) {
 function setConfig(newConfig: ChartConfig) {
   config = newConfig
   migrateConfig(config)
-  expandedRows.clear()
   setSelectedInstrument(null)
   updateAllInputs()
   renderChart()
@@ -639,6 +635,7 @@ function updateAllInputs() {
   straightRowsLabel.style.display = config.layout === 'semicircle' ? '' : 'none'
   arcRangeLabel.style.display = config.layout === 'semicircle' ? '' : 'none'
   renderRowList()
+  renderLabelList()
 }
 
 // --- Row list UI ---
@@ -672,18 +669,13 @@ function renderRowList() {
   }
 
   config.rows.forEach((row, i) => {
-    const isExpanded = expandedRows.has(i)
-    const labelsText = row.chairs.map(c => c.label).join('\n')
-    const taRows = Math.min(12, Math.max(3, row.chairs.length))
     const isStraight = straightFlags[i]
 
     const div = document.createElement('div')
     div.className = 'row-item'
     div.innerHTML = `
       <div class="row-item-header">
-        <button class="row-edit-toggle ${isExpanded ? 'active' : ''}" data-row="${i}" title="Edit chair labels">
-          Row ${row.label}
-        </button>
+        <span class="row-item-name">Row ${row.label}</span>
         <label>Chairs
           <input type="number" min="1" max="30" value="${row.chairs.length}" data-row="${i}" class="chair-count">
         </label>
@@ -695,15 +687,26 @@ function renderRowList() {
       <div class="row-item-meta">
         <label class="row-straight-toggle"><input type="checkbox" data-row="${i}" class="row-straight-check" ${isStraight ? 'checked' : ''}> Straight row</label>
       </div>
-      <div class="row-item-labels" ${isExpanded ? '' : 'style="display:none"'}>
-        <p class="label-editor-hint">One label per line · use % for a line‑break within a label · Tab/Shift‑Tab to move between rows</p>
-        <textarea class="chair-labels-ta" data-row="${i}" rows="${taRows}">${labelsText}</textarea>
-      </div>
     `
     rowsContainer.appendChild(div)
   })
 
   rowsContainer.scrollTop = scrollTop
+}
+
+// The "paste a list" label editor in the Labels panel — one textarea per row,
+// one label per line. Kept in sync with renderRowList (rebuilt on row changes).
+function renderLabelList() {
+  const scrollTop = labelList.scrollTop
+  labelList.innerHTML = config.rows.map((row, i) => {
+    const labelsText = row.chairs.map(c => c.label).join('\n')
+    const taRows = Math.min(12, Math.max(2, row.chairs.length))
+    return `<div class="label-row">
+      <span class="label-row-name">Row ${row.label}</span>
+      <textarea class="chair-labels-ta" data-row="${i}" rows="${taRows}">${labelsText}</textarea>
+    </div>`
+  }).join('')
+  labelList.scrollTop = scrollTop
 }
 
 // --- Instrument inspector ---
@@ -973,7 +976,6 @@ function applyPreset(preset: Preset) {
   config.straightRows = built.straightRows
   config.instruments = built.instruments
 
-  expandedRows.clear()
   setSelectedInstrument(null)
   updateAllInputs()
   renderChart()
@@ -1444,44 +1446,26 @@ function bindEvents() {
       config.rows[rowIdx].isStraight = target.checked
       renderRowList()
     }
+    renderLabelList()   // chair count / row label changed → rebuild the paste list
     renderChart()
   })
 
-  // Row list: toggle label editor + remove row
+  // Row list: remove row
   rowsContainer.addEventListener('click', (e) => {
     const target = e.target as HTMLElement
-
-    if (target.classList.contains('row-edit-toggle')) {
-      const rowIdx = Number(target.dataset['row'])
-      if (isNaN(rowIdx)) return
-      if (expandedRows.has(rowIdx)) {
-        expandedRows.delete(rowIdx)
-      } else {
-        expandedRows.add(rowIdx)
-      }
-      renderRowList()
-      // Focus the textarea if we just opened it
-      if (expandedRows.has(rowIdx)) {
-        const ta = rowsContainer.querySelector<HTMLTextAreaElement>(`.chair-labels-ta[data-row="${rowIdx}"]`)
-        ta?.focus()
-      }
-      return
-    }
-
     if (target.classList.contains('remove-row-btn')) {
       const rowIdx = Number(target.dataset['row'])
       if (isNaN(rowIdx) || config.rows.length <= 1) return
       history.push(config)
       config.rows.splice(rowIdx, 1)
       config.straightRows = Math.min(config.straightRows, config.rows.length)
-      expandedRows.clear()
       updateAllInputs()
       renderChart()
     }
   })
 
-  // Chair label editor — real-time update on every keystroke
-  rowsContainer.addEventListener('input', (e) => {
+  // Paste-a-list label editor (Labels panel) — live update on every keystroke.
+  labelList.addEventListener('input', (e) => {
     const target = e.target as HTMLTextAreaElement
     if (!target.classList.contains('chair-labels-ta')) return
     const rowIdx = Number(target.dataset['row'])
@@ -1493,30 +1477,23 @@ function bindEvents() {
     renderChart()
   })
 
-  // Chair label editor — push to history on blur (not on every keystroke)
-  rowsContainer.addEventListener('focusout', (e) => {
+  // Push to history on blur (not on every keystroke).
+  labelList.addEventListener('focusout', (e) => {
     const target = e.target as HTMLElement
     if (!target.classList.contains('chair-labels-ta')) return
     history.push(config)
   })
 
-  // Tab / Shift+Tab moves between row label editors
-  rowsContainer.addEventListener('keydown', (e) => {
+  // Tab / Shift+Tab moves between the per-row label editors.
+  labelList.addEventListener('keydown', (e) => {
     const target = e.target as HTMLTextAreaElement
     if (!target.classList.contains('chair-labels-ta')) return
     if (e.key !== 'Tab') return
-
     e.preventDefault()
     const rowIdx = Number(target.dataset['row'])
     const nextIdx = e.shiftKey ? rowIdx - 1 : rowIdx + 1
-
     if (nextIdx < 0 || nextIdx >= config.rows.length) return
-
-    // Open the destination editor if not already open
-    expandedRows.add(nextIdx)
-    renderRowList()
-
-    const nextTa = rowsContainer.querySelector<HTMLTextAreaElement>(`.chair-labels-ta[data-row="${nextIdx}"]`)
+    const nextTa = labelList.querySelector<HTMLTextAreaElement>(`.chair-labels-ta[data-row="${nextIdx}"]`)
     nextTa?.focus()
   })
 
