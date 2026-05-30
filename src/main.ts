@@ -21,6 +21,12 @@ let activeTool: 'color' | 'toggle' | 'stand' | 'stool' | 'label' = 'toggle'
 // arc guides and the chair-editing tools / instrument drags are suspended.
 let layoutMode = false
 
+// Which sidebar tab is showing. The conductor is draggable (move whole chart)
+// in the positioning tabs — Setup (place against a background) and Layout —
+// but not in Edit, where clicking it renames it instead.
+let activeTab = 'setup'
+const conductorMovable = () => activeTab === 'setup' || activeTab === 'layout'
+
 // When activeTool === 'label', clicking a chair sets its label to this string.
 // Picked from the Allocate Instruments panel; null = nothing selected yet.
 let selectedLabel: string | null = null
@@ -1156,10 +1162,19 @@ canvas.addEventListener('mousedown', (e) => {
     return
   }
 
-  // Conductor is not draggable outside the Layout tab; a click on it (handled
-  // in the click listener) edits its label instead. Deselect any instrument so
-  // the click doesn't leave a stale selection.
   if (renderer.conductorHitTest(x, y)) {
+    // Setup tab: conductor is draggable (move the whole chart — handy for
+    // positioning it over a background). Elsewhere (Edit) a click renames it,
+    // handled in the click listener.
+    if (conductorMovable()) {
+      conductorDragState = {
+        startX: cv.x, startY: cv.y,
+        initialOffsetX: config.conductor.offsetX,
+        initialOffsetY: config.conductor.offsetY,
+        preDragConfig: cloneConfig(config),
+        moved: false,
+      }
+    }
     if (selectedInstrumentId) {
       setSelectedInstrument(null)
       renderChart()
@@ -1350,15 +1365,17 @@ canvas.addEventListener('click', (e) => {
   if (renderer.rotateHandleHitTest(x, y)) return
   if (renderer.instrumentHitTest(x, y)) return
 
-  // Click the conductor to edit its podium label (shown / hidden via the
-  // "Show conductor" checkbox in Setup; moved via the Layout tab).
+  // Edit tab: click the conductor to rename its podium label. (In Setup/Layout
+  // a click is the tail of a move, so renaming there would be surprising.)
   if (renderer.conductorHitTest(x, y)) {
-    const cur = config.conductor.label ?? 'COND'
-    const next = window.prompt('Conductor label:', cur)
-    if (next !== null && next !== cur) {
-      history.push(config)
-      config.conductor.label = next
-      renderChart()
+    if (activeTab === 'edit') {
+      const cur = config.conductor.label ?? 'COND'
+      const next = window.prompt('Conductor label:', cur)
+      if (next !== null && next !== cur) {
+        history.push(config)
+        config.conductor.label = next
+        renderChart()
+      }
     }
     return
   }
@@ -1595,6 +1612,7 @@ function bindEvents() {
   // buttons and the bottom Next/Back nav buttons end up calling this.
   const switchTab = (tab: string | undefined) => {
     if (!tab) return
+    activeTab = tab
     closeChairLabelEditor()   // don't leave the inline editor floating after a tab change
     tabButtons.forEach(b => b.classList.toggle('active', b.dataset['tab'] === tab))
     tabContents.forEach(c => c.classList.toggle('active', c.dataset['tabContent'] === tab))
