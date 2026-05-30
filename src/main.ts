@@ -243,9 +243,22 @@ function renderChart() {
   redoBtn.disabled = !history.canRedo()
   renderTally()
   // Keep the Layout tab's per-row boxes in sync with the geometry the render
-  // just produced (renderer.layoutRows). Skipped mid-drag — the chair is the
-  // focus then, and the numbers refresh on mouse-up.
-  if (layoutMode && !(layoutDrag && layoutDrag.moved)) updateLayoutRowList()
+  // just produced (renderer.layoutRows). Mid-drag we only sync the numbers in
+  // place (no DOM rebuild) so the boxes track the drag live without churn.
+  if (layoutMode) {
+    if (layoutDrag && layoutDrag.moved) syncLayoutRowValues()
+    else updateLayoutRowList()
+  }
+}
+
+function rowHasLayoutTweak(r: typeof config.rows[number]): boolean {
+  return r.gapBefore !== undefined || r.arcStart !== undefined || r.arcEnd !== undefined ||
+    r.straightSpacing !== undefined || r.straightOffset !== undefined
+}
+
+// The per-row spread value as shown in its box (arc degrees / straight spacing).
+function rowSpreadValue(g: import('./types').RowGeometry): number {
+  return g.isStraight ? Math.round(g.spacing) : Math.round((g.arcStart - g.arcEnd) * 180 / Math.PI)
 }
 
 // Builds the Layout tab's per-row editor: one box per row showing its distance
@@ -256,24 +269,42 @@ function updateLayoutRowList() {
   const geoms = renderer.layoutRows
   if (geoms.length !== config.rows.length) { layoutRowList.innerHTML = ''; return }
 
-  const hasTweak = (r: typeof config.rows[number]) =>
-    r.gapBefore !== undefined || r.arcStart !== undefined || r.arcEnd !== undefined ||
-    r.straightSpacing !== undefined || r.straightOffset !== undefined
-
   layoutRowList.innerHTML = config.rows.map((row, i) => {
     const g = geoms[i]
-    const dist = Math.round(g.r)
     const label = config.showRowLabels ? `Row ${row.label}` : `Row ${i + 1}`
     const spread = g.isStraight
-      ? `<label>Spacing<input type="number" class="lay-spread" data-row="${i}" min="20" max="200" step="1" value="${Math.round(g.spacing)}"></label>`
-      : `<label>Arc°<input type="number" class="lay-spread" data-row="${i}" min="10" max="350" step="1" value="${Math.round((g.arcStart - g.arcEnd) * 180 / Math.PI)}"></label>`
+      ? `<label>Spacing<input type="number" class="lay-spread" data-row="${i}" min="20" max="200" step="1" value="${rowSpreadValue(g)}"></label>`
+      : `<label>Arc°<input type="number" class="lay-spread" data-row="${i}" min="10" max="350" step="1" value="${rowSpreadValue(g)}"></label>`
     return `<div class="layout-row-item">
       <span class="layout-row-name">${label}</span>
-      <label>Dist<input type="number" class="lay-dist" data-row="${i}" min="40" max="2000" step="1" value="${dist}"></label>
+      <label>Dist<input type="number" class="lay-dist" data-row="${i}" min="40" max="2000" step="1" value="${Math.round(g.r)}"></label>
       ${spread}
-      <button class="lay-reset" data-row="${i}" title="Reset this row"${hasTweak(row) ? '' : ' disabled'}>↺</button>
+      <button class="lay-reset" data-row="${i}" title="Reset this row"${rowHasLayoutTweak(row) ? '' : ' disabled'}>↺</button>
     </div>`
   }).join('')
+}
+
+// Lightweight in-place refresh of the existing boxes' numbers + reset states,
+// used during a drag so we don't rebuild the DOM every frame. Skips whichever
+// input is focused so it never fights the user's typing. Falls back to a full
+// rebuild if the structure no longer matches.
+function syncLayoutRowValues() {
+  const geoms = renderer.layoutRows
+  const items = layoutRowList.querySelectorAll<HTMLElement>('.layout-row-item')
+  if (items.length !== config.rows.length || geoms.length !== config.rows.length) {
+    updateLayoutRowList()
+    return
+  }
+  config.rows.forEach((row, i) => {
+    const g = geoms[i]
+    const item = items[i]
+    const distInput = item.querySelector<HTMLInputElement>('.lay-dist')!
+    const spreadInput = item.querySelector<HTMLInputElement>('.lay-spread')!
+    const resetBtn = item.querySelector<HTMLButtonElement>('.lay-reset')!
+    if (document.activeElement !== distInput) distInput.value = String(Math.round(g.r))
+    if (document.activeElement !== spreadInput) spreadInput.value = String(rowSpreadValue(g))
+    resetBtn.disabled = !rowHasLayoutTweak(row)
+  })
 }
 
 // --- Instrument tally overlay ---
