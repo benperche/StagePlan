@@ -15,7 +15,18 @@ const history = new History()
 const renderer = new Renderer()
 
 let activeColor = '#a8d8ea'
-let activeTool: 'color' | 'toggle' | 'stand' | 'stool' | 'label' = 'toggle'
+type ChairTool = 'color' | 'toggle' | 'stand' | 'stool' | 'label'
+let activeTool: ChairTool = 'toggle'
+
+// One-line explanation per chair tool, shown under the Edit Chairs buttons for
+// whichever tool is active (set in setChairTool).
+const TOOL_HINTS: Record<ChairTool, string> = {
+  toggle: "Click a chair to hide it — its place is kept so the row doesn't shift. Click again to bring it back.",
+  stand: 'Click a chair to cycle its music stand: solo × → shared × with the next chair → none.',
+  stool: 'Click a chair to switch it between a chair and a round stool.',
+  color: 'Click a chair to paint it the swatch colour. Click the swatch to change the colour.',
+  label: 'Click a chair to type a name on it (Enter jumps to the next chair). Or quick-fill from the instrument list below.',
+}
 
 // True while the Layout tab is active: the canvas shows geometry handles +
 // arc guides and the chair-editing tools / instrument drags are suspended.
@@ -162,7 +173,7 @@ import {
   librarySearch, libraryList,
   customOrchestraBtn, customOrchestraModal, customOrchestraTitle, customOrchestraNotation,
   customOrchestraPreview, customOrchestraApply, customOrchestraCancel,
-  toolButtons, chairLabelInput, labelToolBtn,
+  toolButtons, chairLabelInput, labelToolBtn, editChairsHint,
   standBulkPanel, stoolBulkPanel, standBulkButtons, stoolBulkButtons,
   instrumentPickerList, labelList, instrumentPickerStatus,
   showTallyBtn, tallyOverlay, tallyBody, tallyTotal, tallyMinimizeBtn, tallyCloseBtn,
@@ -1609,12 +1620,13 @@ function bindEvents() {
   // instrument in the Labels panel sets 'label' (no matching tool button, so
   // they all de-highlight). Keeps the tool buttons, sub-panels and label
   // selection in sync.
-  function setChairTool(tool: typeof activeTool) {
+  function setChairTool(tool: ChairTool) {
     activeTool = tool
     toolButtons.forEach(b => b.classList.toggle('active', b.dataset['tool'] === tool))
     colorPickerLabel.style.display = tool === 'color' ? '' : 'none'
     standBulkPanel.style.display = tool === 'stand' ? '' : 'none'
     stoolBulkPanel.style.display = tool === 'stool' ? '' : 'none'
+    editChairsHint.textContent = TOOL_HINTS[tool]
     // Always clear the instrument selection: switching to a non-label tool
     // leaves label mode, and switching INTO the Label tool means free-type
     // (the picker re-sets selectedLabel itself, after this call).
@@ -1624,7 +1636,7 @@ function bindEvents() {
 
   // Tool selection
   toolButtons.forEach(btn => {
-    btn.addEventListener('click', () => setChairTool(btn.dataset['tool'] as typeof activeTool))
+    btn.addEventListener('click', () => setChairTool(btn.dataset['tool'] as ChairTool))
   })
 
   // "Type labels on chairs" button in the Labels panel = the Label tool.

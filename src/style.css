@@ -382,22 +382,26 @@ button.secondary { border-style: dashed; }
   letter-spacing: 0.03em;
 }
 
-/* Bulk-action rows shown under the Edit Chairs tools (Stand / Stool). */
+/* Bulk-action rows shown under the Edit Chairs tools (Stand / Stool). The
+   label sits on its own line, with the buttons sharing the row below it. */
 .bulk-actions {
   display: flex;
-  align-items: center;
   flex-wrap: wrap;
   gap: 4px;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 .bulk-actions-label {
+  flex-basis: 100%;
   font-size: 12px;
+  font-weight: 600;
   color: var(--text-muted);
-  margin-right: 2px;
+  margin-bottom: 1px;
 }
 .bulk-actions button {
+  flex: 1;
   font-size: 12px;
-  padding: 4px 7px;
+  padding: 5px 6px;
+  white-space: nowrap;
 }
 
 /* Row list */

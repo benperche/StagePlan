@@ -60,6 +60,7 @@ export const colorPickerLabel = document.getElementById('color-picker-label') as
 export const toolButtons = document.querySelectorAll<HTMLButtonElement>('[data-tool]')
 export const chairLabelInput = document.getElementById('chair-label-input') as HTMLInputElement
 export const labelToolBtn = document.getElementById('label-tool-btn') as HTMLButtonElement
+export const editChairsHint = document.getElementById('edit-chairs-hint') as HTMLElement
 export const standBulkPanel = document.getElementById('stand-bulk') as HTMLElement
 export const stoolBulkPanel = document.getElementById('stool-bulk') as HTMLElement
 export const standBulkButtons = document.querySelectorAll<HTMLButtonElement>('[data-stand-bulk]')
