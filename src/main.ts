@@ -928,13 +928,18 @@ function applyChairDrag(e: MouseEvent) {
   } else {
     const r = chairDrag.r
     const angOf = (px: number, py: number) => Math.atan2((py - oy) / yDir, (px - ox) / xDir)
-    let aT = angOf(x, y)
+    // Work in angular *displacement* from the chair's natural slot, wrapped to
+    // (-π, π]. Using the raw pointer angle makes an end chair jump to the far
+    // side when dragged past the row end (across the atan2 ±π seam).
+    const norm = (a: number) => Math.atan2(Math.sin(a), Math.cos(a))
+    let disp = norm(chairDrag.naturalAngle - angOf(x, y))
     const minGap = LAYOUT_MIN_SPACING / r
     const left = i > 0 ? renderer.chairCenter(rowIndex, i - 1) : null    // larger angle
     const right = i < N - 1 ? renderer.chairCenter(rowIndex, i + 1) : null // smaller angle
-    if (left) aT = Math.min(angOf(left.x, left.y) - minGap, aT)
-    if (right) aT = Math.max(angOf(right.x, right.y) + minGap, aT)
-    chair.offset = (chairDrag.naturalAngle - aT) * r
+    // Toward the row end (right / smaller angle) = larger displacement.
+    if (right) disp = Math.min(disp, norm(chairDrag.naturalAngle - (angOf(right.x, right.y) + minGap)))
+    if (left) disp = Math.max(disp, norm(chairDrag.naturalAngle - (angOf(left.x, left.y) - minGap)))
+    chair.offset = disp * r
   }
   renderChart()
 }

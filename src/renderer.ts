@@ -422,7 +422,7 @@ export class Renderer {
     chairs.forEach((chair, chairIndex) => {
       const { cx, cy } = positions[chairIndex]
       if (chair.enabled) {
-        this.drawChair(ctx, chair, cx, cy, ox, oy, row.fontSize)
+        this.drawChair(ctx, chair, cx, cy, ox, oy, row.fontSize, this.isNudged(chair))
         if (chair.hasStand) this.drawStandX(ctx, cx, cy, ox, oy)
         if (config.showNumbers) {
           const num = config.numberRestartPerRow
@@ -495,7 +495,7 @@ export class Renderer {
       positions.push({ cx, cy: rowY })
 
       if (chair.enabled) {
-        this.drawChair(ctx, chair, cx, rowY, cx, oy, row.fontSize)
+        this.drawChair(ctx, chair, cx, rowY, cx, oy, row.fontSize, this.isNudged(chair))
         if (chair.hasStand) this.drawStandX(ctx, cx, rowY, cx, oy)
         if (config.showNumbers) {
           const num = config.numberRestartPerRow
@@ -1021,12 +1021,19 @@ export class Renderer {
   // Drawing primitives
   // ---------------------------------------------------------------------------
 
+  // A chair counts as "nudged" (worth the Layout-tab blue outline) only in
+  // layout mode and only when it actually carries a non-trivial offset.
+  private isNudged(chair: Chair): boolean {
+    return this.layoutMode && chair.offset !== undefined && Math.abs(chair.offset) > 0.5
+  }
+
   private drawChair(
     ctx: CanvasRenderingContext2D,
     chair: Chair,
     cx: number, cy: number,
     condX: number, condY: number,
     fontSize: number,
+    highlight = false,
   ) {
     const faceAngle = Math.atan2(condY - cy, condX - cx)
 
@@ -1075,6 +1082,20 @@ export class Renderer {
       ctx.strokeStyle = '#333'
       ctx.lineWidth = 4
       ctx.stroke()
+    }
+
+    // Layout tab: a nudged chair gets a blue outline so it's obvious which
+    // ones have been moved off their default slot.
+    if (highlight) {
+      ctx.strokeStyle = '#2563eb'
+      ctx.lineWidth = 2.5
+      if (chair.isStool) {
+        ctx.beginPath()
+        ctx.arc(0, 0, CHAIR_HALF, 0, Math.PI * 2)
+        ctx.stroke()
+      } else {
+        ctx.strokeRect(-CHAIR_HALF - 1.5, -CHAIR_HALF - 1.5, CHAIR_SIZE + 3, CHAIR_SIZE + 3)
+      }
     }
 
     ctx.restore()
