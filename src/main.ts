@@ -38,6 +38,17 @@ const VIEW_ZOOM_MAX = 6
 let panState: { startX: number; startY: number; panX0: number; panY0: number; moved: boolean } | null = null
 let suppressClickAfterPan = false
 
+// Active Layout-tab handle drag. geom0 is the row's geometry snapshot captured
+// at grab time; start is the chart-space pointer at grab time.
+let layoutDrag: {
+  rowIndex: number
+  kind: 'distance' | 'span-start' | 'span-end'
+  geom0: import('./types').RowGeometry
+  start: { x: number; y: number }
+  preDragConfig: ChartConfig
+  moved: boolean
+} | null = null
+
 // Canonical instrument list, grouped by section (rough score order).
 // Each instrument appears once — synonyms and instrument-key variants
 // (Eb / Bb, TC / BC, etc.) are collapsed since the seating chart only
@@ -719,6 +730,81 @@ function canvasToChart(x: number, y: number): { x: number; y: number } {
   return { x: (x - ox) / scale + ox, y: (y - oy) / scale + oy }
 }
 
+// --- Layout-tab handle drags ---
+
+const LAYOUT_MIN_SPACING = 34   // px floor so straight-row chairs never overlap
+
+// Applies the in-progress distance/span drag to the dragged row. Distance is
+// a radial (arc) / vertical (straight) delta from grab point; span moves the
+// row's ends — symmetric by default, Shift moves only the grabbed end.
+function applyLayoutDrag(e: MouseEvent) {
+  if (!layoutDrag) return
+  const cv = pointerCanvasCoords(e)
+  const { x, y } = canvasToChart(cv.x, cv.y)
+  if (!layoutDrag.moved) {
+    if (Math.hypot(x - layoutDrag.start.x, y - layoutDrag.start.y) < DRAG_THRESHOLD) return
+    history.push(layoutDrag.preDragConfig)
+    layoutDrag.moved = true
+  }
+
+  const { ox, oy, yDir } = renderer.conductorOrigin
+  const xDir = -yDir
+  const g = layoutDrag.geom0
+  const row = config.rows[layoutDrag.rowIndex]
+  const N = row.chairs.length
+
+  if (layoutDrag.kind === 'distance') {
+    // Radial distance from the conductor (arc) / vertical distance (straight).
+    const dist = (px: number, py: number) =>
+      g.isStraight ? (py - oy) * yDir : Math.hypot(px - ox, py - oy)
+    let newR = g.r + (dist(x, y) - dist(layoutDrag.start.x, layoutDrag.start.y))
+    const minR = g.rowIndex === 0 ? 60 : g.prevR + 44
+    newR = Math.max(minR, newR)
+    row.gapBefore = newR - g.base
+  } else if (g.isStraight) {
+    // Span = chair spacing. Work along the row's x axis.
+    const exOf = (px: number) => (px - ox) / xDir
+    const delta = exOf(x) - exOf(layoutDrag.start.x)
+    const halfW0 = ((N - 1) * g.spacing) / 2
+    const minHalf = (LAYOUT_MIN_SPACING * (N - 1)) / 2
+    if (e.shiftKey) {
+      // Move the grabbed end only; keep the opposite end fixed.
+      const grabbingRight = layoutDrag.kind === 'span-end'
+      const fixed = g.centerOffset + (grabbingRight ? -halfW0 : halfW0)
+      const moving = g.centerOffset + (grabbingRight ? halfW0 : -halfW0) + delta
+      const width = Math.max(LAYOUT_MIN_SPACING * (N - 1), Math.abs(moving - fixed))
+      row.straightSpacing = width / (N - 1)
+      row.straightOffset = grabbingRight ? fixed + width / 2 : fixed - width / 2
+    } else {
+      // Symmetric: both ends move oppositely, centre fixed.
+      const sign = layoutDrag.kind === 'span-end' ? 1 : -1
+      const halfW = Math.max(minHalf, halfW0 + sign * delta)
+      row.straightSpacing = (2 * halfW) / (N - 1)
+      row.straightOffset = g.centerOffset
+    }
+  } else {
+    // Arc span — work in the row's angle space.
+    const angOf = (px: number, py: number) => Math.atan2((py - oy) / yDir, (px - ox) / xDir)
+    const dA = angOf(x, y) - angOf(layoutDrag.start.x, layoutDrag.start.y)
+    let start = g.arcStart
+    let end = g.arcEnd
+    if (e.shiftKey) {
+      if (layoutDrag.kind === 'span-end') end = g.arcEnd + dA
+      else start = g.arcStart + dA
+    } else if (layoutDrag.kind === 'span-end') {
+      end = g.arcEnd + dA; start = g.arcStart - dA
+    } else {
+      start = g.arcStart + dA; end = g.arcEnd - dA
+    }
+    const minSpan = 0.15, maxSpan = Math.PI * 1.96
+    const mid = (start + end) / 2
+    const half = Math.min(maxSpan, Math.max(minSpan, start - end)) / 2
+    row.arcStart = mid + half
+    row.arcEnd = mid - half
+  }
+  renderChart()
+}
+
 // --- Presets ---
 
 function populatePresets() {
@@ -759,9 +845,24 @@ canvas.addEventListener('mousedown', (e) => {
   const { x, y } = canvasToChart(cv.x, cv.y)
 
   // Layout tab: content editing (chairs / instruments / conductor) is
-  // suspended. Geometry handles will be hit-tested here in the next step;
-  // for now only panning the zoomed view is allowed.
+  // suspended. Grab a geometry handle to drag it; otherwise pan the zoomed
+  // view. (Per-chair nudging is added in the next step.)
   if (layoutMode) {
+    const handle = renderer.layoutHandleHitTest(x, y)
+    if (handle) {
+      const geom0 = renderer.layoutRows[handle.rowIndex]
+      if (geom0) {
+        layoutDrag = {
+          rowIndex: handle.rowIndex,
+          kind: handle.kind,
+          geom0,
+          start: { x, y },
+          preDragConfig: cloneConfig(config),
+          moved: false,
+        }
+        return
+      }
+    }
     if (viewZoom > 1) {
       panState = { startX: e.clientX, startY: e.clientY, panX0: viewPanX, panY0: viewPanY, moved: false }
     }
@@ -867,6 +968,12 @@ canvas.addEventListener('mousedown', (e) => {
 })
 
 window.addEventListener('mousemove', (e) => {
+  // Layout-tab handle drag (distance / span).
+  if (layoutDrag) {
+    applyLayoutDrag(e)
+    return
+  }
+
   // View pan — drag empty space while zoomed in. Works in raw screen pixels
   // (the CSS transform's own units), independent of chart coords.
   if (panState) {
@@ -968,12 +1075,33 @@ window.addEventListener('mouseup', () => {
   rotateState = null
   conductorDragState = null
   panState = null
+  layoutDrag = null
   canvas.classList.remove('panning')
 })
 
 // Click handler runs after mouseup. Skip if the click landed on an instrument
 // or its rotate handle (already handled in mousedown) so chair/conductor logic
 // doesn't fire on top.
+// Layout tab: double-click a handle to reset that row's tweak.
+canvas.addEventListener('dblclick', (e) => {
+  if (!layoutMode) return
+  const cv = pointerCanvasCoords(e)
+  const { x, y } = canvasToChart(cv.x, cv.y)
+  const handle = renderer.layoutHandleHitTest(x, y)
+  if (!handle) return
+  const row = config.rows[handle.rowIndex]
+  history.push(config)
+  if (handle.kind === 'distance') {
+    delete row.gapBefore
+  } else {
+    delete row.arcStart
+    delete row.arcEnd
+    delete row.straightSpacing
+    delete row.straightOffset
+  }
+  renderChart()
+})
+
 canvas.addEventListener('click', (e) => {
   // A drag-pan just ended — swallow the click so it doesn't toggle a chair.
   if (suppressClickAfterPan) {

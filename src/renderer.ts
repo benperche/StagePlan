@@ -1,6 +1,7 @@
 import type {
   ChartConfig, Row, Chair, FixedInstrument,
   HitTarget, ConductorHit, InstrumentHit, RotateHandleHit, ConductorOrigin,
+  LayoutHandleHit, RowGeometry,
 } from './types'
 import {
   drawDrumkit, drawPiano, drawAmp, drawTimpani, drawMallet, drawHarp,
@@ -55,6 +56,10 @@ export class Renderer {
   // Set per-render from RenderOptions.layoutMode. When true the chart shows
   // arc guides + geometry handles regardless of config.showArc.
   private layoutMode = false
+  // Populated each render in layout mode: the draggable handles + the per-row
+  // geometry main.ts needs to drive the drags. Empty otherwise.
+  private layoutHandles: LayoutHandleHit[] = []
+  layoutRows: RowGeometry[] = []
 
   render(canvas: HTMLCanvasElement, config: ChartConfig, opts: RenderOptions = {}): void {
     const scale = opts.scale ?? 1
@@ -66,6 +71,8 @@ export class Renderer {
 
     this.hitTargets = []
     this.instrumentHits = []
+    this.layoutHandles = []
+    this.layoutRows = []
     this.conductorHit = null
     this.rotateHandleHit = null
     this.deleteHandleHit = null
@@ -344,6 +351,10 @@ export class Renderer {
         seatNumber = this.renderArcRow(ctx, row, rowIndex, r, ox, oy, yDir, config, seatNumber)
       }
     })
+
+    if (this.layoutMode) {
+      this.renderLayoutHandles(ctx, config, ox, oy, yDir, radii, rowSpacing, isStraightRow)
+    }
   }
 
   private renderArcRow(
@@ -541,6 +552,108 @@ export class Renderer {
       const rowY = oy + yDir * radii[rowIndex]
       seatNumber = this.renderStraightRow(ctx, row, rowIndex, rowY, ox, oy, config, seatNumber, labelX)
     })
+
+    if (this.layoutMode) {
+      this.renderLayoutHandles(ctx, config, ox, oy, yDir, radii, rowSpacing, () => true)
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Layout-tab handles
+  // ---------------------------------------------------------------------------
+
+  // Draws each row's distance handle (radial diamond at the apex) and span
+  // handles (tangential circles at the ends), and records both the hit
+  // targets and the per-row geometry main.ts uses to drive the drags.
+  private renderLayoutHandles(
+    ctx: CanvasRenderingContext2D,
+    config: ChartConfig,
+    ox: number, oy: number, yDir: number,
+    radii: number[],
+    rowSpacing: number,
+    isStraightRow: (i: number) => boolean,
+  ) {
+    const xDir = -yDir
+    const HANDLE_GAP = 24
+    const endPad = CHAIR_HALF + 12
+
+    config.rows.forEach((row, i) => {
+      const r = radii[i]
+      const base = i === 0 ? BASE_RADIUS : radii[i - 1] + rowSpacing
+      const prevR = i === 0 ? 0 : radii[i - 1]
+      const N = row.chairs.length
+      const straight = isStraightRow(i)
+      const geom: RowGeometry = {
+        rowIndex: i, isStraight: straight, r, base, prevR,
+        arcStart: 0, arcEnd: 0, rowY: 0, spacing: 0, centerOffset: 0,
+      }
+
+      let distPt: { x: number; y: number }
+      let startPt: { x: number; y: number } | null = null
+      let endPt: { x: number; y: number } | null = null
+
+      if (straight) {
+        const spacing = row.straightSpacing ?? STRAIGHT_CHAIR_SPACING
+        const centerOffset = row.straightOffset ?? 0
+        const rowY = oy + yDir * r
+        const rowWidth = (N - 1) * spacing
+        geom.rowY = rowY; geom.spacing = spacing; geom.centerOffset = centerOffset
+        distPt = { x: ox + xDir * centerOffset, y: oy + yDir * (r + HANDLE_GAP) }
+        if (N > 1) {
+          startPt = { x: ox + xDir * (centerOffset - rowWidth / 2 - endPad), y: rowY }
+          endPt   = { x: ox + xDir * (centerOffset + rowWidth / 2 + endPad), y: rowY }
+        }
+      } else {
+        const [arcStart, arcEnd] = this.rowArcAngles(row, config)
+        geom.arcStart = arcStart; geom.arcEnd = arcEnd
+        distPt = { x: ox, y: oy + yDir * (r + HANDLE_GAP) }   // apex (angle π/2) is vertical
+        if (N > 1) {
+          const da = endPad / r
+          const aS = arcStart + da, aE = arcEnd - da
+          startPt = { x: ox + xDir * r * Math.cos(aS), y: oy + yDir * r * Math.sin(aS) }
+          endPt   = { x: ox + xDir * r * Math.cos(aE), y: oy + yDir * r * Math.sin(aE) }
+        }
+      }
+
+      this.layoutRows[i] = geom
+      this.drawLayoutDiamond(ctx, distPt.x, distPt.y)
+      this.layoutHandles.push({ rowIndex: i, kind: 'distance', cx: distPt.x, cy: distPt.y, radius: 13 })
+      if (startPt) {
+        this.drawLayoutDot(ctx, startPt.x, startPt.y)
+        this.layoutHandles.push({ rowIndex: i, kind: 'span-start', cx: startPt.x, cy: startPt.y, radius: 11 })
+      }
+      if (endPt) {
+        this.drawLayoutDot(ctx, endPt.x, endPt.y)
+        this.layoutHandles.push({ rowIndex: i, kind: 'span-end', cx: endPt.x, cy: endPt.y, radius: 11 })
+      }
+    })
+  }
+
+  private drawLayoutDiamond(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
+    const s = 7
+    ctx.save()
+    ctx.beginPath()
+    ctx.moveTo(cx, cy - s); ctx.lineTo(cx + s, cy); ctx.lineTo(cx, cy + s); ctx.lineTo(cx - s, cy)
+    ctx.closePath()
+    ctx.fillStyle = '#2563eb'; ctx.fill()
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke()
+    ctx.restore()
+  }
+
+  private drawLayoutDot(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
+    ctx.save()
+    ctx.beginPath(); ctx.arc(cx, cy, 5.5, 0, Math.PI * 2)
+    ctx.fillStyle = '#2563eb'; ctx.fill()
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke()
+    ctx.restore()
+  }
+
+  layoutHandleHitTest(x: number, y: number): LayoutHandleHit | null {
+    for (let i = this.layoutHandles.length - 1; i >= 0; i--) {
+      const h = this.layoutHandles[i]
+      if (Math.hypot(x - h.cx, y - h.cy) <= h.radius) return h
+    }
+    return null
   }
 
   // ---------------------------------------------------------------------------

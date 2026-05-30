@@ -167,6 +167,31 @@ export interface RotateHandleHit {
   radius: number   // hit radius (slightly larger than visual radius)
 }
 
+// Layout-tab drag handles (drawn only in layout mode). A row gets a radial
+// "distance" handle at its apex and two tangential "span" handles at its ends.
+export interface LayoutHandleHit {
+  rowIndex: number
+  kind: 'distance' | 'span-start' | 'span-end'
+  cx: number
+  cy: number
+  radius: number
+}
+
+// Per-row geometry snapshot the Layout drag handlers need (populated by the
+// renderer each frame in layout mode so main.ts doesn't re-derive it).
+export interface RowGeometry {
+  rowIndex: number
+  isStraight: boolean
+  r: number        // effective radius / distance from conductor (incl. gapBefore)
+  base: number     // r minus this row's gapBefore (radius at gap 0)
+  prevR: number    // effective radius of the row in front (0 for the first row)
+  arcStart: number
+  arcEnd: number
+  rowY: number       // straight rows: world y of the row
+  spacing: number    // straight rows: px between chairs
+  centerOffset: number // straight rows: sideways shift of the row centre
+}
+
 export interface ConductorOrigin {
   ox: number
   oy: number
