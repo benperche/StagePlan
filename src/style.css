@@ -328,6 +328,19 @@ button.secondary { border-style: dashed; }
   border-color: var(--accent);
 }
 
+/* Subheading inside the Labels panel separating display toggles from the
+   instrument-label picker. */
+.labels-subhead {
+  margin: 6px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 /* Bulk-action rows shown under the Edit Chairs tools (Stand / Stool). */
 .bulk-actions {
   display: flex;

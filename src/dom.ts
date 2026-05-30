@@ -59,7 +59,6 @@ export const standBulkPanel = document.getElementById('stand-bulk') as HTMLEleme
 export const stoolBulkPanel = document.getElementById('stool-bulk') as HTMLElement
 export const standBulkButtons = document.querySelectorAll<HTMLButtonElement>('[data-stand-bulk]')
 export const stoolBulkButtons = document.querySelectorAll<HTMLButtonElement>('[data-stool-bulk]')
-export const instrumentPickerPanel = document.getElementById('instrument-picker-panel') as HTMLElement
 export const instrumentPickerList = document.getElementById('instrument-picker-list') as HTMLElement
 export const instrumentPickerStatus = document.getElementById('instrument-picker-status') as HTMLElement
 export const showTallyBtn = document.getElementById('show-tally-btn') as HTMLButtonElement

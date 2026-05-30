@@ -135,7 +135,7 @@ import {
   customOrchestraBtn, customOrchestraModal, customOrchestraTitle, customOrchestraNotation,
   customOrchestraPreview, customOrchestraApply, customOrchestraCancel,
   toolButtons, standBulkPanel, stoolBulkPanel, standBulkButtons, stoolBulkButtons,
-  instrumentPickerPanel, instrumentPickerList, instrumentPickerStatus,
+  instrumentPickerList, instrumentPickerStatus,
   showTallyBtn, tallyOverlay, tallyBody, tallyTotal, tallyMinimizeBtn, tallyCloseBtn,
   addInstrumentButtons, inspector, inspectorType, inspectorLabel,
   inspectorCountLabel, inspectorCount, inspectorRotateLeft, inspectorRotateRight,
@@ -1223,19 +1223,35 @@ function bindEvents() {
   tabButtons.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset['tab'])))
   tabNavButtons.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset['tabNav'])))
 
+  // Clears the instrument-label selection (highlight + status + selectedLabel).
+  // Called whenever we leave label mode for one of the chair tools.
+  function clearLabelSelection() {
+    selectedLabel = null
+    instrumentPickerList.querySelectorAll('.active').forEach(el => el.classList.remove('active'))
+    instrumentPickerStatus.textContent = 'Pick an instrument or part below, then click any chair to label it.'
+  }
+
+  // Single source of truth for "what does clicking a chair do". The four
+  // Edit Chairs tool buttons set toggle/stand/stool/color; picking an
+  // instrument in the Labels panel sets 'label' (no matching tool button, so
+  // they all de-highlight). Keeps the tool buttons, sub-panels and label
+  // selection in sync.
+  function setChairTool(tool: typeof activeTool) {
+    activeTool = tool
+    toolButtons.forEach(b => b.classList.toggle('active', b.dataset['tool'] === tool))
+    colorPickerLabel.style.display = tool === 'color' ? '' : 'none'
+    standBulkPanel.style.display = tool === 'stand' ? '' : 'none'
+    stoolBulkPanel.style.display = tool === 'stool' ? '' : 'none'
+    if (tool !== 'label') clearLabelSelection()
+  }
+
   // Tool selection
   toolButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      activeTool = btn.dataset['tool'] as typeof activeTool
-      toolButtons.forEach(b => b.classList.remove('active'))
-      btn.classList.add('active')
-      colorPickerLabel.style.display = activeTool === 'color' ? '' : 'none'
-      standBulkPanel.style.display = activeTool === 'stand' ? '' : 'none'
-      stoolBulkPanel.style.display = activeTool === 'stool' ? '' : 'none'
-      instrumentPickerPanel.style.display = activeTool === 'label' ? '' : 'none'
-      if (activeTool === 'label') renderInstrumentPicker()
-    })
+    btn.addEventListener('click', () => setChairTool(btn.dataset['tool'] as typeof activeTool))
   })
+
+  // Instrument-label picker lives in the Labels panel and is always visible.
+  renderInstrumentPicker()
 
   // Stand bulk actions (apply to every chair in every row)
   standBulkButtons.forEach(btn => {
@@ -1304,6 +1320,9 @@ function bindEvents() {
           b.className = isName ? 'instrument-name' : 'instrument-num'
           b.dataset['label'] = label
           b.addEventListener('click', () => {
+            // Picking an instrument enters label-apply mode (and de-selects
+            // any Edit Chairs tool), then highlights this choice.
+            setChairTool('label')
             selectedLabel = label
             instrumentPickerList.querySelectorAll('.active').forEach(el => el.classList.remove('active'))
             b.classList.add('active')
