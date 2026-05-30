@@ -90,7 +90,7 @@ always render the full chart at full resolution (print CSS forces
 
 1. Clear canvas, apply `config.chartScale`
 2. Draw background image (if any), per `config.backgroundFit`
-3. Draw chart title (top-centre)
+3. Draw chart title — sits a fixed gap above the chart top (`contentTopY`, post-chartScale), not pinned to the canvas top, plus an optional manual `titleOffsetX/Y`. Drawn at canvas scale; `titleHit` (raw canvas px) lets the Layout tab drag it (double-click to reset).
 4. Draw notes (bottom-left)
 5. Draw stage directions if enabled (left/right edges, light grey)
 6. Dispatch to `renderSemicircle` or `renderStraight` based on `config.layout`

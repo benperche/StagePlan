@@ -67,6 +67,13 @@ let layoutDrag: {
   moved: boolean
 } | null = null
 
+// Active Layout-tab title drag. The title is drawn in raw canvas px (not the
+// chartScale frame), so this works in screen px and stores config.titleOffset.
+let titleDrag: {
+  startX: number; startY: number; x0: number; y0: number
+  preDragConfig: ChartConfig; moved: boolean
+} | null = null
+
 // Active Layout-tab per-chair nudge. naturalAngle (arc) / base (straight) are
 // the chair's position with its current offset backed out, so the new offset
 // is just (natural − target).
@@ -274,7 +281,8 @@ function renderChart() {
   if (layoutMode) {
     if (layoutDrag && layoutDrag.moved) syncLayoutRowValues()
     else if (!((chairDrag && chairDrag.moved) || (conductorDragState && conductorDragState.moved)
-      || (dragState && dragState.moved) || (rotateState && rotateState.moved))) updateLayoutRowList()
+      || (dragState && dragState.moved) || (rotateState && rotateState.moved)
+      || (titleDrag && titleDrag.moved))) updateLayoutRowList()
   }
 }
 
@@ -1139,6 +1147,16 @@ canvas.addEventListener('mousedown', (e) => {
 
   // Layout tab: row geometry handles / per-chair nudge / pan.
   if (layoutMode) {
+    // Title is draggable here. It's drawn in raw canvas px, so test/drag with
+    // the un-transformed pointer (cv), not the chart-space coords.
+    if (renderer.titleHitTest(cv.x, cv.y)) {
+      titleDrag = {
+        startX: cv.x, startY: cv.y,
+        x0: config.titleOffsetX ?? 0, y0: config.titleOffsetY ?? 0,
+        preDragConfig: cloneConfig(config), moved: false,
+      }
+      return
+    }
     const handle = renderer.layoutHandleHitTest(x, y)
     if (handle) {
       const geom0 = renderer.layoutRows[handle.rowIndex]
@@ -1197,6 +1215,21 @@ canvas.addEventListener('mousedown', (e) => {
 })
 
 window.addEventListener('mousemove', (e) => {
+  // Layout-tab title drag (raw canvas px → config.titleOffset).
+  if (titleDrag) {
+    const cv = pointerCanvasCoords(e)
+    const dx = cv.x - titleDrag.startX
+    const dy = cv.y - titleDrag.startY
+    if (!titleDrag.moved) {
+      if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return
+      history.push(titleDrag.preDragConfig)
+      titleDrag.moved = true
+    }
+    config.titleOffsetX = titleDrag.x0 + dx
+    config.titleOffsetY = titleDrag.y0 + dy
+    renderChart()
+    return
+  }
   // Layout-tab handle drag (distance / span).
   if (layoutDrag) {
     applyLayoutDrag(e)
@@ -1311,6 +1344,7 @@ window.addEventListener('mouseup', () => {
   panState = null
   layoutDrag = null
   chairDrag = null
+  titleDrag = null
   canvas.classList.remove('panning')
   // The per-row boxes are skipped mid-drag; refresh them now the drag is done.
   if (finishedLayoutDrag && layoutMode) updateLayoutRowList()
@@ -1323,6 +1357,14 @@ window.addEventListener('mouseup', () => {
 canvas.addEventListener('dblclick', (e) => {
   if (!layoutMode) return
   const cv = pointerCanvasCoords(e)
+  // Double-click the title to snap it back to its auto position.
+  if (renderer.titleHitTest(cv.x, cv.y) && (config.titleOffsetX || config.titleOffsetY)) {
+    history.push(config)
+    delete config.titleOffsetX
+    delete config.titleOffsetY
+    renderChart()
+    return
+  }
   const { x, y } = canvasToChart(cv.x, cv.y)
   const handle = renderer.layoutHandleHitTest(x, y)
   if (handle) {
@@ -1809,6 +1851,8 @@ function bindEvents() {
       delete row.straightOffset
       for (const chair of row.chairs) delete chair.offset
     }
+    delete config.titleOffsetX
+    delete config.titleOffsetY
     renderChart()
   })
 

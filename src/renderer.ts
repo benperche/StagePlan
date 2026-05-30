@@ -40,6 +40,7 @@ export class Renderer {
   private hitTargets: HitTarget[] = []
   private instrumentHits: InstrumentHit[] = []
   conductorHit: ConductorHit | null = null
+  titleHit: ConductorHit | null = null
   conductorOrigin: ConductorOrigin = { ox: 0, oy: 0, yDir: -1, flipped: false }
   selectedInstrumentId: string | null = null
   rotateHandleHit: RotateHandleHit | null = null
@@ -83,9 +84,8 @@ export class Renderer {
     // Background image (fit to canvas) drawn first, beneath everything.
     this.drawBackground(ctx, config, w, h)
 
-    // Title / notes / stage-direction labels stay at canvas scale so they
-    // don't shrink with chartScale and remain readable.
-    this.drawTitle(ctx, config.title, w)
+    // Notes / stage-direction labels stay at canvas scale so they don't shrink
+    // with chartScale and remain readable.
     this.drawNotes(ctx, config.notes, h, config.showCredit ?? true)
     if (config.showStageDirections) this.drawStageDirections(ctx, w, h)
 
@@ -98,6 +98,13 @@ export class Renderer {
     const ox = w / 2 + (config.conductor.offsetX ?? 0)
     const oy = this.computeOy(h, numRows, config.flipped, rowSpacing) + (config.conductor.offsetY ?? 0)
     const chartScale = config.chartScale ?? 1
+
+    // Title hugs the top of the chart (a fixed gap above the back row, or the
+    // conductor when flipped) rather than floating at the canvas top, plus any
+    // manual drag offset. Drawn at canvas scale so it stays crisp.
+    this.drawTitle(ctx, config.title, w, this.contentTopY(config, oy, rowSpacing, chartScale),
+      config.titleOffsetX ?? 0, config.titleOffsetY ?? 0)
+
     const scaling = chartScale !== 1
     if (scaling) {
       ctx.save()
@@ -894,15 +901,52 @@ export class Renderer {
   // Title + Notes — always rendered, WYSIWYG
   // ---------------------------------------------------------------------------
 
-  private drawTitle(ctx: CanvasRenderingContext2D, title: string, w: number) {
-    if (!title) return
+  // Topmost y of the drawn chart (post-chartScale), in canvas pixels: the back
+  // row's seat numbers when unflipped, the conductor podium when flipped.
+  private contentTopY(config: ChartConfig, oy: number, rowSpacing: number, scale: number): number {
+    const radii = this.computeRowRadii(config.rows, rowSpacing)
+    const maxR = radii.length ? Math.max(...radii) : BASE_RADIUS
+    const topUnscaled = config.flipped
+      ? oy - (COND_H / 2 + 18)              // conductor podium + a little for its stand
+      : oy - maxR - CHAIR_HALF - 16         // back row chair top + the seat number above it
+    return oy + (topUnscaled - oy) * scale  // chartScale grows the chart around (ox, oy)
+  }
+
+  private drawTitle(
+    ctx: CanvasRenderingContext2D, title: string, w: number, chartTop: number,
+    offsetX: number, offsetY: number,
+  ) {
+    if (!title) { this.titleHit = null; return }
+    const TITLE_HEIGHT = 20   // approx height of the 18px bold line
+    const GAP = 26            // breathing room between the title and the chart
+    const MIN_TOP = 12        // never crowd the canvas top edge
+    const baseY = Math.max(MIN_TOP, chartTop - GAP - TITLE_HEIGHT)
+    const cx = w / 2 + offsetX
+    const y = baseY + offsetY
+
     ctx.save()
-    ctx.fillStyle = '#111'
     ctx.font = 'bold 18px sans-serif'
+    const tw = ctx.measureText(title).width
+    // Hit rect (canvas px — the title is drawn at canvas scale, not chartScale),
+    // padded a little so it's easy to grab in layout mode.
+    this.titleHit = { x: cx - tw / 2 - 6, y: y - 4, w: tw + 12, h: TITLE_HEIGHT + 8 }
+    if (this.layoutMode) {
+      ctx.strokeStyle = '#2563eb'
+      ctx.lineWidth = 1
+      ctx.setLineDash([4, 3])
+      ctx.strokeRect(this.titleHit.x, this.titleHit.y, this.titleHit.w, this.titleHit.h)
+      ctx.setLineDash([])
+    }
+    ctx.fillStyle = '#111'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
-    ctx.fillText(title, w / 2, 14)
+    ctx.fillText(title, cx, y)
     ctx.restore()
+  }
+
+  titleHitTest(x: number, y: number): boolean {
+    const t = this.titleHit
+    return !!t && x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h
   }
 
   private drawNotes(ctx: CanvasRenderingContext2D, notes: string, h: number, creditShown: boolean) {

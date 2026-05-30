@@ -106,6 +106,10 @@ export interface ChartConfig {
   showArc: boolean
   showCredit: boolean
   notes: string
+  // Manual offset (canvas px) of the chart title from its auto position above
+  // the back row. Set by dragging the title in the Layout tab; (0,0) = auto.
+  titleOffsetX?: number
+  titleOffsetY?: number
   instruments: FixedInstrument[]
   // Angular range of the chair arc in radians. Default Math.PI (180°),
   // i.e. a full semicircle. Smaller values draw a narrower arc, useful for
