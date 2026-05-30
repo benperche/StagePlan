@@ -265,7 +265,8 @@ function renderChart() {
   // per-chair nudge doesn't change row geometry, so the boxes are left as-is.
   if (layoutMode) {
     if (layoutDrag && layoutDrag.moved) syncLayoutRowValues()
-    else if (!((chairDrag && chairDrag.moved) || (conductorDragState && conductorDragState.moved))) updateLayoutRowList()
+    else if (!((chairDrag && chairDrag.moved) || (conductorDragState && conductorDragState.moved)
+      || (dragState && dragState.moved) || (rotateState && rotateState.moved))) updateLayoutRowList()
   }
 }
 
@@ -1042,65 +1043,18 @@ canvas.addEventListener('mousedown', (e) => {
   const cv = pointerCanvasCoords(e)
   const { x, y } = canvasToChart(cv.x, cv.y)
 
-  // Layout tab: content editing (chairs / instruments / conductor) is
-  // suspended. Grab a geometry handle to drag it; else grab a chair to nudge
-  // it along its row; else pan the zoomed view.
-  if (layoutMode) {
-    const handle = renderer.layoutHandleHitTest(x, y)
-    if (handle) {
-      const geom0 = renderer.layoutRows[handle.rowIndex]
-      if (geom0) {
-        layoutDrag = {
-          rowIndex: handle.rowIndex,
-          kind: handle.kind,
-          geom0,
-          start: { x, y },
-          preDragConfig: cloneConfig(config),
-          moved: false,
-        }
-        return
-      }
-    }
-    // Conductor: drag to move the whole chart (chairs and instruments are all
-    // positioned relative to it). Offset is in raw canvas px, so the drag start
-    // is recorded in raw canvas coords too.
-    if (renderer.conductorHitTest(x, y)) {
-      conductorDragState = {
-        startX: cv.x, startY: cv.y,
-        initialOffsetX: config.conductor.offsetX,
-        initialOffsetY: config.conductor.offsetY,
-        preDragConfig: cloneConfig(config),
-        moved: false,
-      }
-      return
-    }
-    const hit = renderer.hitTest(x, y)
-    const g = hit ? renderer.layoutRows[hit.rowIndex] : null
-    if (hit && g) {
-      const chair = config.rows[hit.rowIndex].chairs[hit.chairIndex]
-      const off0 = chair.offset ?? 0
-      const { ox, oy, yDir } = renderer.conductorOrigin
-      const xDir = -yDir
-      // Back the current offset out of the drawn position to recover the
-      // chair's natural slot, so the new offset is just (natural − target).
-      const naturalAngle = g.isStraight ? 0
-        : Math.atan2((hit.y - oy) / yDir, (hit.x - ox) / xDir) + off0 / g.r
-      const base = g.isStraight ? (hit.x - ox) / xDir - off0 : 0
-      chairDrag = {
-        rowIndex: hit.rowIndex, chairIndex: hit.chairIndex,
-        isStraight: g.isStraight, r: g.r, naturalAngle, base,
-        start: { x, y }, preDragConfig: cloneConfig(config), moved: false,
-      }
-      return
-    }
+  // Export tab: the canvas is view-only — no chair / instrument / conductor
+  // editing. Panning the zoomed view is still allowed.
+  if (activeTab === 'export') {
     if (viewZoom > 1) {
       panState = { startX: e.clientX, startY: e.clientY, panX0: viewPanX, panY0: viewPanY, moved: false }
     }
     return
   }
 
-  // Red ✕ delete handle (present only on the selected instrument) takes
-  // first priority so it isn't blocked by the rotate handle or the body.
+  // Fixed-instrument editing (delete / rotate / select + drag) works in every
+  // editable tab, Layout included — instruments are freely positioned, not
+  // part of the row geometry.
   if (renderer.deleteHandleHitTest(x, y) && selectedInstrumentId) {
     history.push(config)
     config.instruments = config.instruments.filter(i => i.id !== selectedInstrumentId)
@@ -1108,8 +1062,6 @@ canvas.addEventListener('mousedown', (e) => {
     renderChart()
     return
   }
-
-  // Rotate handle (only present for the selected instrument) takes priority
   if (renderer.rotateHandleHitTest(x, y)) {
     const inst = config.instruments.find(i => i.id === selectedInstrumentId)
     if (inst) {
@@ -1132,15 +1084,11 @@ canvas.addEventListener('mousedown', (e) => {
       return
     }
   }
-
-  // Instrument body hit takes priority over chairs (drawn on top)
   const instHit = renderer.instrumentHitTest(x, y)
   if (instHit) {
-    // Music Stand tool + click on a fixed instrument = toggle a stand
-    // attached to that instrument (drawn between it and the conductor).
-    // Don't start a drag in this mode — the user's intent is clearly to
-    // place/remove the stand.
-    if (activeTool === 'stand') {
+    // Music Stand chair-tool toggles a stand on the instrument — only in the
+    // chair-tool tabs (Edit/Setup), not while reshaping in Layout.
+    if (!layoutMode && activeTool === 'stand') {
       const inst = config.instruments.find(i => i.id === instHit.id)
       if (inst) {
         history.push(config)
@@ -1162,35 +1110,73 @@ canvas.addEventListener('mousedown', (e) => {
     return
   }
 
-  if (renderer.conductorHitTest(x, y)) {
-    // Setup tab: conductor is draggable (move the whole chart — handy for
-    // positioning it over a background). Elsewhere (Edit) a click renames it,
-    // handled in the click listener.
-    if (conductorMovable()) {
-      conductorDragState = {
-        startX: cv.x, startY: cv.y,
-        initialOffsetX: config.conductor.offsetX,
-        initialOffsetY: config.conductor.offsetY,
-        preDragConfig: cloneConfig(config),
-        moved: false,
+  // Conductor: drag to move the whole chart, in the positioning tabs.
+  if (conductorMovable() && renderer.conductorHitTest(x, y)) {
+    conductorDragState = {
+      startX: cv.x, startY: cv.y,
+      initialOffsetX: config.conductor.offsetX,
+      initialOffsetY: config.conductor.offsetY,
+      preDragConfig: cloneConfig(config),
+      moved: false,
+    }
+    if (selectedInstrumentId) { setSelectedInstrument(null); renderChart() }
+    return
+  }
+
+  // Layout tab: row geometry handles / per-chair nudge / pan.
+  if (layoutMode) {
+    const handle = renderer.layoutHandleHitTest(x, y)
+    if (handle) {
+      const geom0 = renderer.layoutRows[handle.rowIndex]
+      if (geom0) {
+        layoutDrag = {
+          rowIndex: handle.rowIndex,
+          kind: handle.kind,
+          geom0,
+          start: { x, y },
+          preDragConfig: cloneConfig(config),
+          moved: false,
+        }
+        return
       }
     }
-    if (selectedInstrumentId) {
-      setSelectedInstrument(null)
-      renderChart()
+    const hit = renderer.hitTest(x, y)
+    const g = hit ? renderer.layoutRows[hit.rowIndex] : null
+    if (hit && g) {
+      const chair = config.rows[hit.rowIndex].chairs[hit.chairIndex]
+      const off0 = chair.offset ?? 0
+      const { ox, oy, yDir } = renderer.conductorOrigin
+      const xDir = -yDir
+      // Back the current offset out of the drawn position to recover the
+      // chair's natural slot, so the new offset is just (natural − target).
+      const naturalAngle = g.isStraight ? 0
+        : Math.atan2((hit.y - oy) / yDir, (hit.x - ox) / xDir) + off0 / g.r
+      const base = g.isStraight ? (hit.x - ox) / xDir - off0 : 0
+      chairDrag = {
+        rowIndex: hit.rowIndex, chairIndex: hit.chairIndex,
+        isStraight: g.isStraight, r: g.r, naturalAngle, base,
+        start: { x, y }, preDragConfig: cloneConfig(config), moved: false,
+      }
+      return
+    }
+    // Empty space: deselect any instrument, otherwise pan the zoomed view.
+    if (selectedInstrumentId) { setSelectedInstrument(null); renderChart() }
+    else if (viewZoom > 1) {
+      panState = { startX: e.clientX, startY: e.clientY, panX0: viewPanX, panY0: viewPanY, moved: false }
     }
     return
   }
 
-  // Click on empty canvas / chair deselects any instrument.
+  // Edit / Setup (non-layout). The conductor in Edit isn't movable — a click
+  // renames it (handled in the click listener). Chairs are handled there too.
+  if (renderer.conductorHitTest(x, y)) {
+    if (selectedInstrumentId) { setSelectedInstrument(null); renderChart() }
+    return
+  }
   if (selectedInstrumentId) {
     setSelectedInstrument(null)
     renderChart()
   }
-
-  // When zoomed in, grabbing empty space (or a chair) starts a pan. A pure
-  // click that never crosses the drag threshold still falls through to the
-  // chair `click` handler, so chair editing keeps working while zoomed.
   if (viewZoom > 1) {
     panState = { startX: e.clientX, startY: e.clientY, panX0: viewPanX, panY0: viewPanY, moved: false }
   }
@@ -1357,8 +1343,8 @@ canvas.addEventListener('click', (e) => {
     suppressClickAfterPan = false
     return
   }
-  // Layout tab suspends chair/conductor click-editing.
-  if (layoutMode) return
+  // Layout tab suspends chair/conductor click-editing; Export is view-only.
+  if (layoutMode || activeTab === 'export') return
   const cv = pointerCanvasCoords(e)
   const { x, y } = canvasToChart(cv.x, cv.y)
   if (renderer.deleteHandleHitTest(x, y)) return
@@ -1614,6 +1600,9 @@ function bindEvents() {
     if (!tab) return
     activeTab = tab
     closeChairLabelEditor()   // don't leave the inline editor floating after a tab change
+    // Export is view-only — drop any instrument selection so its (now
+    // non-interactive) handles don't linger on the chart.
+    if (tab === 'export' && selectedInstrumentId) { setSelectedInstrument(null); renderChart() }
     tabButtons.forEach(b => b.classList.toggle('active', b.dataset['tab'] === tab))
     tabContents.forEach(c => c.classList.toggle('active', c.dataset['tabContent'] === tab))
     // Scroll the sidebar back to the top so Next/Back doesn't strand the
