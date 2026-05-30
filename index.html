@@ -137,6 +137,7 @@
             <button data-tool="stand" class="tool-btn">Stand</button>
             <button data-tool="stool" class="tool-btn">Stool</button>
             <button data-tool="color" class="tool-btn">Colour</button>
+            <button data-tool="label" class="tool-btn">Label</button>
           </div>
           <label id="color-picker-label" style="display:none">Colour
             <input type="color" id="color-picker" value="#a8d8ea" />
@@ -152,7 +153,7 @@
             <button data-stool-bulk="stools">Chairs → stools</button>
             <button data-stool-bulk="chairs">Stools → chairs</button>
           </div>
-          <p class="hint">Click a chair to apply the selected tool. Enable hides chairs without shifting the row. Stand cycles solo × → shared × → none. Colour applies the swatch colour — click the swatch to change it.</p>
+          <p class="hint">Click a chair to apply the selected tool. Enable hides chairs without shifting the row. Stand cycles solo × → shared × → none. Colour applies the swatch colour — click the swatch to change it. Label lets you type a name on a chair (Enter → next chair).</p>
         </section>
 
         <section class="panel">
@@ -164,7 +165,10 @@
           <div class="checkbox-row">
             <label><input type="checkbox" id="show-row-labels" /> Row labels</label>
           </div>
-          <p class="labels-subhead">Instrument labels</p>
+          <p class="labels-subhead">Type names</p>
+          <p class="hint">Pick the <strong>Label</strong> tool above (or click here), then click any chair to type its label. Press Enter to jump to the next chair.</p>
+          <button id="label-tool-btn" class="secondary">✎ Type labels on chairs</button>
+          <p class="labels-subhead">Quick-fill instruments</p>
           <p class="hint" id="instrument-picker-status">Pick an instrument or part below, then click any chair to label it.</p>
           <button id="show-tally-btn" class="secondary">📊 Show instrument tally</button>
           <div id="instrument-picker-list"></div>
@@ -283,6 +287,9 @@
         <button id="redo-btn" disabled title="Redo (Cmd/Ctrl + Shift + Z)">↪</button>
       </div>
       <canvas id="chart-canvas"></canvas>
+      <!-- Inline label editor: floated over a chair when the Label tool is
+           used, so you type a chair's name right on the chart. -->
+      <input id="chair-label-input" type="text" maxlength="24" style="display:none" />
       <!-- View-only zoom controls (bottom-right). Zoom is a screen
            convenience via a CSS transform; PNG export and print always
            render the full chart at full resolution, unaffected by it. -->

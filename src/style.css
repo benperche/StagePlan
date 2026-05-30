@@ -702,6 +702,21 @@ button.danger:hover { background: #fff0f0; }
   height: 100%;
   transform-origin: 0 0;
 }
+
+/* Inline label editor floated over a chair (Label tool). */
+#chair-label-input {
+  position: absolute;
+  z-index: 15;
+  transform: translate(-50%, -50%);
+  width: 100px;
+  padding: 3px 5px;
+  font-size: 12px;
+  text-align: center;
+  border: 2px solid var(--accent);
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25);
+}
 #chart-canvas.pannable { cursor: grab; }
 #chart-canvas.panning { cursor: grabbing; }
 

@@ -159,7 +159,8 @@ import {
   librarySearch, libraryList,
   customOrchestraBtn, customOrchestraModal, customOrchestraTitle, customOrchestraNotation,
   customOrchestraPreview, customOrchestraApply, customOrchestraCancel,
-  toolButtons, standBulkPanel, stoolBulkPanel, standBulkButtons, stoolBulkButtons,
+  toolButtons, chairLabelInput, labelToolBtn,
+  standBulkPanel, stoolBulkPanel, standBulkButtons, stoolBulkButtons,
   instrumentPickerList, instrumentPickerStatus,
   showTallyBtn, tallyOverlay, tallyBody, tallyTotal, tallyMinimizeBtn, tallyCloseBtn,
   addInstrumentButtons, inspector, inspectorType, inspectorLabel,
@@ -971,6 +972,62 @@ function applyPreset(preset: Preset) {
   renderChart()
 }
 
+// --- Inline chair-label editor (Label tool: click a chair, type its name) ---
+
+let editingChair: { rowIndex: number; chairIndex: number } | null = null
+
+// Screen position (within #canvas-area) of a chair's drawn centre, accounting
+// for chartScale and the CSS view zoom/pan, so the floating input sits on it.
+function chairScreenPos(rowIndex: number, chairIndex: number): { x: number; y: number } | null {
+  const c = renderer.chairCenter(rowIndex, chairIndex)
+  if (!c) return null
+  const scale = config.chartScale ?? 1
+  const { ox, oy } = renderer.conductorOrigin
+  const canvasX = (c.x - ox) * scale + ox
+  const canvasY = (c.y - oy) * scale + oy
+  return { x: viewPanX + canvasX * viewZoom, y: viewPanY + canvasY * viewZoom }
+}
+
+function openChairLabelEditor(rowIndex: number, chairIndex: number) {
+  const chair = config.rows[rowIndex]?.chairs[chairIndex]
+  if (!chair || !chair.enabled) return
+  const pos = chairScreenPos(rowIndex, chairIndex)
+  if (!pos) return
+  editingChair = { rowIndex, chairIndex }
+  chairLabelInput.style.left = `${pos.x}px`
+  chairLabelInput.style.top = `${pos.y}px`
+  chairLabelInput.style.display = ''
+  chairLabelInput.value = chair.label ?? ''
+  chairLabelInput.focus()
+  chairLabelInput.select()
+}
+
+function commitChairLabel() {
+  if (!editingChair) return
+  const chair = config.rows[editingChair.rowIndex]?.chairs[editingChair.chairIndex]
+  if (chair && (chair.label ?? '') !== chairLabelInput.value) {
+    history.push(config)
+    chair.label = chairLabelInput.value
+    renderChart()
+  }
+}
+
+function closeChairLabelEditor() {
+  editingChair = null
+  chairLabelInput.style.display = 'none'
+}
+
+// After Enter: commit, then hop to the next enabled chair in the same row.
+function advanceChairLabel() {
+  if (!editingChair) return
+  const { rowIndex, chairIndex } = editingChair
+  const chairs = config.rows[rowIndex].chairs
+  let next = chairIndex + 1
+  while (next < chairs.length && !chairs[next].enabled) next++
+  if (next < chairs.length) openChairLabelEditor(rowIndex, next)
+  else closeChairLabelEditor()
+}
+
 // --- Canvas interaction ---
 
 const DRAG_THRESHOLD = 4   // pixels before a mousedown is treated as a drag
@@ -1308,8 +1365,11 @@ canvas.addEventListener('click', (e) => {
 
   const hit = renderer.hitTest(x, y)
   if (!hit) return
-  // Label tool with no instrument picked yet — no-op (don't pollute undo).
-  if (activeTool === 'label' && selectedLabel === null) return
+  // Label tool, no instrument picked → type a free-text label on the chair.
+  if (activeTool === 'label' && selectedLabel === null) {
+    openChairLabelEditor(hit.rowIndex, hit.chairIndex)
+    return
+  }
 
   history.push(config)
   const chair = config.rows[hit.rowIndex].chairs[hit.chairIndex]
@@ -1535,6 +1595,7 @@ function bindEvents() {
   // buttons and the bottom Next/Back nav buttons end up calling this.
   const switchTab = (tab: string | undefined) => {
     if (!tab) return
+    closeChairLabelEditor()   // don't leave the inline editor floating after a tab change
     tabButtons.forEach(b => b.classList.toggle('active', b.dataset['tab'] === tab))
     tabContents.forEach(c => c.classList.toggle('active', c.dataset['tabContent'] === tab))
     // Scroll the sidebar back to the top so Next/Back doesn't strand the
@@ -1570,13 +1631,28 @@ function bindEvents() {
     colorPickerLabel.style.display = tool === 'color' ? '' : 'none'
     standBulkPanel.style.display = tool === 'stand' ? '' : 'none'
     stoolBulkPanel.style.display = tool === 'stool' ? '' : 'none'
-    if (tool !== 'label') clearLabelSelection()
+    // Always clear the instrument selection: switching to a non-label tool
+    // leaves label mode, and switching INTO the Label tool means free-type
+    // (the picker re-sets selectedLabel itself, after this call).
+    clearLabelSelection()
+    closeChairLabelEditor()
   }
 
   // Tool selection
   toolButtons.forEach(btn => {
     btn.addEventListener('click', () => setChairTool(btn.dataset['tool'] as typeof activeTool))
   })
+
+  // "Type labels on chairs" button in the Labels panel = the Label tool.
+  labelToolBtn.addEventListener('click', () => setChairTool('label'))
+
+  // Inline chair-label editor key handling.
+  chairLabelInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); commitChairLabel(); advanceChairLabel() }
+    else if (e.key === 'Escape') { e.preventDefault(); closeChairLabelEditor() }
+    e.stopPropagation()   // keep global shortcuts out while typing
+  })
+  chairLabelInput.addEventListener('blur', () => { commitChairLabel(); closeChairLabelEditor() })
 
   // Instrument-label picker lives in the Labels panel and is always visible.
   renderInstrumentPicker()
@@ -1772,6 +1848,9 @@ function bindEvents() {
     renderChart()
   })
   document.addEventListener('keydown', (e) => {
+    // While typing a chair label inline, let its own handler deal with keys
+    // (Enter/Escape) and keep global shortcuts (undo, delete…) out of the way.
+    if (document.activeElement === chairLabelInput) return
     // Close any open modal / drawer on Escape
     if (e.key === 'Escape') {
       if (customOrchestraModal.style.display !== 'none') {
