@@ -30,6 +30,9 @@ const COND_H = 36
 
 export interface RenderOptions {
   scale?: number
+  // When true (the Layout tab is active), arc guides are forced on and the
+  // canvas shows the geometry-editing handles.
+  layoutMode?: boolean
 }
 
 export class Renderer {
@@ -49,8 +52,13 @@ export class Renderer {
   private backgroundImageSrc: string | null = null
   onBackgroundLoaded: (() => void) | null = null
 
+  // Set per-render from RenderOptions.layoutMode. When true the chart shows
+  // arc guides + geometry handles regardless of config.showArc.
+  private layoutMode = false
+
   render(canvas: HTMLCanvasElement, config: ChartConfig, opts: RenderOptions = {}): void {
     const scale = opts.scale ?? 1
+    this.layoutMode = opts.layoutMode ?? false
     const ctx = canvas.getContext('2d')!
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     ctx.save()
@@ -295,8 +303,9 @@ export class Renderer {
     const radii = this.computeRowRadii(config.rows, rowSpacing)
 
     // Draw arcs first (behind chairs). Each guide spans the row's own arc
-    // range so the guide tracks any per-row span override.
-    if (config.showArc) {
+    // range so the guide tracks any per-row span override. Always shown in
+    // the Layout tab so you can see what you're adjusting against.
+    if (config.showArc || this.layoutMode) {
       config.rows.forEach((row, rowIndex) => {
         const isStraight = config.rows[rowIndex].isStraight ?? (rowIndex >= numRows - config.straightRows)
         if (isStraight) return

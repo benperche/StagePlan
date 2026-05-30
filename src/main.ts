@@ -17,6 +17,10 @@ const renderer = new Renderer()
 let activeColor = '#a8d8ea'
 let activeTool: 'color' | 'toggle' | 'stand' | 'stool' | 'label' = 'toggle'
 
+// True while the Layout tab is active: the canvas shows geometry handles +
+// arc guides and the chair-editing tools / instrument drags are suspended.
+let layoutMode = false
+
 // When activeTool === 'label', clicking a chair sets its label to this string.
 // Picked from the Allocate Instruments panel; null = nothing selected yet.
 let selectedLabel: string | null = null
@@ -127,7 +131,7 @@ import {
   flipCheck, straightRowsInput, straightRowsLabel, arcRangeInput, arcRangeLabel,
   rowSpacingInput, rowCountInput, advancedBtn, advancedModal, advancedCloseBtn, rowsContainer,
   colorPicker, colorPickerLabel, undoBtn, redoBtn, zoomInBtn, zoomOutBtn, zoomResetBtn,
-  resetPositionBtn, addRowBtn, saveBtn,
+  resetPositionBtn, resetLayoutBtn, addRowBtn, saveBtn,
   loadInput, exportPngBtn, printBtn, shareLinkBtn, shareUrlDisplay, presetSelect, applyPresetBtn,
   libraryDrawer, libraryBackdrop, libraryOpenBtn, libraryCloseBtn,
   libraryCurrentTitle, librarySaveBtn, libraryNewChartBtn, libraryNewFolderBtn,
@@ -223,7 +227,7 @@ function isLibraryOpen() {
 
 function renderChart() {
   resizeCanvas()
-  renderer.render(canvas, config)
+  renderer.render(canvas, config, { layoutMode })
   undoBtn.disabled = !history.canUndo()
   redoBtn.disabled = !history.canRedo()
   renderTally()
@@ -754,6 +758,16 @@ canvas.addEventListener('mousedown', (e) => {
   const cv = pointerCanvasCoords(e)
   const { x, y } = canvasToChart(cv.x, cv.y)
 
+  // Layout tab: content editing (chairs / instruments / conductor) is
+  // suspended. Geometry handles will be hit-tested here in the next step;
+  // for now only panning the zoomed view is allowed.
+  if (layoutMode) {
+    if (viewZoom > 1) {
+      panState = { startX: e.clientX, startY: e.clientY, panX0: viewPanX, panY0: viewPanY, moved: false }
+    }
+    return
+  }
+
   // Red ✕ delete handle (present only on the selected instrument) takes
   // first priority so it isn't blocked by the rotate handle or the body.
   if (renderer.deleteHandleHitTest(x, y) && selectedInstrumentId) {
@@ -966,6 +980,8 @@ canvas.addEventListener('click', (e) => {
     suppressClickAfterPan = false
     return
   }
+  // Layout tab suspends chair/conductor click-editing.
+  if (layoutMode) return
   const cv = pointerCanvasCoords(e)
   const { x, y } = canvasToChart(cv.x, cv.y)
   if (renderer.deleteHandleHitTest(x, y)) return
@@ -1210,7 +1226,7 @@ function bindEvents() {
     renderChart()
   })
 
-  // Sidebar tab navigation (Setup / Edit / Export). Both the top tab
+  // Sidebar tab navigation (Setup / Edit / Layout / Export). Both the top tab
   // buttons and the bottom Next/Back nav buttons end up calling this.
   const switchTab = (tab: string | undefined) => {
     if (!tab) return
@@ -1219,6 +1235,13 @@ function bindEvents() {
     // Scroll the sidebar back to the top so Next/Back doesn't strand the
     // user partway down the new tab.
     document.getElementById('sidebar')?.scrollTo({ top: 0 })
+    // Entering/leaving the Layout tab flips the canvas into geometry-editing
+    // mode (arc guides + handles); re-render so the guides appear/disappear.
+    const nowLayout = tab === 'layout'
+    if (nowLayout !== layoutMode) {
+      layoutMode = nowLayout
+      renderChart()
+    }
   }
   tabButtons.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset['tab'])))
   tabNavButtons.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset['tabNav'])))
@@ -1389,6 +1412,21 @@ function bindEvents() {
     history.push(config)
     config.conductor.offsetX = 0
     config.conductor.offsetY = 0
+    renderChart()
+  })
+
+  // Reset every per-row / per-chair Layout-tab tweak back to the defaults.
+  resetLayoutBtn.addEventListener('click', () => {
+    if (!window.confirm('Reset all manual row and chair position tweaks back to the default layout?')) return
+    history.push(config)
+    for (const row of config.rows) {
+      delete row.gapBefore
+      delete row.arcStart
+      delete row.arcEnd
+      delete row.straightSpacing
+      delete row.straightOffset
+      for (const chair of row.chairs) delete chair.offset
+    }
     renderChart()
   })
   document.addEventListener('keydown', (e) => {

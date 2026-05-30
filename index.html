@@ -46,6 +46,7 @@
       <nav class="tab-bar">
         <button data-tab="setup" class="tab-btn active">Setup</button>
         <button data-tab="edit" class="tab-btn">Edit</button>
+        <button data-tab="layout" class="tab-btn">Layout</button>
         <button data-tab="export" class="tab-btn">Export</button>
       </nav>
 
@@ -211,6 +212,38 @@
 
         <div class="tab-nav">
           <button data-tab-nav="setup" class="tab-nav-back">← Back: Setup</button>
+          <button data-tab-nav="layout" class="tab-nav-next">Next: Layout →</button>
+        </div>
+      </div>
+
+      <!-- =================  LAYOUT TAB  ================= -->
+      <div class="tab-content" data-tab-content="layout">
+        <section class="panel">
+          <h2>Layout</h2>
+          <p class="hint">Fine-tune positions directly on the chart. Drag the
+            <strong>apex dot</strong> of a row to move it in/out, the
+            <strong>end dots</strong> to widen or narrow it (Shift-drag one end
+            for an uneven spread), and drag a <strong>chair</strong> sideways to
+            nudge it along its row. Double-click a handle to reset it.</p>
+          <label id="row-spacing-label">Row spacing (px)
+            <input type="number" id="row-spacing" min="50" max="120" step="5" value="70" />
+          </label>
+          <label id="arc-range-label">Arc range (°)
+            <input type="number" id="arc-range" min="60" max="180" step="5" value="180" />
+          </label>
+          <div class="checkbox-row">
+            <label><input type="checkbox" id="show-arc" /> Show arc guides (always on here)</label>
+          </div>
+          <div class="row-controls">
+            <button id="reset-position-btn" class="secondary">⊙ Reset conductor position</button>
+          </div>
+          <div class="row-controls">
+            <button id="reset-layout-btn" class="danger">↺ Reset all layout tweaks</button>
+          </div>
+        </section>
+
+        <div class="tab-nav">
+          <button data-tab-nav="edit" class="tab-nav-back">← Back: Edit</button>
           <button data-tab-nav="export" class="tab-nav-next">Next: Export →</button>
         </div>
       </div>
@@ -228,7 +261,7 @@
         </section>
 
         <div class="tab-nav">
-          <button data-tab-nav="edit" class="tab-nav-back">← Back: Edit</button>
+          <button data-tab-nav="layout" class="tab-nav-back">← Back: Layout</button>
           <span></span>
         </div>
       </div>
@@ -304,24 +337,16 @@
     <div class="modal-card">
       <h2>Advanced Layout</h2>
       <p class="hint">Fine controls for chart dimensions. Changes apply live.</p>
-      <label id="row-spacing-label">Row spacing (px)
-        <input type="number" id="row-spacing" min="50" max="120" step="5" value="70" />
-      </label>
       <label id="chart-scale-label">Chart scale (%)
         <input type="number" id="chart-scale" min="50" max="200" step="5" value="100" />
       </label>
-      <label id="arc-range-label">Arc range (°)
-        <input type="number" id="arc-range" min="60" max="180" step="5" value="180" />
-      </label>
       <div class="checkbox-row">
-        <label><input type="checkbox" id="show-arc" /> Show arc guides</label>
         <label><input type="checkbox" id="show-stage-directions" /> Stage directions</label>
       </div>
       <div class="checkbox-row">
         <label><input type="checkbox" id="show-credit" checked /> Show "Created with StagePlan" credit</label>
       </div>
       <div class="row-controls modal-actions">
-        <button id="reset-position-btn">⊙ Reset position</button>
         <button id="advanced-close" class="primary">Done</button>
       </div>
     </div>
