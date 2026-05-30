@@ -82,6 +82,7 @@ always render the full chart at full resolution (print CSS forces
 - **`main.ts` owns mutation.** Event handlers mutate `config`, then call `renderChart()`.
 - **Undo snapshots happen at the start of any user action** that changes state. `history.push(config)` before mutation. The push deep-clones via `cloneConfig`.
 - **The conductor is the origin.** All chair positions are computed in polar coords relative to the conductor (semicircle layout) or in row-relative coords (straight layout). Fixed instruments are always polar from the conductor. This is what makes "drag the conductor" translate the whole chart.
+- **Conductor interaction is mode-split.** In the **Layout** tab you drag the conductor to move the whole chart (`conductorDragState`, offset stored in `conductor.offsetX/Y`); "Reset conductor position" lives there too. In **non-layout** tabs the conductor isn't draggable — clicking it instead edits its podium label (`conductor.label`, default "COND"). Show/hide is the "Show conductor" checkbox in Setup (`conductor.show`).
 
 ## Render pipeline (one render call)
 

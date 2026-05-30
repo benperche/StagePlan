@@ -1223,6 +1223,7 @@ export class Renderer {
   ) {
     const rx = ox - COND_W / 2
     const ry = oy - COND_H / 2
+    const label = config.conductor.label ?? 'COND'
 
     // Always store hit rect so clicking works whether shown or not
     this.conductorHit = { x: rx, y: ry, w: COND_W, h: COND_H }
@@ -1237,7 +1238,7 @@ export class Renderer {
       ctx.font = '9px sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.fillText('COND', ox, oy)
+      ctx.fillText(label, ox, oy, COND_W - 6)
       ctx.setLineDash([])
       ctx.restore()
       return
@@ -1253,7 +1254,7 @@ export class Renderer {
     ctx.font = 'bold 11px sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText('COND', ox, oy)
+    ctx.fillText(label, ox, oy, COND_W - 6)
     ctx.restore()
 
     if (config.conductor.hasStand) {

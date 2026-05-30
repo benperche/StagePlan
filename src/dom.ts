@@ -20,6 +20,7 @@ export const showNumbersCheck = document.getElementById('show-numbers') as HTMLI
 export const restartNumbersCheck = document.getElementById('restart-numbers') as HTMLInputElement
 export const showRowLabelsCheck = document.getElementById('show-row-labels') as HTMLInputElement
 export const conductorStandCheck = document.getElementById('conductor-stand') as HTMLInputElement
+export const showConductorCheck = document.getElementById('show-conductor') as HTMLInputElement
 export const flipCheck = document.getElementById('flip') as HTMLInputElement
 export const straightRowsInput = document.getElementById('straight-rows') as HTMLInputElement
 export const straightRowsLabel = document.getElementById('straight-rows-label') as HTMLElement

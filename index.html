@@ -73,8 +73,12 @@
           </div>
           <div class="checkbox-row">
             <label><input type="checkbox" id="flip" /> Flip layout</label>
+            <label><input type="checkbox" id="show-conductor" checked /> Show conductor</label>
+          </div>
+          <div class="checkbox-row">
             <label><input type="checkbox" id="conductor-stand" checked /> Conductor stand</label>
           </div>
+          <p class="hint">Click the conductor on the chart to rename it; drag it in the Layout tab to move the whole chart.</p>
           <button id="advanced-btn" class="secondary">⚙ Advanced layout…</button>
         </section>
 
@@ -220,12 +224,12 @@
       <div class="tab-content" data-tab-content="layout">
         <section class="panel">
           <h2>Layout</h2>
-          <p class="hint">Fine-tune positions directly on the chart. Drag the
-            <strong>apex dot</strong> of a row to move it in/out, the
+          <p class="hint">Fine-tune chair positions directly on the chart.<br>
+            Drag the <strong>apex dot</strong> of a row to move it in/out, the
             <strong>end dots</strong> to widen or narrow it (Shift-drag one end
-            for an uneven spread), and drag a <strong>chair</strong> sideways to
-            nudge it along its row. Double-click a handle to reset it — or use
-            the per-row boxes below.</p>
+            for an uneven spread).<br>
+            Drag a <strong>chair</strong> sideways to nudge it along its row.<br>
+            Double-click any handle to reset it — or use the per-row boxes below.</p>
           <div id="layout-row-list"></div>
           <p class="labels-subhead">Defaults</p>
           <label id="row-spacing-label">Row spacing (px)

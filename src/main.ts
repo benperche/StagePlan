@@ -143,16 +143,11 @@ interface ConductorDragState extends DragBase {
 }
 let conductorDragState: ConductorDragState | null = null
 
-// Set true on mouseup if a conductor drag actually moved.  The next click
-// event consumes (and clears) this so we don't toggle conductor visibility
-// at the end of a drag.
-let suppressConductorClick = false
-
 // All DOM refs live in dom.ts; pull them in by name.
 import {
   canvas, tabButtons, tabContents, tabNavButtons,
   titleInput, layoutSelect, notesArea, showNumbersCheck, restartNumbersCheck,
-  showRowLabelsCheck, conductorStandCheck, showArcCheck, showStageDirectionsCheck,
+  showRowLabelsCheck, conductorStandCheck, showConductorCheck, showArcCheck, showStageDirectionsCheck,
   chartScaleInput, bgInput, bgClearBtn, bgStatus, bgFitSelect, showCreditCheck,
   flipCheck, straightRowsInput, straightRowsLabel, arcRangeInput, arcRangeLabel,
   rowSpacingInput, rowCountInput, advancedBtn, advancedModal, advancedCloseBtn, rowsContainer,
@@ -263,7 +258,7 @@ function renderChart() {
   // per-chair nudge doesn't change row geometry, so the boxes are left as-is.
   if (layoutMode) {
     if (layoutDrag && layoutDrag.moved) syncLayoutRowValues()
-    else if (!(chairDrag && chairDrag.moved)) updateLayoutRowList()
+    else if (!((chairDrag && chairDrag.moved) || (conductorDragState && conductorDragState.moved))) updateLayoutRowList()
   }
 }
 
@@ -581,6 +576,7 @@ bindBool(showNumbersCheck, () => config.showNumbers, v => { config.showNumbers =
 bindBool(restartNumbersCheck, () => config.numberRestartPerRow, v => { config.numberRestartPerRow = v })
 bindBool(showRowLabelsCheck, () => config.showRowLabels, v => { config.showRowLabels = v })
 bindBool(conductorStandCheck, () => config.conductor.hasStand, v => { config.conductor.hasStand = v })
+bindBool(showConductorCheck, () => config.conductor.show, v => { config.conductor.show = v })
 bindBool(flipCheck, () => config.flipped, v => { config.flipped = v })
 bindBool(showArcCheck, () => config.showArc, v => { config.showArc = v })
 bindBool(showStageDirectionsCheck, () => config.showStageDirections, v => { config.showStageDirections = v })
@@ -1002,6 +998,19 @@ canvas.addEventListener('mousedown', (e) => {
         return
       }
     }
+    // Conductor: drag to move the whole chart (chairs and instruments are all
+    // positioned relative to it). Offset is in raw canvas px, so the drag start
+    // is recorded in raw canvas coords too.
+    if (renderer.conductorHitTest(x, y)) {
+      conductorDragState = {
+        startX: cv.x, startY: cv.y,
+        initialOffsetX: config.conductor.offsetX,
+        initialOffsetY: config.conductor.offsetY,
+        preDragConfig: cloneConfig(config),
+        moved: false,
+      }
+      return
+    }
     const hit = renderer.hitTest(x, y)
     const g = hit ? renderer.layoutRows[hit.rowIndex] : null
     if (hit && g) {
@@ -1090,20 +1099,10 @@ canvas.addEventListener('mousedown', (e) => {
     return
   }
 
-  // Conductor: prepare for potential drag.  If the pointer never moves
-  // beyond the threshold, the click handler will fire and toggle visibility.
+  // Conductor is not draggable outside the Layout tab; a click on it (handled
+  // in the click listener) edits its label instead. Deselect any instrument so
+  // the click doesn't leave a stale selection.
   if (renderer.conductorHitTest(x, y)) {
-    // Conductor offset is stored in canvas pixels (it determines where the
-    // conductor lands on the canvas, independent of chartScale). So the
-    // drag-start cursor is recorded in RAW canvas coords too.
-    conductorDragState = {
-      startX: cv.x,
-      startY: cv.y,
-      initialOffsetX: config.conductor.offsetX,
-      initialOffsetY: config.conductor.offsetY,
-      preDragConfig: cloneConfig(config),
-      moved: false,
-    }
     if (selectedInstrumentId) {
       setSelectedInstrument(null)
       renderChart()
@@ -1232,9 +1231,8 @@ window.addEventListener('mousemove', (e) => {
 })
 
 window.addEventListener('mouseup', () => {
-  if (conductorDragState?.moved) suppressConductorClick = true
   if (panState?.moved) suppressClickAfterPan = true
-  const finishedLayoutDrag = layoutDrag?.moved || chairDrag?.moved
+  const finishedLayoutDrag = layoutDrag?.moved || chairDrag?.moved || conductorDragState?.moved
   dragState = null
   rotateState = null
   conductorDragState = null
@@ -1295,16 +1293,16 @@ canvas.addEventListener('click', (e) => {
   if (renderer.rotateHandleHitTest(x, y)) return
   if (renderer.instrumentHitTest(x, y)) return
 
-  // Conductor toggle takes priority — but if the user just finished
-  // dragging the podium, skip the toggle (consume the suppression flag).
+  // Click the conductor to edit its podium label (shown / hidden via the
+  // "Show conductor" checkbox in Setup; moved via the Layout tab).
   if (renderer.conductorHitTest(x, y)) {
-    if (suppressConductorClick) {
-      suppressConductorClick = false
-      return
+    const cur = config.conductor.label ?? 'COND'
+    const next = window.prompt('Conductor label:', cur)
+    if (next !== null && next !== cur) {
+      history.push(config)
+      config.conductor.label = next
+      renderChart()
     }
-    history.push(config)
-    config.conductor.show = !config.conductor.show
-    renderChart()
     return
   }
 
@@ -1351,7 +1349,7 @@ canvas.addEventListener('click', (e) => {
 
 function bindEvents() {
   for (const el of [titleInput, layoutSelect, notesArea, showNumbersCheck,
-    restartNumbersCheck, showRowLabelsCheck, conductorStandCheck, flipCheck,
+    restartNumbersCheck, showRowLabelsCheck, conductorStandCheck, showConductorCheck, flipCheck,
     straightRowsInput, rowCountInput, showArcCheck, arcRangeInput, rowSpacingInput,
     showStageDirectionsCheck, chartScaleInput, bgFitSelect, showCreditCheck]) {
     el.addEventListener('change', () => { readInputs(); updateAllInputs(); renderChart() })

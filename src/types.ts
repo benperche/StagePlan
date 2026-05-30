@@ -45,6 +45,9 @@ export interface Row {
 export interface ConductorConfig {
   show: boolean
   hasStand: boolean
+  // Text drawn on the podium (default "COND"). Editable by clicking the
+  // conductor in a non-layout tab.
+  label?: string
   // Manual offset from the auto-computed conductor position.  Set when the
   // user drags the podium; (0, 0) means use the auto position.  Stored as
   // an offset rather than absolute coords so that resizing the window still
