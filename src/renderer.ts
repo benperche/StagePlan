@@ -806,19 +806,25 @@ export class Renderer {
     })
 
     let totalChairs = 0
+    let totalStools = 0
     let totalStands = 0
     for (const row of config.rows) {
       for (const chair of row.chairs) {
         if (!chair.enabled) continue
-        totalChairs++
+        if (chair.isStool) totalStools++
+        else totalChairs++
         if (chair.hasStand) totalStands++
         if (chair.standAfter) totalStands++
       }
     }
     if (config.rows.length > 1) {
-      lines.push(totalStands > 0
-        ? `Total: ${totalChairs} chairs · ${totalStands} stands`
-        : `Total: ${totalChairs} chairs`)
+      const plural = (n: number, word: string) => `${n} ${word}${n !== 1 ? 's' : ''}`
+      const parts: string[] = []
+      // Always show a chair count unless the chart is purely stools.
+      if (totalChairs > 0 || totalStools === 0) parts.push(plural(totalChairs, 'chair'))
+      if (totalStools > 0) parts.push(plural(totalStools, 'stool'))
+      if (totalStands > 0) parts.push(plural(totalStands, 'stand'))
+      lines.push(`Total: ${parts.join(' · ')}`)
     }
     if (totalStands > 0) lines.push('× = music stand')
 
