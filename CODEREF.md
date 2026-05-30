@@ -45,6 +45,24 @@ and `.tab-content.active` flips to flex.
 Undo and Redo live as **floating overlay buttons** in the top-left of
 the canvas area, not in any tab — they're always accessible.
 
+## View zoom/pan (screen-only)
+
+Floating `−  NNN%  +` controls in the bottom-right of the canvas zoom the
+chart for on-screen inspection. This is a pure **CSS transform** on the
+`<canvas>` element (`translate(panX,panY) scale(zoom)`, `transform-origin:
+0 0`) — it never touches `config`, undo history, PNG export or print, which
+always render the full chart at full resolution (print CSS forces
+`transform: none`). State lives in `viewZoom/viewPanX/viewPanY` in `main.ts`.
+
+- Buttons step by 1.25×; mouse wheel zooms toward the cursor; clamp `[1, 6]`.
+- Pan by dragging empty space while zoomed (`panState`); a non-moving press
+  still falls through to the chair `click` handler, and a moved pan sets
+  `suppressClickAfterPan` so it doesn't toggle a chair.
+- Because the zoom is a CSS transform, `getBoundingClientRect()` already
+  reflects it, so `pointerCanvasCoords` divides by `rect.width/height` to get
+  backing pixels and **all hit-testing keeps working at any zoom** with no
+  per-feature changes.
+
 ## Architectural rules of thumb
 
 - **Renderer is a pure function of `ChartConfig`.** It mutates no state, holds no app state. The only exception: it caches the decoded background image so we don't re-decode every render.

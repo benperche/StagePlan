@@ -21,6 +21,19 @@ let activeTool: 'color' | 'toggle' | 'stand' | 'stool' | 'label' = 'toggle'
 // Picked from the Allocate Instruments panel; null = nothing selected yet.
 let selectedLabel: string | null = null
 
+// --- View zoom/pan (screen-only) ---
+// A CSS transform on the canvas, purely for inspecting the chart on screen.
+// It never touches `config`, undo history, PNG export or print — those always
+// render the full chart at full resolution. transform-origin is the canvas's
+// top-left (0,0); a backing pixel (bx,by) shows at (panX + bx*zoom, ...).
+let viewZoom = 1
+let viewPanX = 0
+let viewPanY = 0
+const VIEW_ZOOM_MIN = 1      // 1 = fit (the canvas already fills the area)
+const VIEW_ZOOM_MAX = 6
+let panState: { startX: number; startY: number; panX0: number; panY0: number; moved: boolean } | null = null
+let suppressClickAfterPan = false
+
 // Canonical instrument list, grouped by section (rough score order).
 // Each instrument appears once — synonyms and instrument-key variants
 // (Eb / Bb, TC / BC, etc.) are collapsed since the seating chart only
@@ -113,7 +126,8 @@ import {
   chartScaleInput, bgInput, bgClearBtn, bgStatus, bgFitSelect, showCreditCheck,
   flipCheck, straightRowsInput, straightRowsLabel, arcRangeInput, arcRangeLabel,
   rowSpacingInput, rowCountInput, advancedBtn, advancedModal, advancedCloseBtn, rowsContainer,
-  colorPicker, colorPickerLabel, undoBtn, redoBtn, resetPositionBtn, addRowBtn, saveBtn,
+  colorPicker, colorPickerLabel, undoBtn, redoBtn, zoomInBtn, zoomOutBtn, zoomResetBtn,
+  resetPositionBtn, addRowBtn, saveBtn,
   loadInput, exportPngBtn, printBtn, shareLinkBtn, shareUrlDisplay, presetSelect, applyPresetBtn,
   libraryCurrentTitle, librarySaveBtn, libraryNewChartBtn, libraryNewFolderBtn,
   librarySearch, libraryList,
@@ -626,8 +640,47 @@ function setSelectedInstrument(id: string | null) {
 }
 
 function pointerCanvasCoords(e: MouseEvent): { x: number; y: number } {
+  // getBoundingClientRect already reflects the canvas's CSS zoom/pan
+  // transform, so dividing by rect.width/height back into backing pixels
+  // works at any zoom level without referencing viewZoom directly.
   const rect = canvas.getBoundingClientRect()
-  return { x: e.clientX - rect.left, y: e.clientY - rect.top }
+  return {
+    x: (e.clientX - rect.left) * (canvas.width / rect.width),
+    y: (e.clientY - rect.top) * (canvas.height / rect.height),
+  }
+}
+
+// --- View zoom/pan helpers ---
+
+function applyViewTransform() {
+  canvas.style.transform = `translate(${viewPanX}px, ${viewPanY}px) scale(${viewZoom})`
+  canvas.classList.toggle('pannable', viewZoom > 1)
+  zoomResetBtn.textContent = `${Math.round(viewZoom * 100)}%`
+  zoomInBtn.disabled = viewZoom >= VIEW_ZOOM_MAX - 1e-6
+  zoomOutBtn.disabled = viewZoom <= VIEW_ZOOM_MIN + 1e-6
+}
+
+// Zoom toward an anchor point given in client coords (defaults to the canvas
+// centre). Keeps the anchored chart point pinned under the cursor.
+function setZoom(target: number, anchorClientX?: number, anchorClientY?: number) {
+  const next = Math.max(VIEW_ZOOM_MIN, Math.min(VIEW_ZOOM_MAX, target))
+  if (next === viewZoom) return
+  const rect = canvas.getBoundingClientRect()
+  const ax = anchorClientX ?? rect.left + rect.width / 2
+  const ay = anchorClientY ?? rect.top + rect.height / 2
+  // panX' = panX + (anchor - rect.left) * (1 - next/zoom)   (see view-state note)
+  viewPanX += (ax - rect.left) * (1 - next / viewZoom)
+  viewPanY += (ay - rect.top) * (1 - next / viewZoom)
+  viewZoom = next
+  if (viewZoom === VIEW_ZOOM_MIN) { viewPanX = 0; viewPanY = 0 }
+  applyViewTransform()
+}
+
+function resetZoom() {
+  viewZoom = 1
+  viewPanX = 0
+  viewPanY = 0
+  applyViewTransform()
 }
 
 // Inverse of the renderer's chart-scale transform: takes a raw canvas
@@ -770,9 +823,32 @@ canvas.addEventListener('mousedown', (e) => {
     setSelectedInstrument(null)
     renderChart()
   }
+
+  // When zoomed in, grabbing empty space (or a chair) starts a pan. A pure
+  // click that never crosses the drag threshold still falls through to the
+  // chair `click` handler, so chair editing keeps working while zoomed.
+  if (viewZoom > 1) {
+    panState = { startX: e.clientX, startY: e.clientY, panX0: viewPanX, panY0: viewPanY, moved: false }
+  }
 })
 
 window.addEventListener('mousemove', (e) => {
+  // View pan — drag empty space while zoomed in. Works in raw screen pixels
+  // (the CSS transform's own units), independent of chart coords.
+  if (panState) {
+    const dx = e.clientX - panState.startX
+    const dy = e.clientY - panState.startY
+    if (!panState.moved) {
+      if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return
+      panState.moved = true
+      canvas.classList.add('panning')
+    }
+    viewPanX = panState.panX0 + dx
+    viewPanY = panState.panY0 + dy
+    applyViewTransform()
+    return
+  }
+
   const cv = pointerCanvasCoords(e)
 
   // Conductor drag — moves the whole chart (chairs and instruments are all
@@ -853,15 +929,23 @@ window.addEventListener('mousemove', (e) => {
 
 window.addEventListener('mouseup', () => {
   if (conductorDragState?.moved) suppressConductorClick = true
+  if (panState?.moved) suppressClickAfterPan = true
   dragState = null
   rotateState = null
   conductorDragState = null
+  panState = null
+  canvas.classList.remove('panning')
 })
 
 // Click handler runs after mouseup. Skip if the click landed on an instrument
 // or its rotate handle (already handled in mousedown) so chair/conductor logic
 // doesn't fire on top.
 canvas.addEventListener('click', (e) => {
+  // A drag-pan just ended — swallow the click so it doesn't toggle a chair.
+  if (suppressClickAfterPan) {
+    suppressClickAfterPan = false
+    return
+  }
   const cv = pointerCanvasCoords(e)
   const { x, y } = canvasToChart(cv.x, cv.y)
   if (renderer.deleteHandleHitTest(x, y)) return
@@ -1250,6 +1334,20 @@ function bindEvents() {
     const next = history.redo(config)
     if (next) setConfig(next)
   })
+
+  // Zoom controls (view-only; see view-state note near the top)
+  const ZOOM_STEP = 1.25
+  zoomInBtn.addEventListener('click', () => setZoom(viewZoom * ZOOM_STEP))
+  zoomOutBtn.addEventListener('click', () => setZoom(viewZoom / ZOOM_STEP))
+  zoomResetBtn.addEventListener('click', resetZoom)
+  // Wheel over the canvas zooms toward the cursor. Trackpad pinch arrives as
+  // wheel + ctrlKey, which we also treat as zoom.
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault()
+    const factor = Math.exp(-e.deltaY * 0.0015)
+    setZoom(viewZoom * factor, e.clientX, e.clientY)
+  }, { passive: false })
+  applyViewTransform()
   resetPositionBtn.addEventListener('click', () => {
     if (config.conductor.offsetX === 0 && config.conductor.offsetY === 0) return
     history.push(config)

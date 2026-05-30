@@ -94,6 +94,9 @@ export const bgFitSelect = document.getElementById('bg-fit') as HTMLSelectElemen
 // --- History panel ---
 export const undoBtn = document.getElementById('undo-btn') as HTMLButtonElement
 export const redoBtn = document.getElementById('redo-btn') as HTMLButtonElement
+export const zoomInBtn = document.getElementById('zoom-in-btn') as HTMLButtonElement
+export const zoomOutBtn = document.getElementById('zoom-out-btn') as HTMLButtonElement
+export const zoomResetBtn = document.getElementById('zoom-reset-btn') as HTMLButtonElement
 
 // --- Library tab ---
 export const libraryCurrentTitle = document.getElementById('library-current-title') as HTMLElement

@@ -275,6 +275,14 @@
         <button id="redo-btn" disabled title="Redo (Cmd/Ctrl + Shift + Z)">↪</button>
       </div>
       <canvas id="chart-canvas"></canvas>
+      <!-- View-only zoom controls (bottom-right). Zoom is a screen
+           convenience via a CSS transform; PNG export and print always
+           render the full chart at full resolution, unaffected by it. -->
+      <div class="canvas-zoom-controls">
+        <button id="zoom-out-btn" title="Zoom out">−</button>
+        <button id="zoom-reset-btn" title="Reset zoom (click to fit)">100%</button>
+        <button id="zoom-in-btn" title="Zoom in">+</button>
+      </div>
     </main>
   </div>
 
