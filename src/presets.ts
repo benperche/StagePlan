@@ -20,10 +20,16 @@ export interface PresetCustomChair {
   // Default true. Set to false for a disabled placeholder chair that keeps
   // the row shape intact without representing a real player.
   enabled?: boolean
+  isStool?: boolean
 }
 export interface PresetCustomRow {
   label: string
   chairs: PresetCustomChair[]
+  // Optional straight-row geometry baked into the preset (px between chairs /
+  // sideways shift of the row centre), e.g. to leave room for fixed
+  // instruments. Map to Row.straightSpacing / straightOffset.
+  straightSpacing?: number
+  straightOffset?: number
 }
 
 // Pre-placed fixed instrument in polar coords relative to the conductor.
@@ -73,9 +79,13 @@ export const PRESETS: Preset[] = [
     // Three straight rows: saxes (front, 5) → trombones (mid, 4) → trumpets (back, 4).
     // Standard big-band lead-in-the-middle ordering within each section.
     // Every player gets their own music stand.
+    // Rows are shifted right (straightOffset) and spread a little so the
+    // rhythm section (piano / drums / amps) sits clear on the left.
     customRows: [
       {
         label: 'A',
+        straightSpacing: 58.75,
+        straightOffset: 100.5,
         chairs: [
           { label: 'Tnr 2',  color: COLORS.woodwind, hasStand: true },
           { label: 'Alto 2', color: COLORS.woodwind, hasStand: true },
@@ -86,6 +96,8 @@ export const PRESETS: Preset[] = [
       },
       {
         label: 'B',
+        straightSpacing: 63.67,
+        straightOffset: 96.5,
         chairs: [
           { label: 'Tbn 4', color: COLORS.brass, hasStand: true },
           { label: 'Tbn 2', color: COLORS.brass, hasStand: true },
@@ -95,19 +107,21 @@ export const PRESETS: Preset[] = [
       },
       {
         label: 'C',
+        straightSpacing: 64.33,
+        straightOffset: 96.5,
         chairs: [
-          { label: 'Tpt 4', color: '#f4a261', hasStand: true },
-          { label: 'Tpt 2', color: '#f4a261', hasStand: true },
-          { label: 'Tpt 1', color: '#f4a261', hasStand: true },
-          { label: 'Tpt 3', color: '#f4a261', hasStand: true },
+          { label: 'Tpt 4', color: '#f4a261', hasStand: true, isStool: true },
+          { label: 'Tpt 2', color: '#f4a261', hasStand: true, isStool: true },
+          { label: 'Tpt 1', color: '#f4a261', hasStand: true, isStool: true },
+          { label: 'Tpt 3', color: '#f4a261', hasStand: true, isStool: true },
         ],
       },
     ],
     instruments: [
-      { type: 'bass-amp',   angle: -2.25, distance: 245 },
-      { type: 'drumkit',    angle: -2.05, distance: 235 },
-      { type: 'piano',      angle: -2.55, distance: 215 },
-      { type: 'guitar-amp', angle: -2.25, distance: 170 },
+      { type: 'bass-amp',   angle: -2.3121, distance: 316.8 },
+      { type: 'drumkit',    angle: -1.9446, distance: 258.4 },
+      { type: 'piano',      angle: -2.4155, distance: 233.3, rotation: -0.5161 },
+      { type: 'guitar-amp', angle: -2.1855, distance: 164.4 },
     ],
   },
   {
@@ -686,9 +700,12 @@ export function buildPreset(preset: Preset): PresetBuild {
         label: c.label,
         hasStand: c.hasStand ?? false,
         standAfter: c.standAfter ?? false,
+        ...(c.isStool ? { isStool: true } : {}),
       })),
       label: row.label || rowLetters[i] || String(i + 1),
       fontSize: 11,
+      ...(row.straightSpacing !== undefined ? { straightSpacing: row.straightSpacing } : {}),
+      ...(row.straightOffset !== undefined ? { straightOffset: row.straightOffset } : {}),
     }))
   } else {
     rows = buildRowsFromSections(preset.sections.map(s => ({ ...s })))
