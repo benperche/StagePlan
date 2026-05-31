@@ -1530,7 +1530,10 @@ canvas.addEventListener('click', (e) => {
     chair.isStool = !chair.isStool
   } else if (activeTool === 'stand') {
     const rowChairs = config.rows[hit.rowIndex].chairs
-    const isLast = hit.chairIndex === rowChairs.length - 1
+    const nextChair = rowChairs[hit.chairIndex + 1]
+    // You can only form a desk with a real neighbour — not the row end and not
+    // a hidden seat (that would draw a stand toward a ghost chair).
+    const canPairNext = !!nextChair?.enabled
     if (!chair.hasStand && !chair.standAfter) {
       chair.hasStand = true
     } else if (chair.hasStand) {
@@ -1538,11 +1541,11 @@ canvas.addEventListener('click', (e) => {
       // they're now sharing this one — otherwise you'd see both a stand
       // between the two chairs AND a stand in front of the next chair.
       chair.hasStand = false
-      if (!isLast) {
+      if (canPairNext) {
         chair.standAfter = true
-        const nextChair = rowChairs[hit.chairIndex + 1]
-        if (nextChair) nextChair.hasStand = false
+        nextChair.hasStand = false
       }
+      // No valid neighbour → just turn the stand off (skip the desk state).
     } else {
       chair.standAfter = false
     }

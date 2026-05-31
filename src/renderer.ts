@@ -487,7 +487,12 @@ export class Renderer {
     while (i < N) {
       const c = chairs[i]
       const next = i + 1 < N ? chairs[i + 1] : null
-      const isPair = !!next && (c.standAfter || (!c.enabled && !next.enabled))
+      // A real desk needs two present players; pairing into a hidden seat is
+      // meaningless (and used to draw a stand floating toward a ghost chair).
+      const isPair = !!next && (
+        (c.standAfter && c.enabled && next.enabled) ||
+        (!c.enabled && !next.enabled)
+      )
       if (isPair) {
         const a0 = startAngle - i * naturalStep
         const a1 = startAngle - (i + 1) * naturalStep
@@ -523,12 +528,12 @@ export class Renderer {
       this.hitTargets.push({ rowIndex, chairIndex, x: cx, y: cy, radius: CHAIR_HALF * 1.1 })
     })
 
-    // Shared stand between desk-paired chairs (only when at least one is
-    // enabled — pure placeholder pairs don't need a stand).
+    // Shared stand between desk-paired chairs — only when BOTH players are
+    // present. Hiding either seat dissolves the desk (no stand to a ghost).
     chairs.forEach((chair, chairIndex) => {
       if (!chair.standAfter || chairIndex + 1 >= positions.length) return
       const next = chairs[chairIndex + 1]
-      if (!chair.enabled && !next.enabled) return
+      if (!chair.enabled || !next.enabled) return
       const a = positions[chairIndex]
       const b = positions[chairIndex + 1]
       this.drawStandX(ctx, (a.cx + b.cx) / 2, (a.cy + b.cy) / 2, ox, oy)
@@ -597,9 +602,11 @@ export class Renderer {
       this.hitTargets.push({ rowIndex, chairIndex, x: cx, y: rowY, radius: CHAIR_HALF * 1.1 })
     })
 
-    // Shared stands between desk-paired chairs
+    // Shared stands between desk-paired chairs — only when both seats are
+    // filled, so a hidden neighbour doesn't leave a stand drawn to a ghost.
     row.chairs.forEach((chair, chairIndex) => {
-      if (chair.standAfter && chairIndex + 1 < positions.length) {
+      const next = row.chairs[chairIndex + 1]
+      if (chair.standAfter && chair.enabled && next?.enabled && chairIndex + 1 < positions.length) {
         const a = positions[chairIndex]
         const b = positions[chairIndex + 1]
         this.drawStandX(ctx, (a.cx + b.cx) / 2, (a.cy + b.cy) / 2, a.cx, oy)
@@ -1130,13 +1137,14 @@ export class Renderer {
     let totalStools = 0
     let totalStands = 0
     for (const row of config.rows) {
-      for (const chair of row.chairs) {
-        if (!chair.enabled) continue
+      row.chairs.forEach((chair, i) => {
+        if (!chair.enabled) return
         if (chair.isStool) totalStools++
         else totalChairs++
         if (chair.hasStand) totalStands++
-        if (chair.standAfter) totalStands++
-      }
+        // Only count a desk stand that's actually drawn (next seat filled).
+        if (chair.standAfter && row.chairs[i + 1]?.enabled) totalStands++
+      })
     }
     if (config.rows.length > 1) {
       const plural = (n: number, word: string) => `${n} ${word}${n !== 1 ? 's' : ''}`

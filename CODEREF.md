@@ -229,6 +229,7 @@ fall through to an "Other" bucket at the bottom.
 - `Chair.hasStand` = solo stand in front of this chair (× drawn between chair and conductor).
 - `Chair.standAfter` = shared stand in the gap between this chair and the next.
 - The Music Stand tool cycles: `none → solo → shared-with-next → none`. When going to shared, the next chair's `hasStand` is automatically cleared.
+- **A desk needs two present players.** A `standAfter` desk is only active when *both* the chair and its next neighbour are `enabled` — the tool refuses to form one into a hidden/absent seat (`canPairNext`), and the renderer (arc + straight positioning, stand drawing) and the summary count all skip a desk whose neighbour is hidden, so you never get a stand drawn toward a ghost chair. Hiding one half of an existing desk dissolves it cleanly; re-showing the seat brings it back.
 - Stand × is drawn by `drawStandX`. Rotated by the chair→conductor angle so the diagonals stay diagonal (not aligned with the radial — that would look like `+`).
 - Default `makeChair()` returns `hasStand: true`.
 - The Stand tool also exposes chart-wide bulk actions (`#stand-bulk`): **One per chair** (solo × on every enabled chair), **One per desk** (pairs consecutive enabled chairs into a shared `standAfter`, leftover singles get a solo stand), **Remove all** (clears both flags). The Stool tool has a matching pair (`#stool-bulk`) to convert every chair to/from `isStool`. All operate on every row and push one undo snapshot.
