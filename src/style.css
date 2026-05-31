@@ -45,6 +45,25 @@ body {
   flex-direction: column;
   gap: 8px;
 }
+.sidebar-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+.about-btn {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--text-muted);
+}
+.about-btn:hover { border-color: var(--accent); color: var(--accent); }
 .library-open-btn {
   align-self: flex-start;
   font-size: 12px;
@@ -649,6 +668,48 @@ button.danger:hover { background: #fff0f0; }
   color: var(--text);
   margin-bottom: 2px;
 }
+
+/* About modal */
+.about-card {
+  position: relative;
+  width: min(380px, 92vw);
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 28px 24px 26px;
+}
+.about-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+.about-logo {
+  border-radius: 16px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.18);
+}
+.about-title {
+  font-size: 22px !important;
+  margin: 4px 0 0 !important;
+}
+.about-line {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+.kofi-btn {
+  display: inline-block;
+  margin: 6px 0;
+  padding: 9px 18px;
+  background: #72a4f2;
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  border-radius: 8px;
+  text-decoration: none;
+  box-shadow: 0 2px 6px rgba(114, 164, 242, 0.4);
+}
+.kofi-btn:hover { background: #5b91e8; }
 
 .modal-card .hint code {
   background: #f1f5f9;

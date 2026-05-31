@@ -26,6 +26,11 @@ export const straightRowsInput = document.getElementById('straight-rows') as HTM
 export const straightRowsLabel = document.getElementById('straight-rows-label') as HTMLElement
 export const rowCountInput = document.getElementById('row-count') as HTMLInputElement
 
+// --- About modal ---
+export const aboutBtn = document.getElementById('about-btn') as HTMLButtonElement
+export const aboutModal = document.getElementById('about-modal') as HTMLElement
+export const aboutCloseBtn = document.getElementById('about-close') as HTMLButtonElement
+
 // --- Advanced layout modal ---
 export const advancedBtn = document.getElementById('advanced-btn') as HTMLButtonElement
 export const advancedModal = document.getElementById('advanced-modal') as HTMLElement

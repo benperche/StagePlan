@@ -175,7 +175,8 @@ import {
   showRowLabelsCheck, conductorStandCheck, showConductorCheck, showArcCheck, showStageDirectionsCheck,
   chartScaleInput, bgInput, bgClearBtn, bgStatus, bgFitSelect, showCreditCheck,
   flipCheck, straightRowsInput, straightRowsLabel, arcRangeInput, arcRangeLabel,
-  rowSpacingInput, rowCountInput, advancedBtn, advancedModal, advancedCloseBtn, rowsContainer,
+  rowSpacingInput, rowCountInput, aboutBtn, aboutModal, aboutCloseBtn,
+  advancedBtn, advancedModal, advancedCloseBtn, rowsContainer,
   colorPicker, colorPickerLabel, undoBtn, redoBtn, zoomInBtn, zoomOutBtn, zoomResetBtn,
   resetPositionBtn, resetLayoutBtn, layoutRowList, addRowBtn, saveBtn,
   loadInput, exportPngBtn, printBtn, shareLinkBtn, shareUrlDisplay, presetSelect, applyPresetBtn,
@@ -1942,6 +1943,10 @@ function bindEvents() {
         advancedModal.style.display = 'none'
         return
       }
+      if (aboutModal.style.display !== 'none') {
+        aboutModal.style.display = 'none'
+        return
+      }
       if (isLibraryOpen()) {
         closeLibrary()
         return
@@ -2105,6 +2110,13 @@ function bindEvents() {
   advancedCloseBtn.addEventListener('click', () => { advancedModal.style.display = 'none' })
   advancedModal.addEventListener('click', (e) => {
     if (e.target === advancedModal) advancedModal.style.display = 'none'
+  })
+
+  // --- About modal ---
+  aboutBtn.addEventListener('click', () => { aboutModal.style.display = 'flex' })
+  aboutCloseBtn.addEventListener('click', () => { aboutModal.style.display = 'none' })
+  aboutModal.addEventListener('click', (e) => {
+    if (e.target === aboutModal) aboutModal.style.display = 'none'
   })
 
   // --- Custom orchestra modal ---
