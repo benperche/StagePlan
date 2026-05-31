@@ -192,7 +192,9 @@ export function drawTimpani(ctx: CanvasRenderingContext2D, inst: FixedInstrument
 // thin white separators suggesting the bars/keys.
 // ---------------------------------------------------------------------------
 export function drawMallet(ctx: CanvasRenderingContext2D): GlyphResult {
-  const w = 90, leftH = 36, rightH = 24
+  // Wider (taller) end = the low notes. Default orientation puts the low end
+  // on the RIGHT, matching how a marimba/xylophone faces the player.
+  const w = 90, leftH = 24, rightH = 36
   const hw = w / 2
 
   ctx.fillStyle = '#1a1a1a'
@@ -218,7 +220,7 @@ export function drawMallet(ctx: CanvasRenderingContext2D): GlyphResult {
     ctx.stroke()
   }
 
-  return { hw, hh: leftH / 2, labelInside: false }
+  return { hw, hh: Math.max(leftH, rightH) / 2, labelInside: false }
 }
 
 // ---------------------------------------------------------------------------

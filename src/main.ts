@@ -651,7 +651,9 @@ bindNumber(straightRowsInput,
 bindNumber(rowCountInput,
   () => config.rows.length,
   v => {
-    const target = Math.max(1, Math.min(20, v || 1))
+    // 0 rows is allowed — e.g. a percussion-only chart with just fixed
+    // instruments around the conductor.
+    const target = Math.max(0, Math.min(20, Number.isFinite(v) ? v : 0))
     while (config.rows.length < target) {
       config.rows.push(makeRow(8, String(config.rows.length + 1)))
     }
@@ -730,7 +732,7 @@ function renderRowList() {
         <label>Label
           <input type="text" maxlength="6" value="${row.label}" data-row="${i}" class="row-label-input">
         </label>
-        <button data-row="${i}" class="remove-row-btn" ${config.rows.length <= 1 ? 'disabled' : ''}>✕</button>
+        <button data-row="${i}" class="remove-row-btn" title="Remove row">✕</button>
       </div>
       <div class="row-item-meta">
         <label class="row-straight-toggle"><input type="checkbox" data-row="${i}" class="row-straight-check" ${isStraight ? 'checked' : ''}> Straight row</label>
@@ -1599,7 +1601,7 @@ function bindEvents() {
     const target = e.target as HTMLElement
     if (target.classList.contains('remove-row-btn')) {
       const rowIdx = Number(target.dataset['row'])
-      if (isNaN(rowIdx) || config.rows.length <= 1) return
+      if (isNaN(rowIdx)) return
       history.push(config)
       config.rows.splice(rowIdx, 1)
       config.straightRows = Math.min(config.straightRows, config.rows.length)
