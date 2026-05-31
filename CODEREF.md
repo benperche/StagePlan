@@ -148,7 +148,7 @@ chart below the floating undo/zoom buttons.
 
 1. Clear canvas, apply `config.chartScale`
 2. Draw background image (if any), per `config.backgroundFit`
-3. Draw chart title — sits a fixed gap above the chart top (`contentTopY`, post-chartScale), not pinned to the canvas top, plus an optional manual `titleOffsetX/Y`. Drawn at canvas scale; `titleHit` (raw canvas px) lets the Layout tab drag it (double-click to reset).
+3. Draw chart title — sits a fixed gap above the chart top (`contentTopY`, post-chartScale), not pinned to the canvas top, plus an optional manual `titleOffsetX/Y`. Drawn at canvas scale; `titleHit` (raw canvas px) lets the Layout tab drag it (double-click to reset). `contentTopY` clears the back chair row, the conductor (when flipped), **and any fixed instrument that sits higher and overlaps the centred title horizontally** (e.g. percussion behind a concert band) — instrument sizes come from `glyphDims`, which measures the real glyph code on a throwaway off-screen context so there's no duplicated size table.
 4. Draw notes (bottom-left)
 5. Draw stage directions if enabled (left/right edges, light grey)
 6. Dispatch to `renderSemicircle` or `renderStraight` based on `config.layout`

@@ -7,6 +7,7 @@ import {
   drawDrumkit, drawPiano, drawAmp, drawTimpani, drawMallet, drawHarp,
   drawMicrophone, drawGong, drawSingleChair, drawSingleStand, drawStool, drawGenericRect,
 } from './instrument-glyphs'
+import type { GlyphResult } from './instrument-glyphs'
 
 const CHAIR_SIZE = 30
 const CHAIR_HALF = CHAIR_SIZE / 2
@@ -54,6 +55,8 @@ export class Renderer {
   // Touch/pen devices get bigger Layout-handle hit areas (fat-finger slop).
   private coarsePointer = typeof window !== 'undefined'
     && !!window.matchMedia?.('(pointer: coarse)')?.matches
+  // Throwaway context for measuring glyph sizes without drawing to the canvas.
+  private measureCtx: CanvasRenderingContext2D | null = null
   selectedInstrumentId: string | null = null
   rotateHandleHit: RotateHandleHit | null = null
   // Same-shape hit-test target for the red ✕ delete button drawn next to
@@ -124,11 +127,18 @@ export class Renderer {
     const oy = this.computeOy(h, numRows, config.flipped, rowSpacing) + (config.conductor.offsetY ?? 0)
     const chartScale = config.chartScale ?? 1
 
-    // Title hugs the top of the chart (a fixed gap above the back row, or the
-    // conductor when flipped) rather than floating at the canvas top, plus any
-    // manual drag offset. Drawn at canvas scale so it stays crisp.
-    this.drawTitle(ctx, config.title, w, this.contentTopY(config, oy, rowSpacing, chartScale),
-      config.titleOffsetX ?? 0, config.titleOffsetY ?? 0)
+    // Title hugs the top of the chart (a fixed gap above the back row / the
+    // tallest fixed instrument under it, or the conductor when flipped) rather
+    // than floating at the canvas top, plus any manual drag offset. Drawn at
+    // canvas scale so it stays crisp.
+    const titleOffsetX = config.titleOffsetX ?? 0
+    const titleCx = w / 2 + titleOffsetX
+    ctx.save(); ctx.font = 'bold 18px sans-serif'
+    const titleHalfW = ctx.measureText(config.title).width / 2
+    ctx.restore()
+    this.drawTitle(ctx, config.title, w,
+      this.contentTopY(config, ox, oy, rowSpacing, chartScale, titleCx, titleHalfW),
+      titleOffsetX, config.titleOffsetY ?? 0)
 
     const scaling = chartScale !== 1
     if (scaling) {
@@ -797,6 +807,47 @@ export class Renderer {
   // Fixed instruments (rhythm section, timpani, mallets, etc.)
   // ---------------------------------------------------------------------------
 
+  // Symmetric / orientation-neutral glyphs stay upright in canvas coords when
+  // the chart is flipped — rotating them just looks upside-down for no benefit.
+  private keepUpright(inst: FixedInstrument): boolean {
+    return inst.type === 'drumkit' || inst.type === 'guitar-amp'
+      || inst.type === 'bass-amp' || inst.type === 'stand'
+      || inst.type === 'stool' || inst.type === 'microphone'
+      || inst.type === 'gong'
+  }
+
+  // Draws one instrument glyph in the current (already translated/rotated)
+  // frame and returns its intrinsic half-size. Shared by the real render and
+  // the measure-only pass used for title clearance, so dimensions never drift.
+  private drawGlyph(ctx: CanvasRenderingContext2D, inst: FixedInstrument): GlyphResult {
+    switch (inst.type) {
+      case 'drumkit':    return drawDrumkit(ctx)
+      case 'piano':      return drawPiano(ctx)
+      case 'guitar-amp': return drawAmp(ctx, 32, 34)
+      case 'bass-amp':   return drawAmp(ctx, 40, 42)
+      case 'timpani':    return drawTimpani(ctx, inst)
+      case 'mallet':     return drawMallet(ctx)
+      case 'harp':       return drawHarp(ctx)
+      case 'microphone': return drawMicrophone(ctx, inst)
+      case 'gong':       return drawGong(ctx)
+      case 'chair':      return drawSingleChair(ctx)
+      case 'stand':      return drawSingleStand(ctx)
+      case 'stool':      return drawStool(ctx)
+      case 'square':     return drawGenericRect(ctx, 28, 28)
+      case 'rectangle':  return drawGenericRect(ctx, 42, 26)
+      default:           return { hw: 0, hh: 0, labelInside: false }
+    }
+  }
+
+  // Intrinsic half-width/height of an instrument glyph, measured by drawing it
+  // to a throwaway off-screen context (so the exact glyph code defines the size
+  // — no duplicated dimension tables to keep in sync).
+  private glyphDims(inst: FixedInstrument): { hw: number; hh: number } {
+    if (!this.measureCtx) this.measureCtx = document.createElement('canvas').getContext('2d')
+    const { hw, hh } = this.drawGlyph(this.measureCtx!, inst)
+    return { hw, hh }
+  }
+
   private renderInstruments(ctx: CanvasRenderingContext2D, config: ChartConfig) {
     const instruments = config.instruments ?? []
     if (instruments.length === 0) return
@@ -814,11 +865,7 @@ export class Renderer {
       // Symmetric / orientation-neutral glyphs stay upright in canvas
       // coords when the chart is flipped — rotating them just looks
       // upside-down for no benefit.
-      const keepUpright = inst.type === 'drumkit' || inst.type === 'guitar-amp'
-        || inst.type === 'bass-amp' || inst.type === 'stand'
-        || inst.type === 'stool' || inst.type === 'microphone'
-        || inst.type === 'gong'
-      const worldRotation = inst.rotation + (flipped && !keepUpright ? Math.PI : 0)
+      const worldRotation = inst.rotation + (flipped && !this.keepUpright(inst) ? Math.PI : 0)
       const isSelected = inst.id === this.selectedInstrumentId
 
       // 1) Draw the glyph in the rotated frame (no label!)
@@ -826,23 +873,7 @@ export class Renderer {
       ctx.translate(cx, cy)
       ctx.rotate(worldRotation)
 
-      let hw = 0, hh = 0, labelInside = false
-      switch (inst.type) {
-        case 'drumkit':    ({ hw, hh, labelInside } = drawDrumkit(ctx)); break
-        case 'piano':      ({ hw, hh, labelInside } = drawPiano(ctx)); break
-        case 'guitar-amp': ({ hw, hh, labelInside } = drawAmp(ctx, 32, 34)); break
-        case 'bass-amp':   ({ hw, hh, labelInside } = drawAmp(ctx, 40, 42)); break
-        case 'timpani':    ({ hw, hh, labelInside } = drawTimpani(ctx, inst)); break
-        case 'mallet':     ({ hw, hh, labelInside } = drawMallet(ctx)); break
-        case 'harp':       ({ hw, hh, labelInside } = drawHarp(ctx)); break
-        case 'microphone': ({ hw, hh, labelInside } = drawMicrophone(ctx, inst)); break
-        case 'gong':       ({ hw, hh, labelInside } = drawGong(ctx)); break
-        case 'chair':      ({ hw, hh, labelInside } = drawSingleChair(ctx)); break
-        case 'stand':      ({ hw, hh, labelInside } = drawSingleStand(ctx)); break
-        case 'stool':      ({ hw, hh, labelInside } = drawStool(ctx)); break
-        case 'square':     ({ hw, hh, labelInside } = drawGenericRect(ctx, 28, 28)); break
-        case 'rectangle':  ({ hw, hh, labelInside } = drawGenericRect(ctx, 42, 26)); break
-      }
+      const { hw, hh, labelInside } = this.drawGlyph(ctx, inst)
 
       // Selection highlight (still in rotated frame so it tracks the glyph)
       if (isSelected) {
@@ -1023,14 +1054,36 @@ export class Renderer {
   // ---------------------------------------------------------------------------
 
   // Topmost y of the drawn chart (post-chartScale), in canvas pixels: the back
-  // row's seat numbers when unflipped, the conductor podium when flipped.
-  private contentTopY(config: ChartConfig, oy: number, rowSpacing: number, scale: number): number {
+  // row's seat numbers when unflipped, the conductor podium when flipped — and
+  // any fixed instrument that sits higher (e.g. percussion behind the band), so
+  // the title clears them instead of overlapping. `titleCx`/`titleHalfW` let it
+  // ignore instruments off to the side that the centred title won't touch.
+  private contentTopY(
+    config: ChartConfig, ox: number, oy: number, rowSpacing: number, scale: number,
+    titleCx: number, titleHalfW: number,
+  ): number {
     const radii = this.computeRowRadii(config.rows, rowSpacing)
     const maxR = radii.length ? Math.max(...radii) : BASE_RADIUS
-    const topUnscaled = config.flipped
+    const chairTopUnscaled = config.flipped
       ? oy - (COND_H / 2 + 18)              // conductor podium + a little for its stand
       : oy - maxR - CHAIR_HALF - 16         // back row chair top + the seat number above it
-    return oy + (topUnscaled - oy) * scale  // chartScale grows the chart around (ox, oy)
+    let top = oy + (chairTopUnscaled - oy) * scale  // chartScale grows the chart around (ox, oy)
+
+    const mirror = config.flipped ? -1 : 1
+    for (const inst of config.instruments ?? []) {
+      const dims = this.glyphDims(inst)
+      const rot = inst.rotation + (config.flipped && !this.keepUpright(inst) ? Math.PI : 0)
+      // Rotated bounding-box half extents.
+      const vExt = Math.abs(dims.hw * Math.sin(rot)) + Math.abs(dims.hh * Math.cos(rot))
+      const hExt = Math.abs(dims.hw * Math.cos(rot)) + Math.abs(dims.hh * Math.sin(rot))
+      const cx = ox + mirror * inst.distance * Math.cos(inst.angle) * scale
+      const cyTop = oy + (mirror * inst.distance * Math.sin(inst.angle) - vExt) * scale
+      // Only let it raise the title if it overlaps the title's horizontal span.
+      if (Math.abs(cx - titleCx) - hExt * scale < titleHalfW + 8) {
+        top = Math.min(top, cyTop)
+      }
+    }
+    return top
   }
 
   private drawTitle(
