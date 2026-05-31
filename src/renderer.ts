@@ -42,6 +42,10 @@ export class Renderer {
   conductorHit: ConductorHit | null = null
   titleHit: ConductorHit | null = null
   conductorOrigin: ConductorOrigin = { ox: 0, oy: 0, yDir: -1, flipped: false }
+  // The uniform auto-fit scale applied to the whole canvas on the last render
+  // (1 when the chart fits at natural size; < 1 on small canvases / phones).
+  // main.ts maps pointer coords through this so hit-testing lines up.
+  viewScale = 1
   selectedInstrumentId: string | null = null
   rotateHandleHit: RotateHandleHit | null = null
   // Same-shape hit-test target for the red ✕ delete button drawn next to
@@ -63,7 +67,12 @@ export class Renderer {
   layoutRows: RowGeometry[] = []
 
   render(canvas: HTMLCanvasElement, config: ChartConfig, opts: RenderOptions = {}): void {
-    const scale = opts.scale ?? 1
+    // Auto-fit: scale the whole chart down so it fits the canvas at its
+    // natural row spacing, instead of cramming rows together (which made
+    // music stands overlap the chairs behind them) or running off the edge
+    // on a narrow canvas. 1 on a roomy desktop canvas; < 1 on a phone.
+    const scale = (opts.scale ?? 1) * this.computeFitScale(canvas.width, canvas.height, config)
+    this.viewScale = scale
     this.layoutMode = opts.layoutMode ?? false
     const ctx = canvas.getContext('2d')!
     ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -239,13 +248,67 @@ export class Renderer {
   // would overflow at that spacing, shrink to whatever fits. Floored at 40
   // so extremely tall charts still render legibly. The user is in charge
   // when their value is feasible; we only step in when it isn't.
-  private effectiveRowSpacing(h: number, numRows: number, userRowSpacing: number): number {
-    if (numRows <= 1) return userRowSpacing
-    const titlePad = 50
-    const farPad = 30
-    const available = h - titlePad - farPad - CONDUCTOR_EXTENT - BASE_RADIUS - CHAIR_HALF
-    const fitting = available / (numRows - 1)
-    return Math.max(40, Math.min(userRowSpacing, fitting))
+  // Worst-case extent of the drawn chart from the conductor, in chart px at
+  // chartScale = 1: how far it reaches sideways (halfW), behind the conductor
+  // toward the title (back), and in front of it (front). Fixed instruments can
+  // sit anywhere (e.g. amps far out), so they widen these too.
+  private contentExtents(config: ChartConfig): { halfW: number; back: number; front: number } {
+    const rowSpacing = config.rowSpacing ?? ROW_SPACING_DEFAULT
+    const radii = this.computeRowRadii(config.rows, rowSpacing)
+    const outer = radii.length ? radii[radii.length - 1] : BASE_RADIUS
+    const LABEL_PAD = 24
+
+    let halfW: number
+    if (config.layout === 'straight') {
+      let widest = 0
+      for (const r of config.rows) {
+        const spacing = r.straightSpacing ?? STRAIGHT_CHAIR_SPACING
+        const w = (Math.max(0, r.chairs.length - 1) * spacing) / 2 + Math.abs(r.straightOffset ?? 0)
+        if (w > widest) widest = w
+      }
+      halfW = widest + CHAIR_HALF + LABEL_PAD
+    } else {
+      // Arc rows reach their widest (≈ the outer radius) near the horizontal.
+      halfW = outer + CHAIR_HALF + LABEL_PAD
+    }
+
+    let back = outer + CHAIR_HALF   // chairs sit behind the conductor
+    let front = CONDUCTOR_EXTENT    // conductor sits in front
+
+    for (const inst of config.instruments ?? []) {
+      const dx = Math.abs(inst.distance * Math.cos(inst.angle)) + 46
+      const dy = inst.distance * Math.sin(inst.angle)
+      halfW = Math.max(halfW, dx)
+      // Flip mirrors the chart, so be safe and let an instrument extend the
+      // estimate on whichever side it lands.
+      back = Math.max(back, Math.abs(dy) + 46)
+      front = Math.max(front, Math.abs(dy) + 46)
+    }
+    return { halfW, back, front }
+  }
+
+  // Uniform scale that makes the whole chart fit the canvas at natural spacing.
+  private computeFitScale(canvasW: number, canvasH: number, config: ChartConfig): number {
+    if (config.rows.length === 0 && (config.instruments?.length ?? 0) === 0) return 1
+    const chartScale = config.chartScale ?? 1
+    const { halfW, back, front } = this.contentExtents(config)
+    const TITLE_PAD = 44   // title sits above the back row (drawn at canvas scale)
+    const FAR_PAD = 22
+    const SIDE_PAD = 14
+    const naturalWidth = 2 * halfW * chartScale + 2 * SIDE_PAD
+    const naturalHeight = (back + front) * chartScale + TITLE_PAD + FAR_PAD
+    const fitW = canvasW / naturalWidth
+    const fitH = canvasH / naturalHeight
+    return Math.max(0.2, Math.min(1, fitW, fitH))
+  }
+
+  private effectiveRowSpacing(_h: number, _numRows: number, userRowSpacing: number): number {
+    // The row spacing is always the user's preferred value. Fitting the chart
+    // to the canvas is handled uniformly by computeFitScale (which scales the
+    // whole chart down), rather than by squeezing the rows together — squeezing
+    // pulled music stands up onto the chairs of the row behind. The signature
+    // keeps `h`/`numRows` so callers don't all have to change.
+    return userRowSpacing
   }
 
   // Cumulative per-row radius from the conductor. Base step is the (already

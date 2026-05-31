@@ -1099,6 +1099,44 @@ button.danger:hover { background: #fff0f0; }
   margin: 8mm;
 }
 
+/* ---- Phones / very small screens ----
+   The side-by-side layout collapses well below ~640px (the 310px sidebar
+   leaves almost no room for the canvas). Stack instead: a chart preview
+   pinned to the top, with the tabbed controls scrolling underneath it. */
+@media (max-width: 640px) {
+  #app { flex-direction: column; }
+
+  /* Chart preview sits on top (DOM order is sidebar-then-canvas). */
+  #canvas-area {
+    order: -1;
+    flex: none;
+    height: 42vh;
+    min-height: 200px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  #sidebar {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
+    min-height: 0;        /* let it shrink inside the column so it scrolls */
+    padding-top: 0;       /* moved onto .sidebar-top so the tab bar can pin */
+  }
+  .sidebar-top { padding-top: 14px; }
+
+  /* Keep the tabs reachable while a long panel scrolls underneath. */
+  .tab-bar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--sidebar-bg);
+    padding-top: 8px;
+  }
+
+  /* Slightly tighter header so the chart preview gets more height. */
+  #sidebar h1 { font-size: 16px; }
+}
+
 @media print {
   html, body { margin: 0; padding: 0; background: #fff; height: 100%; }
   #sidebar,

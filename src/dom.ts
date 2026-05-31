@@ -31,10 +31,7 @@ export const aboutBtn = document.getElementById('about-btn') as HTMLButtonElemen
 export const aboutModal = document.getElementById('about-modal') as HTMLElement
 export const aboutCloseBtn = document.getElementById('about-close') as HTMLButtonElement
 
-// --- Advanced layout modal ---
-export const advancedBtn = document.getElementById('advanced-btn') as HTMLButtonElement
-export const advancedModal = document.getElementById('advanced-modal') as HTMLElement
-export const advancedCloseBtn = document.getElementById('advanced-close') as HTMLButtonElement
+// --- Chart-dimension controls (now inline on the Setup tab) ---
 export const showArcCheck = document.getElementById('show-arc') as HTMLInputElement
 export const showStageDirectionsCheck = document.getElementById('show-stage-directions') as HTMLInputElement
 export const chartScaleInput = document.getElementById('chart-scale') as HTMLInputElement

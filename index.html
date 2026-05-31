@@ -80,9 +80,12 @@
           </div>
           <div class="checkbox-row">
             <label><input type="checkbox" id="conductor-stand" checked /> Conductor stand</label>
+            <label><input type="checkbox" id="show-stage-directions" /> Stage directions</label>
+          </div>
+          <div class="checkbox-row">
+            <label><input type="checkbox" id="show-credit" checked /> Show "Created with StagePlan" credit</label>
           </div>
           <p class="hint">Drag the conductor on the chart to move the whole chart (here or in the Layout tab). Rename it by clicking it in the Edit tab.</p>
-          <button id="advanced-btn" class="secondary">⚙ Advanced layout…</button>
         </section>
 
         <section class="panel">
@@ -110,6 +113,9 @@
               <option value="cover">Cover (crop edges)</option>
               <option value="stretch">Stretch (fill)</option>
             </select>
+          </label>
+          <label id="chart-scale-label">Chart scale (%)
+            <input type="number" id="chart-scale" min="50" max="200" step="5" value="100" />
           </label>
           <p class="hint" id="bg-status">No background.</p>
         </section>
@@ -369,25 +375,6 @@
       <a class="kofi-btn" href="https://ko-fi.com/A0A310XUPN" target="_blank" rel="noopener">☕ Buy me a coffee</a>
       <p class="about-line">Check out my other music projects at<br>
         <a href="https://benperche.com/projects" target="_blank" rel="noopener">benperche.com/projects</a></p>
-    </div>
-  </div>
-
-  <div id="advanced-modal" class="modal-overlay" style="display:none">
-    <div class="modal-card">
-      <h2>Advanced Layout</h2>
-      <p class="hint">Fine controls for chart dimensions. Changes apply live.</p>
-      <label id="chart-scale-label">Chart scale (%)
-        <input type="number" id="chart-scale" min="50" max="200" step="5" value="100" />
-      </label>
-      <div class="checkbox-row">
-        <label><input type="checkbox" id="show-stage-directions" /> Stage directions</label>
-      </div>
-      <div class="checkbox-row">
-        <label><input type="checkbox" id="show-credit" checked /> Show "Created with StagePlan" credit</label>
-      </div>
-      <div class="row-controls modal-actions">
-        <button id="advanced-close" class="primary">Done</button>
-      </div>
     </div>
   </div>
 

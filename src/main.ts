@@ -176,7 +176,7 @@ import {
   chartScaleInput, bgInput, bgClearBtn, bgStatus, bgFitSelect, showCreditCheck,
   flipCheck, straightRowsInput, straightRowsLabel, arcRangeInput, arcRangeLabel,
   rowSpacingInput, rowCountInput, aboutBtn, aboutModal, aboutCloseBtn,
-  advancedBtn, advancedModal, advancedCloseBtn, rowsContainer,
+  rowsContainer,
   colorPicker, colorPickerLabel, undoBtn, redoBtn, zoomInBtn, zoomOutBtn, zoomResetBtn,
   resetPositionBtn, resetLayoutBtn, layoutRowList, addRowBtn, saveBtn,
   loadInput, exportPngBtn, printBtn, shareLinkBtn, shareUrlDisplay, presetSelect, applyPresetBtn,
@@ -435,8 +435,13 @@ renderer.onBackgroundLoaded = () => renderChart()
 
 function resizeCanvas() {
   const container = canvas.parentElement!
-  canvas.width = container.clientWidth
-  canvas.height = Math.max(500, container.clientHeight)
+  // Backing store must match the display box 1:1, otherwise the chart is
+  // squished. (An earlier `Math.max(500, …)` floor distorted the chart on
+  // short windows and on phones, where the canvas area is well under 500px.)
+  // The renderer already adapts row spacing to the available height, so a
+  // shorter canvas just draws a tighter — but undistorted — chart.
+  canvas.width = Math.max(1, container.clientWidth)
+  canvas.height = Math.max(1, container.clientHeight)
 }
 
 // --- Library tab rendering ---
@@ -804,9 +809,12 @@ function pointerCanvasCoords(e: MouseEvent): { x: number; y: number } {
   // transform, so dividing by rect.width/height back into backing pixels
   // works at any zoom level without referencing viewZoom directly.
   const rect = canvas.getBoundingClientRect()
+  // Divide by the renderer's auto-fit scale so we land in the chart's logical
+  // coordinate space (where all hit targets are stored), not raw backing px.
+  const s = renderer.viewScale || 1
   return {
-    x: (e.clientX - rect.left) * (canvas.width / rect.width),
-    y: (e.clientY - rect.top) * (canvas.height / rect.height),
+    x: (e.clientX - rect.left) * (canvas.width / rect.width) / s,
+    y: (e.clientY - rect.top) * (canvas.height / rect.height) / s,
   }
 }
 
@@ -1032,7 +1040,10 @@ function chairScreenPos(rowIndex: number, chairIndex: number): { x: number; y: n
   const { ox, oy } = renderer.conductorOrigin
   const canvasX = (c.x - ox) * scale + ox
   const canvasY = (c.y - oy) * scale + oy
-  return { x: viewPanX + canvasX * viewZoom, y: viewPanY + canvasY * viewZoom }
+  // canvasX/Y are in logical chart space; multiply by the auto-fit scale to
+  // get backing px before the CSS view zoom/pan.
+  const fit = renderer.viewScale || 1
+  return { x: viewPanX + canvasX * fit * viewZoom, y: viewPanY + canvasY * fit * viewZoom }
 }
 
 function openChairLabelEditor(rowIndex: number, chairIndex: number) {
@@ -1961,10 +1972,6 @@ function bindEvents() {
         customOrchestraModal.style.display = 'none'
         return
       }
-      if (advancedModal.style.display !== 'none') {
-        advancedModal.style.display = 'none'
-        return
-      }
       if (aboutModal.style.display !== 'none') {
         aboutModal.style.display = 'none'
         return
@@ -2132,14 +2139,6 @@ function bindEvents() {
   applyPresetBtn.addEventListener('click', () => {
     const preset = PRESETS.find(p => p.id === presetSelect.value)
     if (preset) applyPreset(preset)
-  })
-
-  // --- Advanced layout modal ---
-  // Inputs inside live-update via the existing change listener loop.
-  advancedBtn.addEventListener('click', () => { advancedModal.style.display = 'flex' })
-  advancedCloseBtn.addEventListener('click', () => { advancedModal.style.display = 'none' })
-  advancedModal.addEventListener('click', (e) => {
-    if (e.target === advancedModal) advancedModal.style.display = 'none'
   })
 
   // --- About modal ---

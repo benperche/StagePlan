@@ -8,6 +8,13 @@ Internal notes for working on the codebase. Not user-facing.
 - **HTML5 Canvas** for all chart rendering. No SVG, no drawing library.
 - Hosted on **GitHub Pages**. Build: `npm run build`; preview: `npm run dev`.
 - Single-page: `index.html` + `src/*.ts` + `src/style.css`.
+- **Layout**: desktop is a flex row — fixed-width `#sidebar` + flexible
+  `#canvas-area`. Below **640px** (`@media` in `style.css`) it stacks into a
+  column: the chart preview pins to the top (`order: -1`, ~42vh), the tabbed
+  controls scroll underneath, and `.tab-bar` becomes `position: sticky` so the
+  tabs stay reachable. The canvas backing always matches its display box 1:1
+  (`resizeCanvas`) — never a fixed floor — so the chart is never squished; the
+  auto-fit scale shrinks it to fit instead.
 
 ## File map (what lives where)
 
@@ -27,14 +34,19 @@ Internal notes for working on the codebase. Not user-facing.
 
 ## Sidebar tabs
 
-The sidebar is organised into three tabs (single-button switch, no
+The sidebar is organised into four tabs (single-button switch, no
 nested state):
 
 | Tab | Contains |
 |---|---|
-| **Setup** | Chart, Preset Arrangements, Stage Background, Notes |
+| **Setup** | Chart (title, layout, rows, flip/show-conductor/conductor-stand, **stage directions**, **show credit**), Preset Arrangements, Stage Background (incl. **Chart scale %**), Notes |
 | **Edit** | Rows, Edit chairs (Hide / Stand / Stool / Colour / Label / Instruments, each with its own contextual sub-panel), Numbers & labels (display toggles), Large / Fixed Instruments |
+| **Layout** | Per-row distance/span/nudge fine-tuning on the chart, default arc-range handles, Defaults (row spacing, arc range), reset buttons |
 | **Export** | Save JSON, Load JSON, Export PNG, Print/PDF, Copy share link |
+
+The chart-scale / stage-directions / credit controls used to live in a
+separate "Advanced Layout" modal — that's gone; they're plain Setup controls
+now. (There is no Advanced modal anymore.)
 
 Each panel is wrapped in a `<div class="tab-content" data-tab-content="…">`
 container. Clicking a tab toggles `active` on its button and on the
@@ -74,6 +86,28 @@ always render the full chart at full resolution (print CSS forces
   reflects it, so `pointerCanvasCoords` divides by `rect.width/height` to get
   backing pixels and **all hit-testing keeps working at any zoom** with no
   per-feature changes.
+
+## Auto-fit scale (`renderer.viewScale`)
+
+The chart is drawn at fixed pixel sizes (a chair is 30px, `BASE_RADIUS` 130,
+etc.). To make it fit any canvas — a wide desktop, a short window, a phone —
+`render()` computes a single uniform `computeFitScale()` and applies it as the
+outermost `ctx.scale()`. It's `1` when the chart fits at natural size and `< 1`
+when it has to shrink. This is **not** the same as `config.chartScale` (a user
+setting that scales around the conductor); auto-fit wraps everything (title,
+notes, chart) so the whole drawing fits.
+
+- It replaced the old `effectiveRowSpacing` height-squeeze, which pulled rows
+  together to fit — that made music stands overlap the chairs of the row
+  behind. Scaling the whole chart down keeps spacing proportional. (The
+  function still exists but is now a pass-through returning the user's spacing.)
+- `computeFitScale` estimates the chart's natural extent (`contentExtents`:
+  arc/straight chair span + far-out fixed instruments) vs the canvas, erring
+  toward a *smaller* chart so nothing clips.
+- Hit targets are stored in **logical** coords (canvas px ÷ viewScale), so
+  `pointerCanvasCoords` divides the incoming pointer by `renderer.viewScale`,
+  and `chairScreenPos` multiplies by it when placing the inline label editor.
+  Everything else (angle/distance math, `canvasToChart`) stays in logical space.
 
 ## Architectural rules of thumb
 
@@ -116,8 +150,8 @@ Hit tests are populated as a side effect of (6) and (7). `main.ts` calls `render
 
 ### Row spacing
 
-- `config.rowSpacing` (default 70 px). User-configurable in the Advanced modal.
-- `effectiveRowSpacing` shrinks it if the chart would overflow the canvas, floored at 40 so it stays legible.
+- `config.rowSpacing` (default 70 px). User-configurable in the **Layout** tab ("Defaults → Row spacing").
+- Fitting the chart to the canvas is handled by the auto-fit scale (see above), **not** by squeezing row spacing — `effectiveRowSpacing` is now a pass-through that always returns the user's value.
 - Sized so the seat number behind one row doesn't collide with the shared stand drawn in front of the row behind (stand reaches ~35 px forward, number ~28 px behind — 65 px floor; 70 gives a small gap).
 
 ## Chair tools & labelling
