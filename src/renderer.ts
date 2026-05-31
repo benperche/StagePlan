@@ -634,6 +634,36 @@ export class Renderer {
         this.layoutHandles.push({ rowIndex: i, kind: 'span-end', cx: endPt.x, cy: endPt.y, radius: 11 })
       }
     })
+
+    // Chart-wide DEFAULT arc-range handles: two radial lines from the conductor
+    // at the default arc's ends. Dragging them sets config.arcRange, which moves
+    // every row that hasn't had its own arc edited. (Semicircle only.)
+    if (config.layout === 'semicircle') {
+      const range = config.arcRange ?? Math.PI
+      const maxR = config.rows.reduce((m, _r, i) => Math.max(m, radii[i] ?? 0), BASE_RADIUS)
+      const R = maxR + 46
+      const ends: Array<[number, 'arc-range-start' | 'arc-range-end']> = [
+        [Math.PI / 2 + range / 2, 'arc-range-start'],
+        [Math.PI / 2 - range / 2, 'arc-range-end'],
+      ]
+      for (const [a, kind] of ends) {
+        const ex = ox + xDir * R * Math.cos(a)
+        const ey = oy + yDir * R * Math.sin(a)
+        const sx = ox + xDir * 30 * Math.cos(a)   // start just outside the podium
+        const sy = oy + yDir * 30 * Math.sin(a)
+        ctx.save()
+        ctx.strokeStyle = '#7c3aed'
+        ctx.lineWidth = 1.5
+        ctx.setLineDash([5, 4])
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke()
+        ctx.setLineDash([])
+        ctx.beginPath(); ctx.arc(ex, ey, 6, 0, Math.PI * 2)
+        ctx.fillStyle = '#7c3aed'; ctx.fill()
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke()
+        ctx.restore()
+        this.layoutHandles.push({ rowIndex: -1, kind, cx: ex, cy: ey, radius: 12 })
+      }
+    }
   }
 
   private drawLayoutDiamond(ctx: CanvasRenderingContext2D, cx: number, cy: number) {

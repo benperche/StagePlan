@@ -74,6 +74,9 @@ let titleDrag: {
   preDragConfig: ChartConfig; moved: boolean
 } | null = null
 
+// Active drag of a chart-wide default arc-range handle (sets config.arcRange).
+let arcRangeDrag: { startX: number; startY: number; preDragConfig: ChartConfig; moved: boolean } | null = null
+
 // Active Layout-tab per-chair nudge. naturalAngle (arc) / base (straight) are
 // the chair's position with its current offset backed out, so the new offset
 // is just (natural − target).
@@ -1159,6 +1162,10 @@ canvas.addEventListener('mousedown', (e) => {
     }
     const handle = renderer.layoutHandleHitTest(x, y)
     if (handle) {
+      if (handle.kind === 'arc-range-start' || handle.kind === 'arc-range-end') {
+        arcRangeDrag = { startX: x, startY: y, preDragConfig: cloneConfig(config), moved: false }
+        return
+      }
       const geom0 = renderer.layoutRows[handle.rowIndex]
       if (geom0) {
         layoutDrag = {
@@ -1227,6 +1234,24 @@ window.addEventListener('mousemove', (e) => {
     }
     config.titleOffsetX = titleDrag.x0 + dx
     config.titleOffsetY = titleDrag.y0 + dy
+    renderChart()
+    return
+  }
+  // Default arc-range drag — sets config.arcRange (moves all non-edited rows).
+  if (arcRangeDrag) {
+    const cv = pointerCanvasCoords(e)
+    const { x, y } = canvasToChart(cv.x, cv.y)
+    if (!arcRangeDrag.moved) {
+      if (Math.hypot(x - arcRangeDrag.startX, y - arcRangeDrag.startY) < DRAG_THRESHOLD) return
+      history.push(arcRangeDrag.preDragConfig)
+      arcRangeDrag.moved = true
+    }
+    const { ox, oy, yDir } = renderer.conductorOrigin
+    const xDir = -yDir
+    const a = Math.atan2((y - oy) / yDir, (x - ox) / xDir)
+    const range = Math.max(Math.PI / 3, Math.min(Math.PI, 2 * Math.abs(a - Math.PI / 2)))
+    config.arcRange = range
+    arcRangeInput.value = String(Math.round((range * 180) / Math.PI))
     renderChart()
     return
   }
@@ -1337,7 +1362,7 @@ window.addEventListener('mousemove', (e) => {
 
 window.addEventListener('mouseup', () => {
   if (panState?.moved) suppressClickAfterPan = true
-  const finishedLayoutDrag = layoutDrag?.moved || chairDrag?.moved || conductorDragState?.moved
+  const finishedLayoutDrag = layoutDrag?.moved || chairDrag?.moved || conductorDragState?.moved || arcRangeDrag?.moved
   dragState = null
   rotateState = null
   conductorDragState = null
@@ -1345,6 +1370,7 @@ window.addEventListener('mouseup', () => {
   layoutDrag = null
   chairDrag = null
   titleDrag = null
+  arcRangeDrag = null
   canvas.classList.remove('panning')
   // The per-row boxes are skipped mid-drag; refresh them now the drag is done.
   if (finishedLayoutDrag && layoutMode) updateLayoutRowList()
@@ -1368,6 +1394,16 @@ canvas.addEventListener('dblclick', (e) => {
   const { x, y } = canvasToChart(cv.x, cv.y)
   const handle = renderer.layoutHandleHitTest(x, y)
   if (handle) {
+    // Default arc-range handles → reset the default back to a full 180°.
+    if (handle.kind === 'arc-range-start' || handle.kind === 'arc-range-end') {
+      if ((config.arcRange ?? Math.PI) !== Math.PI) {
+        history.push(config)
+        config.arcRange = Math.PI
+        arcRangeInput.value = '180'
+        renderChart()
+      }
+      return
+    }
     const row = config.rows[handle.rowIndex]
     history.push(config)
     if (handle.kind === 'distance') {

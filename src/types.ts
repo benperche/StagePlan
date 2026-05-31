@@ -177,8 +177,9 @@ export interface RotateHandleHit {
 // Layout-tab drag handles (drawn only in layout mode). A row gets a radial
 // "distance" handle at its apex and two tangential "span" handles at its ends.
 export interface LayoutHandleHit {
+  // -1 for the chart-wide default arc-range handles (kind 'arc-range-*').
   rowIndex: number
-  kind: 'distance' | 'span-start' | 'span-end'
+  kind: 'distance' | 'span-start' | 'span-end' | 'arc-range-start' | 'arc-range-end'
   cx: number
   cy: number
   radius: number
