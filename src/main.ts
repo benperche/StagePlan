@@ -224,11 +224,11 @@ function migrateConfig(c: ChartConfig) {
 
 /**
  * Swap the entire `config` for a new one (undo, redo, load JSON, hash-load)
- * and run the bookkeeping every replacement needs: schema migration,
- * collapse any open row label editors / instrument selection that no
- * longer refers to anything valid, push the new state to the sidebar, and
- * re-render the canvas. Use this any time the whole config is replaced
- * wholesale; for in-place mutations just call renderChart() directly.
+ * and run the bookkeeping every replacement needs: schema migration, clear
+ * the instrument selection that no longer refers to anything valid, push the
+ * new state to the sidebar, and re-render the canvas. Use this any time the
+ * whole config is replaced wholesale; for in-place mutations just call
+ * renderChart() directly.
  */
 function setConfig(newConfig: ChartConfig) {
   config = newConfig
@@ -244,6 +244,7 @@ function setConfig(newConfig: ChartConfig) {
 // to decide between "update in place" and "create new entry".
 let currentChartId: string | null = null
 let librarySearchText = ''
+const LIBRARY_ERROR = "Couldn't reach the chart library — your browser may be blocking local storage. Use Save JSON in the Export tab to keep this chart."
 
 function updateLibraryCurrentTitle() {
   libraryCurrentTitle.textContent = currentChartId
@@ -279,15 +280,21 @@ function renderChart() {
   redoBtn.disabled = !history.canRedo()
   renderTally()
   // Keep the Layout tab's per-row boxes in sync with the geometry the render
-  // just produced (renderer.layoutRows). Mid-drag we only sync the numbers in
-  // place (no DOM rebuild) so the boxes track the drag live without churn; a
-  // per-chair nudge doesn't change row geometry, so the boxes are left as-is.
+  // just produced (renderer.layoutRows). A row-handle / default-arc drag is the
+  // only kind that changes those numbers, so it gets a lightweight in-place
+  // value sync; other drags leave the boxes untouched; everything else rebuilds.
   if (layoutMode) {
-    if (layoutDrag && layoutDrag.moved) syncLayoutRowValues()
-    else if (!((chairDrag && chairDrag.moved) || (conductorDragState && conductorDragState.moved)
-      || (dragState && dragState.moved) || (rotateState && rotateState.moved)
-      || (titleDrag && titleDrag.moved))) updateLayoutRowList()
+    if (layoutDrag?.moved || arcRangeDrag?.moved) syncLayoutRowValues()
+    else if (!quietDragMoved()) updateLayoutRowList()
   }
+}
+
+// True while a canvas drag is in progress that doesn't affect the Layout
+// row boxes (instrument move/rotate, conductor move, per-chair nudge, title),
+// so we can skip rebuilding them mid-drag.
+function quietDragMoved(): boolean {
+  return !!(chairDrag?.moved || conductorDragState?.moved || dragState?.moved
+    || rotateState?.moved || titleDrag?.moved)
 }
 
 function rowHasLayoutTweak(r: typeof config.rows[number]): boolean {
@@ -451,7 +458,14 @@ function escapeText(s: string): string {
  * `[data-lib-action]` so the click handler can dispatch by name.
  */
 async function renderLibrary() {
-  const [charts, folders] = await Promise.all([library.listCharts(), library.listFolders()])
+  let charts, folders
+  try {
+    [charts, folders] = await Promise.all([library.listCharts(), library.listFolders()])
+  } catch {
+    // IndexedDB can be unavailable (private browsing, locked-down browser).
+    libraryList.innerHTML = '<p class="lib-empty">⚠ Your browser blocked local storage, so the chart library isn\'t available here. You can still use <strong>Save JSON</strong> / <strong>Load JSON</strong> in the Export tab.</p>'
+    return
+  }
   updateLibraryCurrentTitle()
 
   // Filter by search text
@@ -1062,10 +1076,16 @@ function advanceChairLabel() {
 }
 
 // --- Canvas interaction ---
+//
+// Uses pointer events (not mouse events) so everything works with a mouse,
+// touch, or pen. Touch gets implicit pointer capture, and `touch-action: none`
+// on the canvas stops a drag from scrolling the page. Secondary fingers
+// (non-primary pointers) are ignored so multi-touch doesn't fight a drag.
 
-const DRAG_THRESHOLD = 4   // pixels before a mousedown is treated as a drag
+const DRAG_THRESHOLD = 4   // pixels before a press is treated as a drag
 
-canvas.addEventListener('mousedown', (e) => {
+canvas.addEventListener('pointerdown', (e) => {
+  if (!e.isPrimary) return
   const cv = pointerCanvasCoords(e)
   const { x, y } = canvasToChart(cv.x, cv.y)
 
@@ -1222,7 +1242,8 @@ canvas.addEventListener('mousedown', (e) => {
   }
 })
 
-window.addEventListener('mousemove', (e) => {
+window.addEventListener('pointermove', (e) => {
+  if (!e.isPrimary) return
   // Layout-tab title drag (raw canvas px → config.titleOffset).
   if (titleDrag) {
     const cv = pointerCanvasCoords(e)
@@ -1361,7 +1382,8 @@ window.addEventListener('mousemove', (e) => {
   renderChart()
 })
 
-window.addEventListener('mouseup', () => {
+window.addEventListener('pointerup', (e) => {
+  if (!e.isPrimary) return
   if (panState?.moved) suppressClickAfterPan = true
   const finishedLayoutDrag = layoutDrag?.moved || chairDrag?.moved || conductorDragState?.moved || arcRangeDrag?.moved
   dragState = null
@@ -2042,21 +2064,25 @@ function bindEvents() {
     // gets a quick prompt so they can adjust.
     let title = config.title || 'Untitled'
     let folder = ''
-    if (currentChartId) {
-      const existing = await library.loadChart(currentChartId)
-      if (existing) {
-        title = config.title || existing.title
-        folder = existing.folder
+    try {
+      if (currentChartId) {
+        const existing = await library.loadChart(currentChartId)
+        if (existing) {
+          title = config.title || existing.title
+          folder = existing.folder
+        }
+      } else {
+        const next = window.prompt('Save chart as:', title)
+        if (next === null) return
+        title = next.trim() || 'Untitled'
       }
-    } else {
-      const next = window.prompt('Save chart as:', title)
-      if (next === null) return
-      title = next.trim() || 'Untitled'
+      const id = await library.saveChart(currentChartId, title, folder, config)
+      currentChartId = id
+      updateLibraryCurrentTitle()
+      await renderLibrary()
+    } catch {
+      alert(LIBRARY_ERROR)
     }
-    const id = await library.saveChart(currentChartId, title, folder, config)
-    currentChartId = id
-    updateLibraryCurrentTitle()
-    await renderLibrary()
   })
 
   libraryNewChartBtn.addEventListener('click', () => {
@@ -2070,8 +2096,12 @@ function bindEvents() {
   libraryNewFolderBtn.addEventListener('click', async () => {
     const name = window.prompt('Folder name:')
     if (name === null || !name.trim()) return
-    await library.createFolder(name.trim())
-    await renderLibrary()
+    try {
+      await library.createFolder(name.trim())
+      await renderLibrary()
+    } catch {
+      alert(LIBRARY_ERROR)
+    }
   })
 
   librarySearch.addEventListener('input', () => {
@@ -2086,7 +2116,7 @@ function bindEvents() {
     const action = btn.dataset['libAction'] ?? ''
     const id = btn.dataset['id'] ?? null
     const folder = btn.dataset['folder'] ?? null
-    handleLibraryAction(action, id, folder)
+    handleLibraryAction(action, id, folder).catch(() => alert(LIBRARY_ERROR))
   })
 
   shareLinkBtn.addEventListener('click', () => {

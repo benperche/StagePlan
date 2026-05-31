@@ -276,7 +276,7 @@ through have since been done.
   into `dom.ts` (refs), `events.ts` (handlers), `row-ui.ts` (row list).~~
   — partially done; `dom.ts` extracted. `events.ts` and `row-ui.ts`
   splits deferred (the row UI is tightly coupled to the shared `config`
-  / `history` / `expandedRows` state and would need a heavy props pass).
+  / `history` state and would need a heavy props pass).
 - ~~`applyPreset` is ~270 lines doing notation/customRows/sections dispatch
   + chair construction + instrument placement. The "build rows from
   preset" part probably belongs in `presets.ts`.~~ — done; the pure build
