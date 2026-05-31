@@ -239,6 +239,7 @@ is then a thin wrapper that calls `buildPreset`, pushes the result into
 
 ## Common gotchas
 
+- **Canvas editing uses POINTER events** (`pointerdown/move/up` on canvas+window) so touch/pen work, not mouse events. Non-primary pointers are dropped (`if (!e.isPrimary) return`) and the canvas has `touch-action: none`. The hover-cursor listener is the one exception — still `mousemove`, since hover is mouse-only. `click`/`dblclick` stay as-is (they fire for taps too). Dispatching a synthetic `MouseEvent('mousedown')` will NOT trigger the handlers — use `PointerEvent`.
 - **`ChartConfig.straightRows`** counts straight rows from the *back*, not the front.
 - **Renderer caches `backgroundImage`** by src — if you swap the image data URL but keep the same string, it won't re-decode.
 - **Hit targets are stored on the Renderer instance** and reset every render. Don't call hitTest before the first render.
