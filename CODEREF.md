@@ -104,10 +104,34 @@ notes, chart) so the whole drawing fits.
 - `computeFitScale` estimates the chart's natural extent (`contentExtents`:
   arc/straight chair span + far-out fixed instruments) vs the canvas, erring
   toward a *smaller* chart so nothing clips.
-- Hit targets are stored in **logical** coords (canvas px ÷ viewScale), so
-  `pointerCanvasCoords` divides the incoming pointer by `renderer.viewScale`,
-  and `chairScreenPos` multiplies by it when placing the inline label editor.
-  Everything else (angle/distance math, `canvasToChart`) stays in logical space.
+- Hit targets are stored in **logical (CSS-space)** coords, so
+  `pointerCanvasCoords` divides the incoming pointer by `viewScale * renderDpr`,
+  and `chairScreenPos` multiplies by `viewScale` (CSS, no dpr) when placing the
+  inline label editor. Everything else (angle/distance math, `canvasToChart`)
+  stays in logical space.
+
+### HiDPI / dpr
+
+The canvas **backing store is `cssPx * devicePixelRatio`** (capped at 3×; see
+`resizeCanvas`, which measures the canvas's *own* box so the mobile top-padding
+strip is respected). So chairs/labels stay crisp on retina + phones, and PNG
+export is dpr-sharp too. The renderer separates the two scales: `fit` (CSS) for
+layout/`viewScale`, and `fit * dpr` for the actual `ctx.scale()`. `renderDpr`
+(module global in `main.ts`) is the single source of truth — set in
+`resizeCanvas`, passed to `render({ dpr })`, and re-used by `pointerCanvasCoords`.
+
+### Touch hit areas
+
+`layoutHandleHitTest` enlarges its target to a constant ~22px **on-screen**
+radius when `(pointer: coarse)` matches (÷ viewScale so it doesn't shrink with
+the auto-fit). The drawn handles stay the same size; only the catch area grows.
+
+### `#canvas-area` offset
+
+The inline label editor is positioned relative to `#canvas-area`, so
+`chairScreenPos` adds `canvas.offsetLeft/offsetTop` — 0 on desktop, but ~44px
+top on mobile where `#canvas-area` has a `padding-top` strip that drops the
+chart below the floating undo/zoom buttons.
 
 ## Architectural rules of thumb
 

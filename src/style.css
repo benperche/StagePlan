@@ -1106,12 +1106,15 @@ button.danger:hover { background: #fff0f0; }
 @media (max-width: 640px) {
   #app { flex-direction: column; }
 
-  /* Chart preview sits on top (DOM order is sidebar-then-canvas). */
+  /* Chart preview sits on top (DOM order is sidebar-then-canvas). The top
+     padding drops the chart below the undo/redo + zoom buttons, which would
+     otherwise overlap a full-height chart (the buttons float in this strip). */
   #canvas-area {
     order: -1;
     flex: none;
-    height: 42vh;
+    height: 44vh;
     min-height: 200px;
+    padding-top: 44px;
     border-bottom: 1px solid var(--border);
   }
 

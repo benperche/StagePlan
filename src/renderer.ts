@@ -34,6 +34,11 @@ export interface RenderOptions {
   // When true (the Layout tab is active), arc guides are forced on and the
   // canvas shows the geometry-editing handles.
   layoutMode?: boolean
+  // Device-pixel-ratio of the canvas backing store. The backing is sized
+  // cssPx * dpr (see resizeCanvas) so the chart stays crisp on retina/phone
+  // screens; the renderer draws everything dpr-bigger and exposes the css-space
+  // scale separately for DOM positioning / hit-testing.
+  dpr?: number
 }
 
 export class Renderer {
@@ -46,6 +51,9 @@ export class Renderer {
   // (1 when the chart fits at natural size; < 1 on small canvases / phones).
   // main.ts maps pointer coords through this so hit-testing lines up.
   viewScale = 1
+  // Touch/pen devices get bigger Layout-handle hit areas (fat-finger slop).
+  private coarsePointer = typeof window !== 'undefined'
+    && !!window.matchMedia?.('(pointer: coarse)')?.matches
   selectedInstrumentId: string | null = null
   rotateHandleHit: RotateHandleHit | null = null
   // Same-shape hit-test target for the red ✕ delete button drawn next to
@@ -67,12 +75,20 @@ export class Renderer {
   layoutRows: RowGeometry[] = []
 
   render(canvas: HTMLCanvasElement, config: ChartConfig, opts: RenderOptions = {}): void {
-    // Auto-fit: scale the whole chart down so it fits the canvas at its
-    // natural row spacing, instead of cramming rows together (which made
-    // music stands overlap the chairs behind them) or running off the edge
-    // on a narrow canvas. 1 on a roomy desktop canvas; < 1 on a phone.
-    const scale = (opts.scale ?? 1) * this.computeFitScale(canvas.width, canvas.height, config)
-    this.viewScale = scale
+    // The backing store is dpr-bigger than the CSS box (see resizeCanvas), so
+    // work out the chart's geometry in CSS pixels and let dpr only sharpen the
+    // raster. Auto-fit then scales the whole chart down so it fits the canvas at
+    // its natural row spacing, instead of cramming rows together (which made
+    // music stands overlap the chairs behind them) or running off the edge on a
+    // narrow canvas. fit is 1 on a roomy desktop canvas; < 1 on a phone.
+    const dpr = opts.dpr ?? 1
+    const cssW = canvas.width / dpr
+    const cssH = canvas.height / dpr
+    const fit = (opts.scale ?? 1) * this.computeFitScale(cssW, cssH, config)
+    // viewScale is the CSS-space logical→screen factor (no dpr) that main.ts
+    // uses to place the inline label editor and to map pointer coords.
+    this.viewScale = fit
+    const scale = fit * dpr   // logical → backing pixels
     this.layoutMode = opts.layoutMode ?? false
     const ctx = canvas.getContext('2d')!
     ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -749,9 +765,14 @@ export class Renderer {
   }
 
   layoutHandleHitTest(x: number, y: number): LayoutHandleHit | null {
+    // On touch/pen, guarantee a finger-sized hit area: handles are stored in
+    // logical px, so a constant on-screen radius needs ÷ viewScale (the chart
+    // is drawn smaller on a phone, which would otherwise shrink the targets).
+    const minScreen = this.coarsePointer ? 22 : 0
     for (let i = this.layoutHandles.length - 1; i >= 0; i--) {
       const h = this.layoutHandles[i]
-      if (Math.hypot(x - h.cx, y - h.cy) <= h.radius) return h
+      const r = Math.max(h.radius, minScreen / (this.viewScale || 1))
+      if (Math.hypot(x - h.cx, y - h.cy) <= r) return h
     }
     return null
   }

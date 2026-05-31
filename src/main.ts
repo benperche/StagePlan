@@ -275,7 +275,7 @@ function isLibraryOpen() {
 
 function renderChart() {
   resizeCanvas()
-  renderer.render(canvas, config, { layoutMode })
+  renderer.render(canvas, config, { layoutMode, dpr: renderDpr })
   undoBtn.disabled = !history.canUndo()
   redoBtn.disabled = !history.canRedo()
   renderTally()
@@ -433,15 +433,20 @@ function escapeHtml(s: string): string {
 // Re-render once the background image finishes decoding.
 renderer.onBackgroundLoaded = () => renderChart()
 
+// Device-pixel-ratio used for the current backing store. Capped so a 3× phone
+// doesn't allocate an enormous canvas. pointerCanvasCoords needs the same value
+// the last render used, so it's a module global set here.
+let renderDpr = 1
+
 function resizeCanvas() {
-  const container = canvas.parentElement!
-  // Backing store must match the display box 1:1, otherwise the chart is
-  // squished. (An earlier `Math.max(500, …)` floor distorted the chart on
-  // short windows and on phones, where the canvas area is well under 500px.)
-  // The renderer already adapts row spacing to the available height, so a
-  // shorter canvas just draws a tighter — but undistorted — chart.
-  canvas.width = Math.max(1, container.clientWidth)
-  canvas.height = Math.max(1, container.clientHeight)
+  // Measure the canvas's own rendered box (not the parent's) so any padding on
+  // #canvas-area — e.g. the top strip on mobile that clears the overlay
+  // buttons — is respected and the backing never mismatches the display size.
+  // The backing matches that box's aspect 1:1 (no squish) and is dpr-bigger so
+  // the chart stays crisp on retina / phone screens.
+  renderDpr = Math.min(window.devicePixelRatio || 1, 3)
+  canvas.width = Math.max(1, Math.round(canvas.clientWidth * renderDpr))
+  canvas.height = Math.max(1, Math.round(canvas.clientHeight * renderDpr))
 }
 
 // --- Library tab rendering ---
@@ -809,9 +814,10 @@ function pointerCanvasCoords(e: MouseEvent): { x: number; y: number } {
   // transform, so dividing by rect.width/height back into backing pixels
   // works at any zoom level without referencing viewZoom directly.
   const rect = canvas.getBoundingClientRect()
-  // Divide by the renderer's auto-fit scale so we land in the chart's logical
-  // coordinate space (where all hit targets are stored), not raw backing px.
-  const s = renderer.viewScale || 1
+  // canvas.width/rect.width converts a CSS pointer delta into backing pixels
+  // (this already folds in dpr and the CSS view-zoom). Dividing by viewScale*dpr
+  // then lands us in the chart's logical coord space, where hit targets live.
+  const s = (renderer.viewScale || 1) * renderDpr
   return {
     x: (e.clientX - rect.left) * (canvas.width / rect.width) / s,
     y: (e.clientY - rect.top) * (canvas.height / rect.height) / s,
@@ -1040,10 +1046,15 @@ function chairScreenPos(rowIndex: number, chairIndex: number): { x: number; y: n
   const { ox, oy } = renderer.conductorOrigin
   const canvasX = (c.x - ox) * scale + ox
   const canvasY = (c.y - oy) * scale + oy
-  // canvasX/Y are in logical chart space; multiply by the auto-fit scale to
-  // get backing px before the CSS view zoom/pan.
+  // canvasX/Y are in logical chart space; multiply by the auto-fit scale for
+  // CSS px, then by the view zoom/pan. The label editor is positioned relative
+  // to #canvas-area, so add the canvas's own offset within it (the mobile top
+  // padding pushes the canvas down; 0 on desktop).
   const fit = renderer.viewScale || 1
-  return { x: viewPanX + canvasX * fit * viewZoom, y: viewPanY + canvasY * fit * viewZoom }
+  return {
+    x: canvas.offsetLeft + viewPanX + canvasX * fit * viewZoom,
+    y: canvas.offsetTop + viewPanY + canvasY * fit * viewZoom,
+  }
 }
 
 function openChairLabelEditor(rowIndex: number, chairIndex: number) {
