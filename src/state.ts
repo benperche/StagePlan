@@ -1,7 +1,9 @@
 import type { ChartConfig, Row, Chair, FixedInstrument, InstrumentType } from './types'
 
+export const DEFAULT_CHAIR_COLOR = '#e8e8e8'
+
 const CHAIR_COLORS = [
-  '#e8e8e8', // default
+  DEFAULT_CHAIR_COLOR, // default
 ]
 
 export function makeChair(): Chair {

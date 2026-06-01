@@ -545,13 +545,17 @@ export class Renderer {
       if (chair.enabled) {
         this.drawChair(ctx, chair, cx, cy, ox, oy, row.fontSize, this.isNudged(chair))
         if (chair.hasStand) this.drawStandX(ctx, cx, cy, ox, oy)
-        if (config.showNumbers) {
-          const num = config.numberRestartPerRow
-            ? chairs.slice(0, chairIndex).filter(c => c.enabled).length + 1
-            : seatNumber
-          this.drawSeatNumber(ctx, cx, cy, ox, oy, String(num), row.fontSize)
+        // Standing players aren't numbered seats — no number drawn, and they
+        // don't consume one (so the seated chairs stay sequential).
+        if (!chair.noSeat) {
+          if (config.showNumbers) {
+            const num = config.numberRestartPerRow
+              ? chairs.slice(0, chairIndex).filter(c => c.enabled && !c.noSeat).length + 1
+              : seatNumber
+            this.drawSeatNumber(ctx, cx, cy, ox, oy, String(num), row.fontSize)
+          }
+          seatNumber++
         }
-        seatNumber++
       } else {
         this.drawGhostChair(ctx, cx, cy, ox, oy)
       }
@@ -618,13 +622,16 @@ export class Renderer {
       if (chair.enabled) {
         this.drawChair(ctx, chair, cx, rowY, cx, oy, row.fontSize, this.isNudged(chair))
         if (chair.hasStand) this.drawStandX(ctx, cx, rowY, cx, oy)
-        if (config.showNumbers) {
-          const num = config.numberRestartPerRow
-            ? row.chairs.slice(0, chairIndex).filter(c => c.enabled).length + 1
-            : seatNumber
-          this.drawSeatNumber(ctx, cx, rowY, cx, oy, String(num), row.fontSize)
+        // Standing players aren't numbered seats (see semicircle path).
+        if (!chair.noSeat) {
+          if (config.showNumbers) {
+            const num = config.numberRestartPerRow
+              ? row.chairs.slice(0, chairIndex).filter(c => c.enabled && !c.noSeat).length + 1
+              : seatNumber
+            this.drawSeatNumber(ctx, cx, rowY, cx, oy, String(num), row.fontSize)
+          }
+          seatNumber++
         }
-        seatNumber++
       } else {
         this.drawGhostChair(ctx, cx, rowY, cx, oy)
       }
@@ -1208,11 +1215,13 @@ export class Renderer {
 
     let totalChairs = 0
     let totalStools = 0
+    let totalStanding = 0
     let totalStands = 0
     for (const row of config.rows) {
       row.chairs.forEach((chair, i) => {
         if (!chair.enabled) return
-        if (chair.isStool) totalStools++
+        if (chair.noSeat) totalStanding++
+        else if (chair.isStool) totalStools++
         else totalChairs++
         if (chair.hasStand) totalStands++
         // Only count a desk stand that's actually drawn (next seat filled).
@@ -1222,9 +1231,10 @@ export class Renderer {
     if (config.rows.length > 1) {
       const plural = (n: number, word: string) => `${n} ${word}${n !== 1 ? 's' : ''}`
       const parts: string[] = []
-      // Always show a chair count unless the chart is purely stools.
-      if (totalChairs > 0 || totalStools === 0) parts.push(plural(totalChairs, 'chair'))
+      // Always show a chair count unless the chart is purely stools/standing.
+      if (totalChairs > 0 || (totalStools === 0 && totalStanding === 0)) parts.push(plural(totalChairs, 'chair'))
       if (totalStools > 0) parts.push(plural(totalStools, 'stool'))
+      if (totalStanding > 0) parts.push(`${totalStanding} standing`)
       if (totalStands > 0) parts.push(plural(totalStands, 'stand'))
       lines.push(`Total: ${parts.join(' · ')}`)
     }
@@ -1280,7 +1290,11 @@ export class Renderer {
     ctx.translate(cx, cy)
     ctx.rotate(faceAngle + Math.PI / 2)
 
-    if (chair.isStool) {
+    // Standing player: no chair/stool glyph at all, just the label (drawn
+    // below) and whatever stand the caller adds.
+    if (chair.noSeat) {
+      // nothing to draw here
+    } else if (chair.isStool) {
       // Round seat with four small legs poking out at the diagonals —
       // a double-bass stool. Keeps the chair's colour so colour-coding
       // (e.g. principals) still applies.
@@ -1325,7 +1339,7 @@ export class Renderer {
 
     // Layout tab: a nudged chair gets a blue outline so it's obvious which
     // ones have been moved off their default slot.
-    if (highlight) {
+    if (highlight && !chair.noSeat) {
       ctx.strokeStyle = '#2563eb'
       ctx.lineWidth = 2.5
       if (chair.isStool) {

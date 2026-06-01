@@ -1,5 +1,5 @@
 import './style.css'
-import { makeDefaultConfig, makeRow, makeInstrument, History, cloneConfig } from './state'
+import { makeDefaultConfig, makeRow, makeInstrument, History, cloneConfig, DEFAULT_CHAIR_COLOR } from './state'
 import { Renderer } from './renderer'
 import {
   PRESETS, buildPreset, parseOrchestraNotation, describeComposition,
@@ -28,7 +28,7 @@ let activeTool: ChairTool = 'toggle'
 const TOOL_HINTS: Record<ChairTool, string> = {
   toggle: "Click a chair to hide it — its place is kept so the row doesn't shift. Click again to bring it back.",
   stand: 'Click a chair to cycle its music stand: solo × → shared × with the next chair → none.',
-  stool: 'Click a chair to switch it between a chair and a round stool.',
+  stool: 'Click a chair to cycle it: chair → stool → standing (just stand + label) → chair.',
   color: 'Click a chair to paint it the swatch colour. Click the swatch to change the colour.',
   label: 'Click a chair to type a name on it (Enter jumps to the next chair), or paste a list below.',
   instrument: 'Pick an instrument below, then click chairs to stamp it on them.',
@@ -203,7 +203,8 @@ import {
   flipCheck, straightRowsInput, straightRowsLabel, arcRangeInput, arcRangeLabel,
   rowSpacingInput, rowCountInput, aboutBtn, aboutModal, aboutCloseBtn,
   rowsContainer,
-  colorPicker, colorPickerLabel, undoBtn, redoBtn, zoomInBtn, zoomOutBtn, zoomResetBtn,
+  colorPicker, colorPickerLabel, colorBulkPanel, resetColorsBtn,
+  undoBtn, redoBtn, zoomInBtn, zoomOutBtn, zoomResetBtn,
   resetPositionBtn, resetLayoutBtn, layoutRowList, addRowBtn, saveBtn,
   loadInput, exportPngBtn, printBtn, shareLinkBtn, shareUrlDisplay, presetSelect, applyPresetBtn,
   libraryDrawer, libraryBackdrop, libraryOpenBtn, libraryCloseBtn,
@@ -1560,7 +1561,15 @@ canvas.addEventListener('click', (e) => {
   } else if (activeTool === 'toggle') {
     chair.enabled = !chair.enabled
   } else if (activeTool === 'stool') {
-    chair.isStool = !chair.isStool
+    // Cycle: chair → stool → standing (no seat) → chair.
+    if (chair.noSeat) {
+      chair.noSeat = false
+    } else if (chair.isStool) {
+      chair.isStool = false
+      chair.noSeat = true
+    } else {
+      chair.isStool = true
+    }
   } else if (activeTool === 'stand') {
     const rowChairs = config.rows[hit.rowIndex].chairs
     const prevChair = rowChairs[hit.chairIndex - 1]
@@ -1799,6 +1808,7 @@ function bindEvents() {
     activeTool = tool
     toolButtons.forEach(b => b.classList.toggle('active', b.dataset['tool'] === tool))
     colorPickerLabel.style.display = tool === 'color' ? '' : 'none'
+    colorBulkPanel.style.display = tool === 'color' ? '' : 'none'
     standBulkPanel.style.display = tool === 'stand' ? '' : 'none'
     stoolBulkPanel.style.display = tool === 'stool' ? '' : 'none'
     labelPanel.style.display = tool === 'label' ? '' : 'none'
@@ -1859,14 +1869,25 @@ function bindEvents() {
     })
   })
 
-  // Stool bulk actions — convert every chair in the chart to/from a stool.
+  // Stool bulk actions — convert every seat in the chart to chairs, stools,
+  // or standing (no seat).
   stoolBulkButtons.forEach(btn => {
     btn.addEventListener('click', () => {
-      const toStool = btn.dataset['stoolBulk'] === 'stools'
+      const mode = btn.dataset['stoolBulk']   // 'chairs' | 'stools' | 'standing'
       history.push(config)
-      config.rows.forEach(row => row.chairs.forEach(c => { c.isStool = toStool }))
+      config.rows.forEach(row => row.chairs.forEach(c => {
+        c.isStool = mode === 'stools'
+        c.noSeat = mode === 'standing'
+      }))
       renderChart()
     })
+  })
+
+  // Reset every chair's colour back to the default (Colour tool bulk action).
+  resetColorsBtn.addEventListener('click', () => {
+    history.push(config)
+    config.rows.forEach(row => row.chairs.forEach(c => { c.color = DEFAULT_CHAIR_COLOR }))
+    renderChart()
   })
 
   // Build the Allocate Instruments panel: one row per instrument with a

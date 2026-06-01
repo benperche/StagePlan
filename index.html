@@ -155,6 +155,9 @@
           <label id="color-picker-label" style="display:none">Colour
             <input type="color" id="color-picker" value="#a8d8ea" />
           </label>
+          <div id="color-bulk" class="bulk-actions" style="display:none">
+            <button id="reset-colors-btn" class="secondary">↺ Reset all colours</button>
+          </div>
           <div id="stand-bulk" class="bulk-actions" style="display:none">
             <span class="bulk-actions-label">Stands on all chairs:</span>
             <button data-stand-bulk="per-chair">Per chair</button>
@@ -163,8 +166,9 @@
           </div>
           <div id="stool-bulk" class="bulk-actions" style="display:none">
             <span class="bulk-actions-label">Convert every seat to:</span>
-            <button data-stool-bulk="stools">Stools</button>
             <button data-stool-bulk="chairs">Chairs</button>
+            <button data-stool-bulk="stools">Stools</button>
+            <button data-stool-bulk="standing">Standing</button>
           </div>
           <!-- Label tool: free-type + bulk paste -->
           <div id="label-panel" style="display:none">

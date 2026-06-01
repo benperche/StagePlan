@@ -8,6 +8,7 @@ export interface Chair {
   hasStand: boolean      // solo stand in front of this chair
   standAfter?: boolean   // shared stand between this chair and the next
   isStool?: boolean      // render as a double-bass stool (round) instead of a chair
+  noSeat?: boolean       // standing player: no chair/stool drawn, just the stand + label
   // Layout-tab per-chair nudge: tangential displacement in px along the row
   // (sideways along the arc / line). Converted to an angle (offset / radius)
   // for arc rows. Default 0. Clamped so chairs never overlap.
