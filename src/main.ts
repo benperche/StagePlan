@@ -1563,11 +1563,20 @@ canvas.addEventListener('click', (e) => {
     chair.isStool = !chair.isStool
   } else if (activeTool === 'stand') {
     const rowChairs = config.rows[hit.rowIndex].chairs
+    const prevChair = rowChairs[hit.chairIndex - 1]
     const nextChair = rowChairs[hit.chairIndex + 1]
     // You can only form a desk with a real neighbour — not the row end and not
     // a hidden seat (that would draw a stand toward a ghost chair).
     const canPairNext = !!nextChair?.enabled
-    if (!chair.hasStand && !chair.standAfter) {
+    if (prevChair?.standAfter) {
+      // This chair is the right-hand half of a desk shared with the chair on
+      // its left. Clicking it splits the desk and gives each player their own
+      // solo stand back (rather than stacking a second stand in front of it).
+      prevChair.standAfter = false
+      prevChair.hasStand = true
+      chair.hasStand = true
+      chair.standAfter = false
+    } else if (!chair.hasStand && !chair.standAfter) {
       chair.hasStand = true
     } else if (chair.hasStand) {
       // Solo → shared with next. Drop the next chair's own stand, since
