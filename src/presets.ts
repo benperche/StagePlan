@@ -134,8 +134,8 @@ export const PRESETS: Preset[] = [
     notation: '1.1.1.1 - 2.0.0.0 - 0 - 6.5.4.3.1',
   },
   {
-    id: 'full-symphony',
-    name: 'Full Symphony',
+    id: 'symphony-orchestra',
+    name: 'Symphony Orchestra',
     layout: 'semicircle',
     sections: [],
     // Late-romantic full symphony (Tchaikovsky-ish): triple winds, full
