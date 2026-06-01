@@ -87,10 +87,10 @@ export const PRESETS: Preset[] = [
         straightSpacing: 58.75,
         straightOffset: 100.5,
         chairs: [
-          { label: 'Tnr 2',  color: COLORS.woodwind, hasStand: true },
+          { label: 'Tnr 1',  color: COLORS.woodwind, hasStand: true },
           { label: 'Alto 2', color: COLORS.woodwind, hasStand: true },
           { label: 'Alto 1', color: COLORS.woodwind, hasStand: true },
-          { label: 'Tnr 1',  color: COLORS.woodwind, hasStand: true },
+          { label: 'Tnr 2',  color: COLORS.woodwind, hasStand: true },
           { label: 'Bari',   color: COLORS.woodwind, hasStand: true },
         ],
       },
@@ -99,10 +99,10 @@ export const PRESETS: Preset[] = [
         straightSpacing: 63.67,
         straightOffset: 96.5,
         chairs: [
-          { label: 'Tbn 4', color: COLORS.brass, hasStand: true },
           { label: 'Tbn 2', color: COLORS.brass, hasStand: true },
           { label: 'Tbn 1', color: COLORS.brass, hasStand: true },
           { label: 'Tbn 3', color: COLORS.brass, hasStand: true },
+          { label: 'Tbn 4', color: COLORS.brass, hasStand: true },
         ],
       },
       {
@@ -110,10 +110,10 @@ export const PRESETS: Preset[] = [
         straightSpacing: 64.33,
         straightOffset: 96.5,
         chairs: [
-          { label: 'Tpt 4', color: '#f4a261', hasStand: true, isStool: true },
           { label: 'Tpt 2', color: '#f4a261', hasStand: true, isStool: true },
           { label: 'Tpt 1', color: '#f4a261', hasStand: true, isStool: true },
           { label: 'Tpt 3', color: '#f4a261', hasStand: true, isStool: true },
+          { label: 'Tpt 4', color: '#f4a261', hasStand: true, isStool: true },
         ],
       },
     ],
