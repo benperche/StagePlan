@@ -198,7 +198,13 @@ six tools (`ChairTool`) and their sub-panels:
   per row, rebuilt by `renderLabelList()` alongside `renderRowList()`).
 - **Instruments** — reveals `#instrument-panel` with the canonical picker
   (`#instrument-picker-list`, built once at init) + tally button. Clicking a
-  picker button arms `selectedLabel`; subsequent chair clicks stamp it.
+  picker button arms `selectedLabel`; subsequent chair clicks stamp it. Buttons
+  show the full instrument name but stamp the **abbreviated** form
+  (`INSTRUMENT_ABBREV`, e.g. Flute → `Fl`, numbered → `Fl 1`) so it fits the
+  chair box and matches the preset charts. Every abbreviation is a label used
+  verbatim by a preset; the tally's matcher list includes both full and
+  abbreviated forms so preset/abbreviated labels classify into their section
+  instead of "Other".
 
 A one-line `#edit-chairs-hint` (`TOOL_HINTS[tool]`) explains the active tool.
 The seat-number / restart-per-row / row-label *display* toggles live in a

@@ -123,6 +123,27 @@ const INSTRUMENT_GROUPS: Array<{ name: string; items: string[] }> = [
   { name: 'Voices', items: ['Voice', 'Soprano', 'Alto', 'Tenor', 'Bass', 'Solo'] },
 ]
 
+// Short labels the Instruments picker stamps into the (small) chair boxes, so
+// they read like the preset charts ("Fl 1" rather than "Flute 1"). Every value
+// here is a label used verbatim by a built-in preset (presets.ts / orchestra
+// notation) — instruments without a preset short form keep their full name.
+const INSTRUMENT_ABBREV: Record<string, string> = {
+  // Woodwinds
+  Piccolo: 'Picc', Flute: 'Fl', Oboe: 'Ob', Clarinet: 'Cl',
+  'Bass Clarinet': 'B Cl', Bassoon: 'Bsn',
+  // Saxophones
+  'Alto Sax': 'AS', 'Tenor Sax': 'TS', 'Bari Sax': 'BS',
+  // Brass
+  Horn: 'Hn', Trumpet: 'Tpt', Trombone: 'Tbn', Euphonium: 'Euph',
+  // Strings
+  Viola: 'Va', Cello: 'Vc', 'Double Bass': 'Cb',
+  // Percussion
+  Timpani: 'Timp', Glockenspiel: 'Glock', Xylophone: 'Xylo',
+  Vibraphone: 'Vibes', Percussion: 'Perc', Auxiliary: 'Aux',
+}
+
+const abbrevInstrument = (name: string): string => INSTRUMENT_ABBREV[name] ?? name
+
 // Currently selected fixed instrument (for drag/inspector/delete)
 let selectedInstrumentId: string | null = null
 
@@ -368,8 +389,13 @@ function renderTally() {
   // Pre-built sorted matcher list: longer names first so "Bass Clarinet"
   // wins over "Bass" when classifying a "Bass Clarinet 1" label.
   const matchers: Array<{ name: string; section: string; orderInSection: number }> = []
-  INSTRUMENT_GROUPS.forEach(g => g.items.forEach((item, idx) =>
-    matchers.push({ name: item, section: g.name, orderInSection: idx })))
+  INSTRUMENT_GROUPS.forEach(g => g.items.forEach((item, idx) => {
+    matchers.push({ name: item, section: g.name, orderInSection: idx })
+    // Also classify the abbreviated form (what the picker stamps and what the
+    // presets use), so e.g. "Fl 1" lands in Woodwinds, not "Other".
+    const ab = INSTRUMENT_ABBREV[item]
+    if (ab && ab !== item) matchers.push({ name: ab, section: g.name, orderInSection: idx })
+  }))
   matchers.sort((a, b) => b.name.length - a.name.length)
 
   // Count every distinct (enabled) label in the chart
@@ -1863,9 +1889,12 @@ function bindEvents() {
           })
           return b
         }
-        row.appendChild(makeBtn(name, name, true))
+        // Button text shows the full instrument name; the stamped label is the
+        // abbreviated form so it fits the chair boxes (matching the presets).
+        const short = abbrevInstrument(name)
+        row.appendChild(makeBtn(name, short, true))
         for (const n of [1, 2, 3]) {
-          row.appendChild(makeBtn(String(n), `${name} ${n}`, false))
+          row.appendChild(makeBtn(String(n), `${short} ${n}`, false))
         }
         details.appendChild(row)
       })
