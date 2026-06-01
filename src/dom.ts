@@ -46,6 +46,7 @@ export const layoutRowList = document.getElementById('layout-row-list') as HTMLE
 // --- Preset panel + custom orchestra modal ---
 export const presetSelect = document.getElementById('preset-select') as HTMLSelectElement
 export const applyPresetBtn = document.getElementById('apply-preset-btn') as HTMLButtonElement
+export const clearPresetBtn = document.getElementById('clear-preset-btn') as HTMLButtonElement
 export const customOrchestraBtn = document.getElementById('custom-orchestra-btn') as HTMLButtonElement
 export const customOrchestraModal = document.getElementById('custom-orchestra-modal') as HTMLElement
 export const customOrchestraTitle = document.getElementById('custom-orchestra-title') as HTMLInputElement

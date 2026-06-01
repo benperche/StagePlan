@@ -206,7 +206,7 @@ import {
   colorPicker, colorPickerLabel, colorBulkPanel, resetColorsBtn,
   undoBtn, redoBtn, zoomInBtn, zoomOutBtn, zoomResetBtn,
   resetPositionBtn, resetLayoutBtn, layoutRowList, addRowBtn, saveBtn,
-  loadInput, exportPngBtn, printBtn, shareLinkBtn, shareUrlDisplay, presetSelect, applyPresetBtn,
+  loadInput, exportPngBtn, printBtn, shareLinkBtn, shareUrlDisplay, presetSelect, applyPresetBtn, clearPresetBtn,
   libraryDrawer, libraryBackdrop, libraryOpenBtn, libraryCloseBtn,
   libraryCurrentTitle, librarySaveBtn, libraryNewChartBtn, libraryNewFolderBtn,
   librarySearch, libraryList,
@@ -2246,6 +2246,25 @@ function bindEvents() {
   applyPresetBtn.addEventListener('click', () => {
     const preset = PRESETS.find(p => p.id === presetSelect.value)
     if (preset) applyPreset(preset)
+  })
+
+  // Clear preset → reset the seating to plain default rows (no colours, labels,
+  // stools/standing or fixed instruments). Title, notes, background and
+  // conductor placement are left alone.
+  clearPresetBtn.addEventListener('click', () => {
+    history.push(config)
+    const def = makeDefaultConfig()
+    config.rows = def.rows
+    config.instruments = []
+    config.layout = 'semicircle'
+    config.straightRows = 0
+    config.arcRange = def.arcRange
+    config.rowSpacing = def.rowSpacing
+    config.flipped = false
+    setSelectedInstrument(null)
+    presetSelect.value = ''
+    updateAllInputs()
+    renderChart()
   })
 
   // --- About modal ---
