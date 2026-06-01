@@ -92,18 +92,25 @@ always render the full chart at full resolution (print CSS forces
 The chart is drawn at fixed pixel sizes (a chair is 30px, `BASE_RADIUS` 130,
 etc.). To make it fit any canvas — a wide desktop, a short window, a phone —
 `render()` computes a single uniform `computeFitScale()` and applies it as the
-outermost `ctx.scale()`. It's `1` when the chart fits at natural size and `< 1`
-when it has to shrink. This is **not** the same as `config.chartScale` (a user
-setting that scales around the conductor); auto-fit wraps everything (title,
+outermost `ctx.scale()`. It **auto-fills** a target fraction of the canvas
+(`Renderer.FILL`, 0.93): small layouts scale *up*, big ones scale *down* so the
+chart always fills the page-ish area without ever overflowing. This is **not**
+the same as `config.chartScale` (see below); auto-fit wraps everything (title,
 notes, chart) so the whole drawing fits.
 
+- `config.chartScale` is the user's manual **override**, applied as the inner
+  transform around the conductor. 100% = a clean auto-fill; >100% grows the
+  seating past the fill (may clip), <100% shrinks it. So it multiplies the
+  auto-fill rather than being an absolute size.
+- **Exception — a background photo** (`config.backgroundImage`) switches off
+  auto-fill: the chart sits at its natural size (× chartScale) so you can match
+  it to the stage in the image, only shrinking to avoid overflow.
 - It replaced the old `effectiveRowSpacing` height-squeeze, which pulled rows
   together to fit — that made music stands overlap the chairs of the row
   behind. Scaling the whole chart down keeps spacing proportional. (The
   function still exists but is now a pass-through returning the user's spacing.)
 - `computeFitScale` estimates the chart's natural extent (`contentExtents`:
-  arc/straight chair span + far-out fixed instruments) vs the canvas, erring
-  toward a *smaller* chart so nothing clips.
+  arc/straight chair span + far-out fixed instruments) vs the canvas.
 - Hit targets are stored in **logical (CSS-space)** coords, so
   `pointerCanvasCoords` divides the incoming pointer by `viewScale * renderDpr`,
   and `chairScreenPos` multiplies by `viewScale` (CSS, no dpr) when placing the
@@ -291,7 +298,7 @@ is then a thin wrapper that calls `buildPreset`, pushes the result into
 
 - **Save JSON**: full `ChartConfig` including `backgroundImage` as a data URL. Survives anything.
 - **Share link**: `encodeToHash` strips `backgroundImage` (URLs can't carry MB-scale data) and returns `{ hash, strippedBackground }`. When stripped, the share-URL display appends a one-line warning telling the user to use Save JSON for full fidelity.
-- **PNG export**: just `canvas.toBlob()`.
+- **PNG export / Print**: rendered to **A4-landscape proportions** (`EXPORT_W`×`EXPORT_H`, 2100×1485 ≈ √2), not the screen-shaped on-screen canvas, so the chart auto-fills the page. PNG renders to a throwaway off-screen canvas; print re-renders the live canvas at that size in a `beforeprint` handler (and restores it in `afterprint`). Both suppress the instrument selection box. The print `@media` CSS then `object-fit: contain`s the now-A4 canvas onto the A4 page with no letterboxing.
 - **URL hash on load**: decoded by `decodeFromHash`, passed through `migrateConfig` (which merges in any newer default fields the saved config is missing).
 
 ## Coordinate conventions

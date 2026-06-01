@@ -313,7 +313,12 @@ export class Renderer {
     return { halfW, back, front }
   }
 
-  // Uniform scale that makes the whole chart fit the canvas at natural spacing.
+  // Fraction of the canvas the chart fills when auto-sizing (a little margin
+  // all round so it never touches the page edge).
+  private static readonly FILL = 0.93
+
+  // Uniform outer scale applied to the whole chart. `chartScale` is applied
+  // separately (the inner transform in render), so it is NOT folded in here.
   private computeFitScale(canvasW: number, canvasH: number, config: ChartConfig): number {
     if (config.rows.length === 0 && (config.instruments?.length ?? 0) === 0) return 1
     const chartScale = config.chartScale ?? 1
@@ -321,11 +326,26 @@ export class Renderer {
     const TITLE_PAD = 44   // title sits above the back row (drawn at canvas scale)
     const FAR_PAD = 22
     const SIDE_PAD = 14
-    const naturalWidth = 2 * halfW * chartScale + 2 * SIDE_PAD
-    const naturalHeight = (back + front) * chartScale + TITLE_PAD + FAR_PAD
-    const fitW = canvasW / naturalWidth
-    const fitH = canvasH / naturalHeight
-    return Math.max(0.2, Math.min(1, fitW, fitH))
+    const naturalWidth = 2 * halfW + 2 * SIDE_PAD
+    const naturalHeight = (back + front) + TITLE_PAD + FAR_PAD
+
+    if (config.backgroundImage) {
+      // A background photo defines the scale context: the chart should sit at
+      // its natural size (× chartScale, via the inner transform) so it can be
+      // matched to the stage in the image — only shrink to avoid overflowing.
+      return Math.max(0.2, Math.min(1,
+        canvasW / (naturalWidth * chartScale),
+        canvasH / (naturalHeight * chartScale)))
+    }
+
+    // No background: auto-fill a target fraction of the canvas/page regardless
+    // of the layout's size (scale small charts up, big charts down so it still
+    // fits one page). chartScale then multiplies this as a manual override
+    // (100% = a clean auto-fill).
+    const fill = Math.min(
+      (canvasW * Renderer.FILL) / naturalWidth,
+      (canvasH * Renderer.FILL) / naturalHeight)
+    return Math.max(0.05, fill)
   }
 
   private effectiveRowSpacing(_h: number, _numRows: number, userRowSpacing: number): number {

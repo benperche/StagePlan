@@ -14,6 +14,11 @@ let config: ChartConfig = makeDefaultConfig()
 const history = new History()
 const renderer = new Renderer()
 
+// Off-screen render size for PNG export / print — A4 landscape proportions
+// (297×210 ≈ 1.414:1) at a print-friendly resolution, so exports fill the page.
+const EXPORT_W = 2100
+const EXPORT_H = Math.round(EXPORT_W / Math.SQRT2)   // 1485 — A4's √2 aspect ratio
+
 let activeColor = '#a8d8ea'
 type ChairTool = 'color' | 'toggle' | 'stand' | 'stool' | 'label' | 'instrument'
 let activeTool: ChairTool = 'toggle'
@@ -2097,12 +2102,39 @@ function bindEvents() {
     renderChart()
   })
 
-  exportPngBtn.addEventListener('click', () => exportToPng(canvas, config.title))
+  // PNG export renders to an off-screen canvas shaped like A4 landscape (the
+  // intended print target) so the chart auto-fills the page rather than the
+  // screen-shaped on-screen canvas. Selection handles are suppressed.
+  exportPngBtn.addEventListener('click', () => {
+    const ex = document.createElement('canvas')
+    ex.width = EXPORT_W
+    ex.height = EXPORT_H
+    const savedSel = renderer.selectedInstrumentId
+    renderer.selectedInstrumentId = null
+    try {
+      renderer.render(ex, config, { dpr: 1 })
+      exportToPng(ex, config.title)
+    } finally {
+      renderer.selectedInstrumentId = savedSel
+      renderChart()   // restore the on-screen canvas + renderer state
+    }
+  })
 
   // Print → triggers the browser print dialog. The @media print CSS in
   // style.css hides every UI control, leaving only the canvas centred on
   // the page. Users can then pick "Save as PDF" from the print dialog to
-  // get a PDF for free with no extra dependencies.
+  // get a PDF for free with no extra dependencies. beforeprint re-renders the
+  // canvas at A4-landscape proportions so the chart fills the page (no
+  // letterboxing from the screen's aspect ratio); afterprint restores it.
+  window.addEventListener('beforeprint', () => {
+    const savedSel = renderer.selectedInstrumentId
+    renderer.selectedInstrumentId = null
+    canvas.width = EXPORT_W
+    canvas.height = EXPORT_H
+    renderer.render(canvas, config, { dpr: 1 })
+    renderer.selectedInstrumentId = savedSel
+  })
+  window.addEventListener('afterprint', () => renderChart())
   printBtn.addEventListener('click', () => window.print())
 
   // --- Library drawer ---
