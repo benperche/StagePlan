@@ -87,6 +87,6 @@ pinned to top, controls scroll underneath, sticky `.tab-bar`).
 
 - Commit messages must end with:
   `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
-- Established workflow: commit and push after each verified feature/fix.
+- **Commit and push after every change**, once verified. This is the default expected workflow — do not wait to be asked.
 - Keep `CODEREF.md` updated when architecture changes — it's the detailed
   reference future work depends on.
