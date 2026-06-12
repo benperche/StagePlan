@@ -140,13 +140,11 @@ export const PRESETS: Preset[] = [
     sections: [],
     // Late-romantic full symphony (Tchaikovsky-ish): triple winds, full
     // brass, full strings. The percussion block is dropped from the notation so
-    // it isn't a row of chairs; instead the timpani + a small percussion bench
-    // sit behind the brass as fixed instruments (polar coords from conductor).
+    // it isn't a row of chairs; instead the timpani sits as a fixed instrument
+    // at the right-hand end of the back (brass) row (polar from conductor).
     notation: '3.3.3.3 - 4.3.3.1 - 14.12.10.8.6',
     instruments: [
-      { type: 'timpani', angle: -1.46, distance: 850, count: 4 },
-      { type: 'square',  angle: -1.74, distance: 855, label: 'Perc' },
-      { type: 'square',  angle: -1.96, distance: 835, label: 'Perc' },
+      { type: 'timpani', angle: -1.16, distance: 760, count: 4 },
     ],
   },
   {
@@ -347,10 +345,10 @@ export interface OrchestraComposition {
   strings: ParsedSlot[]
 }
 
-const WW_NAMES   = ['Fl', 'Ob', 'Cl', 'Bn']
-const BR_NAMES   = ['Hn', 'Tp', 'Tb', 'Tu']
+const WW_NAMES   = ['Fl', 'Ob', 'Cl', 'Bsn']
+const BR_NAMES   = ['Hn', 'Tpt', 'Tbn', 'Tuba']
 const PERC_NAMES = ['Timp', 'Perc']
-const STR_NAMES  = ['V1', 'V2', 'Va', 'Vc', 'Cb']
+const STR_NAMES  = ['Vln 1', 'Vln 2', 'Va', 'Vc', 'Cb']
 
 function parseEntry(entry: string): ParsedInstrument {
   const trimmed = entry.trim()
@@ -399,10 +397,10 @@ export function parseOrchestraNotation(notation: string): OrchestraComposition |
 /** Human-readable summary of a parsed composition, used by the modal preview. */
 export function describeComposition(comp: OrchestraComposition): string {
   const longNames: Record<string, string> = {
-    Fl: 'Flute', Ob: 'Oboe', Cl: 'Clarinet', Bn: 'Bassoon',
-    Hn: 'French Horn', Tp: 'Trumpet', Tb: 'Trombone', Tu: 'Tuba',
+    Fl: 'Flute', Ob: 'Oboe', Cl: 'Clarinet', Bsn: 'Bassoon',
+    Hn: 'French Horn', Tpt: 'Trumpet', Tbn: 'Trombone', Tuba: 'Tuba',
     Timp: 'Timpani', Perc: 'Percussion',
-    V1: 'Violin I', V2: 'Violin II', Va: 'Viola', Vc: 'Cello', Cb: 'Double Bass',
+    'Vln 1': 'Violin I', 'Vln 2': 'Violin II', Va: 'Viola', Vc: 'Cello', Cb: 'Double Bass',
   }
   const lines: string[] = []
   const fmtBlock = (label: string, slots: ParsedSlot[]) => {

@@ -124,7 +124,7 @@ export class Renderer {
     const numRows = config.rows.length
     const rowSpacing = this.effectiveRowSpacing(h, numRows, config.rowSpacing ?? ROW_SPACING_DEFAULT)
     const ox = w / 2 + (config.conductor.offsetX ?? 0)
-    const oy = this.computeOy(h, numRows, config.flipped, rowSpacing) + (config.conductor.offsetY ?? 0)
+    const oy = this.computeOy(h, config, rowSpacing) + (config.conductor.offsetY ?? 0)
     const chartScale = config.chartScale ?? 1
 
     // Title hugs the top of the chart (a fixed gap above the back row / the
@@ -300,10 +300,13 @@ export class Renderer {
       const dx = Math.abs(inst.distance * Math.cos(inst.angle)) + 46
       const dy = inst.distance * Math.sin(inst.angle)
       halfW = Math.max(halfW, dx)
-      // Flip mirrors the chart, so be safe and let an instrument extend the
-      // estimate on whichever side it lands.
-      back = Math.max(back, Math.abs(dy) + 46)
-      front = Math.max(front, Math.abs(dy) + 46)
+      // Extend only the side the instrument actually sits on (in the unflipped
+      // reference): negative y is behind the conductor with the chairs, positive
+      // is in front. Counting both sides used to roughly double the natural
+      // height for a back instrument (e.g. orchestral timpani) — shrinking the
+      // whole chart and reserving dead space in front of the conductor.
+      if (dy < 0) back = Math.max(back, -dy + 46)
+      else        front = Math.max(front, dy + 46)
     }
     return { halfW, back, front }
   }
@@ -385,12 +388,17 @@ export class Renderer {
     return [start, end]
   }
 
-  private computeOy(h: number, numRows: number, flipped: boolean, rowSpacing: number): number {
+  private computeOy(h: number, config: ChartConfig, _rowSpacing: number): number {
     // Default conductor position sits in the lower (or upper, when flipped)
     // third of the canvas — the conductor is at the FRONT of the stage, with
     // chairs working backwards from there. Falls back to clamping when the
     // chart is too tall to fit at the preferred position.
-    const chartHeight = BASE_RADIUS + Math.max(0, numRows - 1) * rowSpacing + CHAIR_HALF
+    const flipped = config.flipped
+    // Distance from the conductor to the far (chairs) edge — including any fixed
+    // instruments parked behind the chairs, so a chart with e.g. timpani at the
+    // back packs down toward the conductor instead of floating with the
+    // instruments clipped or crammed against the title.
+    const chartHeight = this.contentExtents(config).back
     // The chart-title side needs extra padding so the title (drawn at y≈14,
     // text ~18px tall) doesn't get tangled with the back-row seat numbers
     // (drawn ~12px above the back chair top). 50px covers both with a
@@ -424,7 +432,7 @@ export class Renderer {
     const offX = config.conductor.offsetX ?? 0
     const offY = config.conductor.offsetY ?? 0
     const ox = w / 2 + offX
-    const oy = this.computeOy(h, numRows, config.flipped, rowSpacing) + offY
+    const oy = this.computeOy(h, config, rowSpacing) + offY
     const yDir = config.flipped ? 1 : -1
     this.conductorOrigin = { ox, oy, yDir, flipped: config.flipped }
     const radii = this.computeRowRadii(config.rows, rowSpacing)
@@ -668,7 +676,7 @@ export class Renderer {
     const offX = config.conductor.offsetX ?? 0
     const offY = config.conductor.offsetY ?? 0
     const ox = w / 2 + offX
-    const oy = this.computeOy(h, numRows, config.flipped, rowSpacing) + offY
+    const oy = this.computeOy(h, config, rowSpacing) + offY
     const yDir = config.flipped ? 1 : -1
     this.conductorOrigin = { ox, oy, yDir, flipped: config.flipped }
 

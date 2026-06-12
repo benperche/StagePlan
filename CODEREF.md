@@ -111,6 +111,16 @@ notes, chart) so the whole drawing fits.
   function still exists but is now a pass-through returning the user's spacing.)
 - `computeFitScale` estimates the chart's natural extent (`contentExtents`:
   arc/straight chair span + far-out fixed instruments) vs the canvas.
+  `contentExtents` returns `back`/`front` (the up/down extents from the
+  conductor); an instrument extends **only the side it actually sits on**
+  (negative `dy` = behind, with the chairs). Counting both sides used to roughly
+  double the natural height for a back instrument (e.g. orchestral timpani),
+  shrinking the chart and reserving dead space in front of the conductor.
+- `computeOy` (the conductor's vertical placement) uses `contentExtents.back` —
+  i.e. the chairs **plus any instruments parked behind them** — as the
+  chart's far-edge depth, so an instrument-heavy back (timpani, percussion)
+  packs the chart down toward the conductor instead of floating with empty space
+  below it. Both the auto-fit scale and the conductor position then agree.
 - Hit targets are stored in **logical (CSS-space)** coords, so
   `pointerCanvasCoords` divides the incoming pointer by `viewScale * renderDpr`,
   and `chairScreenPos` multiplies by `viewScale` (CSS, no dpr) when placing the
@@ -262,7 +272,7 @@ Ww − Br [− Perc] − Str
 3(III=Bass Clarinet).2.2.2 - 4.3.3.1 - 1.2 - 14.12.10.8.6
 ```
 
-Each block is dot-separated counts. Doublings in parens (`N(Roman=Label)`) get appended to the chair label.
+Each block is dot-separated counts. Doublings in parens (`N(Roman=Label)`) get appended to the chair label. Canonical section labels are the readable abbreviations `Fl Ob Cl Bsn` / `Hn Tpt Tbn Tuba` / `Vln 1 Vln 2 Va Vc Cb` (`WW_NAMES` etc.; `describeComposition`'s `longNames` map is keyed on these, so keep the two in step).
 
 `buildOrchestraRows(composition)` returns `{ rows, straightRows }`:
 
@@ -275,7 +285,7 @@ Each block is dot-separated counts. Doublings in parens (`N(Roman=Label)`) get a
 - **Wind/brass numbering** (`numberSections`, applied via the `numbered` flag on `pushSectionRow`): each section of ≥2 players is numbered so the **1st sits innermost** (toward the row centre / conductor) and higher numbers fan to the edges — e.g. `Fl 3 Fl 2 Fl 1 | Ob 1 Ob 2 Ob 3`, `Hn 4 Hn 3 Hn 2 Hn 1 | Tp 3 Tp 2 Tp 1 | …`. Soloists (a lone Tuba) and doubled chairs (different labels) are left unnumbered. Strings are never numbered (they're desks).
 - Returned `straightRows` count tells `applyPreset` how many trailing rows to render as straight lines instead of arcs.
 
-The **Symphony Orchestra** preset drops the percussion block from its notation (so it isn't a row of chairs) and instead places a real **timpani glyph** plus a small `Perc` bench behind the brass as fixed `instruments` — `buildPreset` reads `preset.instruments` regardless of how the rows were specified, so a notation preset can still carry fixed instruments.
+The **Symphony Orchestra** preset drops the percussion block from its notation (so it isn't a row of chairs) and instead places a real **timpani glyph** at the right-hand end of the back (brass) row as a fixed `instrument` — `buildPreset` reads `preset.instruments` regardless of how the rows were specified, so a notation preset can still carry fixed instruments.
 
 ## Presets architecture
 
