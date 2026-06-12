@@ -42,7 +42,7 @@ export function makeDefaultConfig(): ChartConfig {
     straightRows: 0,
     conductor: { show: true, hasStand: true, offsetX: 0, offsetY: 0 },
     flipped: false,
-    showNumbers: true,
+    showNumbers: false,
     numberRestartPerRow: false,
     showRowLabels: false,
     showArc: false,

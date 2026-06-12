@@ -1104,12 +1104,16 @@ function applyPreset(preset: Preset) {
 // --- Inline chair-label editor (Label tool: click a chair, type its name) ---
 
 let editingChair: { rowIndex: number; chairIndex: number } | null = null
+// True while the shared label input is editing the conductor podium instead of
+// a chair. The two are mutually exclusive — opening one closes the other.
+let editingConductor = false
 
 // Screen position (within #canvas-area) of a chair's drawn centre, accounting
 // for chartScale and the CSS view zoom/pan, so the floating input sits on it.
-function chairScreenPos(rowIndex: number, chairIndex: number): { x: number; y: number } | null {
-  const c = renderer.chairCenter(rowIndex, chairIndex)
-  if (!c) return null
+// Screen position of an arbitrary chart-space point (chairs, conductor, …),
+// accounting for chartScale and the CSS view zoom/pan, so a floating input can
+// sit on it.
+function chartPointToScreen(c: { x: number; y: number }): { x: number; y: number } {
   const scale = config.chartScale ?? 1
   const { ox, oy } = renderer.conductorOrigin
   const canvasX = (c.x - ox) * scale + ox
@@ -1125,21 +1129,51 @@ function chairScreenPos(rowIndex: number, chairIndex: number): { x: number; y: n
   }
 }
 
+function chairScreenPos(rowIndex: number, chairIndex: number): { x: number; y: number } | null {
+  const c = renderer.chairCenter(rowIndex, chairIndex)
+  if (!c) return null
+  return chartPointToScreen(c)
+}
+
+// Float the shared label input at a screen position and arm it for editing.
+function showLabelEditor(pos: { x: number; y: number }, value: string) {
+  chairLabelInput.style.left = `${pos.x}px`
+  chairLabelInput.style.top = `${pos.y}px`
+  chairLabelInput.style.display = ''
+  chairLabelInput.value = value
+  chairLabelInput.focus()
+  chairLabelInput.select()
+}
+
 function openChairLabelEditor(rowIndex: number, chairIndex: number) {
   const chair = config.rows[rowIndex]?.chairs[chairIndex]
   if (!chair || !chair.enabled) return
   const pos = chairScreenPos(rowIndex, chairIndex)
   if (!pos) return
+  editingConductor = false
   editingChair = { rowIndex, chairIndex }
-  chairLabelInput.style.left = `${pos.x}px`
-  chairLabelInput.style.top = `${pos.y}px`
-  chairLabelInput.style.display = ''
-  chairLabelInput.value = chair.label ?? ''
-  chairLabelInput.focus()
-  chairLabelInput.select()
+  showLabelEditor(pos, chair.label ?? '')
+}
+
+// Rename the conductor podium in place, reusing the same floating input as
+// chair labels (instead of the browser's ugly window.prompt).
+function openConductorLabelEditor() {
+  const { ox, oy } = renderer.conductorOrigin
+  editingChair = null
+  editingConductor = true
+  showLabelEditor(chartPointToScreen({ x: ox, y: oy }), config.conductor.label ?? 'COND')
 }
 
 function commitChairLabel() {
+  if (editingConductor) {
+    if ((config.conductor.label ?? 'COND') !== chairLabelInput.value) {
+      history.push(config)
+      // Blank reverts to the default rather than leaving an empty podium.
+      config.conductor.label = chairLabelInput.value.trim() || undefined
+      renderChart()
+    }
+    return
+  }
   if (!editingChair) return
   const chair = config.rows[editingChair.rowIndex]?.chairs[editingChair.chairIndex]
   if (chair && (chair.label ?? '') !== chairLabelInput.value) {
@@ -1151,11 +1185,14 @@ function commitChairLabel() {
 
 function closeChairLabelEditor() {
   editingChair = null
+  editingConductor = false
   chairLabelInput.style.display = 'none'
 }
 
 // After Enter: commit, then hop to the next enabled chair in the same row.
+// The conductor isn't part of a row, so there's nowhere to advance to — close.
 function advanceChairLabel() {
+  if (editingConductor) { closeChairLabelEditor(); return }
   if (!editingChair) return
   const { rowIndex, chairIndex } = editingChair
   const chairs = config.rows[rowIndex].chairs
@@ -1559,15 +1596,7 @@ canvas.addEventListener('click', (e) => {
   // Edit tab: click the conductor to rename its podium label. (In Setup/Layout
   // a click is the tail of a move, so renaming there would be surprising.)
   if (renderer.conductorHitTest(x, y)) {
-    if (activeTab === 'edit') {
-      const cur = config.conductor.label ?? 'COND'
-      const next = window.prompt('Conductor label:', cur)
-      if (next !== null && next !== cur) {
-        history.push(config)
-        config.conductor.label = next
-        renderChart()
-      }
-    }
+    if (activeTab === 'edit') openConductorLabelEditor()
     return
   }
 
