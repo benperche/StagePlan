@@ -881,8 +881,12 @@ function renderRowList() {
 function renderLabelList() {
   const scrollTop = labelList.scrollTop
   labelList.innerHTML = config.rows.map((row, i) => {
-    const labelsText = row.chairs.map(c => c.label).join('\n')
-    const taRows = Math.min(12, Math.max(2, row.chairs.length))
+    // Hidden chairs (disabled seats, preset spacers) are skipped so the list
+    // reads as the actual players — no empty lines to keep aligned by hand.
+    const visible = row.chairs.filter(c => c.enabled)
+    if (visible.length === 0) return ''
+    const labelsText = visible.map(c => c.label).join('\n')
+    const taRows = Math.min(12, Math.max(2, visible.length))
     return `<div class="label-row">
       <span class="label-row-name">Row ${row.label}</span>
       <textarea class="chair-labels-ta" data-row="${i}" rows="${taRows}">${labelsText}</textarea>
@@ -1796,8 +1800,12 @@ function bindEvents() {
     const rowIdx = Number(target.dataset['row'])
     if (isNaN(rowIdx)) return
     const lines = target.value.split('\n')
-    config.rows[rowIdx].chairs.forEach((chair, i) => {
-      chair.label = lines[i] ?? ''
+    // One line per *visible* chair — hidden seats are skipped (they aren't
+    // shown in the textarea), so walk an independent line cursor.
+    let li = 0
+    config.rows[rowIdx].chairs.forEach((chair) => {
+      if (!chair.enabled) return
+      chair.label = lines[li++] ?? ''
     })
     renderChart()
   })
@@ -1815,11 +1823,11 @@ function bindEvents() {
     if (!target.classList.contains('chair-labels-ta')) return
     if (e.key !== 'Tab') return
     e.preventDefault()
-    const rowIdx = Number(target.dataset['row'])
-    const nextIdx = e.shiftKey ? rowIdx - 1 : rowIdx + 1
-    if (nextIdx < 0 || nextIdx >= config.rows.length) return
-    const nextTa = labelList.querySelector<HTMLTextAreaElement>(`.chair-labels-ta[data-row="${nextIdx}"]`)
-    nextTa?.focus()
+    // Walk the rendered textareas directly so Tab skips any rows that were
+    // omitted (every chair hidden) without landing on a gap.
+    const tas = [...labelList.querySelectorAll<HTMLTextAreaElement>('.chair-labels-ta')]
+    const cur = tas.indexOf(target)
+    tas[e.shiftKey ? cur - 1 : cur + 1]?.focus()
   })
 
   // Add fixed instrument
@@ -1942,6 +1950,9 @@ function bindEvents() {
     standBulkPanel.style.display = tool === 'stand' ? '' : 'none'
     stoolBulkPanel.style.display = tool === 'stool' ? '' : 'none'
     labelPanel.style.display = tool === 'label' ? '' : 'none'
+    // Rebuild the paste list on entry so it reflects any chairs hidden/shown
+    // since it was last drawn (the toggle tool only re-renders the canvas).
+    if (tool === 'label') renderLabelList()
     instrumentPanel.style.display = tool === 'instrument' ? '' : 'none'
     editChairsHint.textContent = TOOL_HINTS[tool]
     // Always clear the instrument selection: switching to a non-label tool

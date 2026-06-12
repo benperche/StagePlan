@@ -579,17 +579,20 @@ export function buildOrchestraRows(comp: OrchestraComposition): OrchestraRowsRes
   if (v1Desks + v2Desks + vaDesks + rightTotal > 0) {
     // Returns the chairs for one desk position. Full desk (2 paired chairs),
     // lone last chair (1 chair, solo stand), or placeholder pair (2 disabled).
-    const oneDesk = (slot: ParsedSlot, deskIdx: number): Chair[] => {
+    const oneDesk = (slot: ParsedSlot, deskIdx: number, asStool = false): Chair[] => {
       const startIdx = deskIdx * 2
       const remaining = slot.parsed.count - startIdx
       if (remaining >= 2) {
         const c1 = makeChairFromSlot(slot, startIdx,     COLORS.strings, 'shared')
         const c2 = makeChairFromSlot(slot, startIdx + 1, COLORS.strings, 'shared')
         c1.standAfter = true
+        if (asStool) { c1.isStool = true; c2.isStool = true }
         return [c1, c2]
       }
       if (remaining === 1) {
-        return [makeChairFromSlot(slot, startIdx, COLORS.strings, 'solo')]
+        const c = makeChairFromSlot(slot, startIdx, COLORS.strings, 'solo')
+        if (asStool) c.isStool = true
+        return [c]
       }
       return [makePlaceholderChair(COLORS.strings), makePlaceholderChair(COLORS.strings)]
     }
@@ -627,7 +630,8 @@ export function buildOrchestraRows(comp: OrchestraComposition): OrchestraRowsRes
           out.push(...oneDesk(vc, rightUsed))
           rightUsed++
         } else if (cb && rightUsed < rightTotal) {
-          out.push(...oneDesk(cb, rightUsed - vcDesks))
+          // Double basses play standing/perched, so seat them on stools.
+          out.push(...oneDesk(cb, rightUsed - vcDesks, true))
           rightUsed++
         } else {
           out.push(...placeholderDesk())

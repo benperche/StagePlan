@@ -211,8 +211,14 @@ six tools (`ChairTool`) and their sub-panels:
   `#chair-label-input` on it (`openChairLabelEditor`, positioned through the
   chartScale + view-zoom transforms via `chairScreenPos`); type, **Enter**
   commits + hops to the next chair (`advanceChairLabel`), Esc/blur closes. The
-  panel also has the "paste a list" `<details>` (`#label-list`, one textarea
-  per row, rebuilt by `renderLabelList()` alongside `renderRowList()`).
+  panel also has the "paste a list" `<details open>` (`#label-list`, one
+  textarea per row, rebuilt by `renderLabelList()` alongside `renderRowList()`
+  and again whenever the Label tool is (re)entered). The list shows **only
+  enabled chairs** — hidden seats and preset spacers are skipped, so a row with
+  a hidden middle chair reads as two consecutive labels (no blank line to keep
+  aligned). The `input` handler walks an independent line cursor over the
+  enabled chairs, and Tab/Shift-Tab step through the rendered textareas directly
+  so they skip any all-hidden rows that were omitted.
 - **Instruments** — reveals `#instrument-panel` with the canonical picker
   (`#instrument-picker-list`, built once at init) + tally button. Clicking a
   picker button arms `selectedLabel`; subsequent chair clicks stamp it. Buttons
@@ -279,7 +285,7 @@ Each block is dot-separated counts. Doublings in parens (`N(Roman=Label)`) get a
 - **Strings** sit in semicircle rows (V1 | V2 | Va | Vc→Cb columns, separated by placeholder gaps).
   - Rows 0–3: one desk per active section (a tight principal-led front).
   - Rows 4+: two desks per section (sections spread back faster).
-  - The rightmost column is shared between Vc and Cb — cellos fill the front of that column, basses take over behind them, putting them naturally behind the cellos.
+  - The rightmost column is shared between Vc and Cb — cellos fill the front of that column, basses take over behind them, putting them naturally behind the cellos. Bass desks are flagged `isStool` (double basses are played standing/perched) via `oneDesk(slot, idx, asStool)`; this applies to every orchestra-notation chart, including the custom-orchestra modal.
   - Exhausted sections get disabled placeholder desks so the column structure stays consistent.
 - **Winds, brass, percussion** are straight rows at the back. The wind row splits into Fl/Ob front + Cl/Bn back when totals > 6.
 - **Wind/brass numbering** (`numberSections`, applied via the `numbered` flag on `pushSectionRow`): each section of ≥2 players is numbered so the **1st sits innermost** (toward the row centre / conductor) and higher numbers fan to the edges — e.g. `Fl 3 Fl 2 Fl 1 | Ob 1 Ob 2 Ob 3`, `Hn 4 Hn 3 Hn 2 Hn 1 | Tp 3 Tp 2 Tp 1 | …`. Soloists (a lone Tuba) and doubled chairs (different labels) are left unnumbered. Strings are never numbered (they're desks).
