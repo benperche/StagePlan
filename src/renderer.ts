@@ -311,9 +311,10 @@ export class Renderer {
     return { halfW, back, front }
   }
 
-  // Fraction of the canvas the chart fills when auto-sizing (a little margin
-  // all round so it never touches the page edge).
-  private static readonly FILL = 0.93
+  // Fraction of the canvas the chart fills when auto-sizing. 0.85 keeps the
+  // conductor from hugging the bottom edge on narrow/short canvases — 0.93
+  // pushed it past 80% down on typical laptop viewports.
+  private static readonly FILL = 0.85
 
   // Uniform outer scale applied to the whole chart. `chartScale` is applied
   // separately (the inner transform in render), so it is NOT folded in here.
