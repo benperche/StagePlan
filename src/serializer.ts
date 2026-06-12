@@ -29,9 +29,15 @@ export function loadFromJson(file: File): Promise<ChartConfig> {
   })
 }
 
-// Migrate older saved formats forward
-function migrate(data: Record<string, unknown>): ChartConfig {
-  const version = (data['version'] as number) ?? 0
+// Migrate older saved formats forward. Throws on anything that isn't
+// recognisably a StagePlan chart, so a stray JSON file or a corrupt share link
+// surfaces a friendly error instead of replacing the chart with garbage.
+function migrate(data: unknown): ChartConfig {
+  if (!data || typeof data !== 'object' || !Array.isArray((data as { rows?: unknown }).rows)) {
+    throw new Error('Not a StagePlan chart')
+  }
+  const rec = data as Record<string, unknown>
+  const version = (rec['version'] as number) ?? 0
   if (version === CURRENT_VERSION) return data as unknown as ChartConfig
   // Future migrations go here as version numbers increase
   return data as unknown as ChartConfig

@@ -242,8 +242,16 @@ import {
 
 function init() {
   if (location.hash) {
+    // An explicit shared-chart link wins over anything else.
     const loaded = decodeFromHash(location.hash)
     if (loaded) config = loaded
+  } else {
+    // Otherwise pick up where the last session left off (autosave safety net).
+    const restored = restoreWorkingChart()
+    if (restored) {
+      config = restored.config
+      currentChartId = restored.currentChartId
+    }
   }
   migrateConfig(config)
 
@@ -251,6 +259,7 @@ function init() {
   updateAllInputs()
   renderInspector()
   bindEvents()
+  markSaved()        // baseline for the unsaved-changes guard
   maybeShowIntro()
   // setConfig isn't usable here yet (bindEvents hasn't wired things up
   // until after this returns). The default/hash-loaded path is the one
@@ -273,6 +282,57 @@ function maybeShowIntro() {
   } catch { /* storage unavailable — show it this once anyway */ }
   aboutModal.style.display = 'flex'
 }
+
+// --- Working-chart autosave (crash / refresh safety) ---
+//
+// The charts a user explicitly keeps live in the IndexedDB library; this is a
+// separate safety net for the chart currently on screen. We mirror it to
+// localStorage on a short debounce after every render, and restore it on the
+// next launch, so a refresh / closed tab / slept laptop never silently loses
+// unsaved work. The library id rides along so a restored chart still Saves in
+// place. Best-effort throughout — storage can be full or blocked.
+const WORKING_KEY = 'stageplan_working_chart'
+let autosaveTimer: number | undefined
+function scheduleAutosave() {
+  clearTimeout(autosaveTimer)
+  autosaveTimer = window.setTimeout(persistWorkingChart, 500)
+}
+function persistWorkingChart() {
+  try {
+    localStorage.setItem(WORKING_KEY, JSON.stringify({ config, currentChartId }))
+  } catch {
+    // Usually the quota, blown by a large background image. Retry without it so
+    // at least the layout survives — better than losing everything.
+    try {
+      const { backgroundImage: _omit, ...rest } = config
+      localStorage.setItem(WORKING_KEY, JSON.stringify({ config: rest, currentChartId }))
+    } catch { /* storage unavailable — nothing more we can do */ }
+  }
+}
+function restoreWorkingChart(): { config: ChartConfig; currentChartId: string | null } | null {
+  try {
+    const raw = localStorage.getItem(WORKING_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { config?: unknown; currentChartId?: unknown }
+    // Same shape guard as the file/hash loaders — ignore anything corrupt.
+    if (!parsed.config || typeof parsed.config !== 'object' ||
+        !Array.isArray((parsed.config as { rows?: unknown }).rows)) return null
+    return {
+      config: parsed.config as ChartConfig,
+      currentChartId: typeof parsed.currentChartId === 'string' ? parsed.currentChartId : null,
+    }
+  } catch { return null }
+}
+
+// --- Unsaved-changes guard ---
+//
+// Baseline JSON of the chart as it last stood at an explicit Save / Load / New
+// (NOT undo/redo, which are edits). beforeunload warns only when the live chart
+// differs from it, so leaving with genuinely unsaved edits prompts, but a clean
+// reload doesn't nag. Autosave above is the real safety net; this is the belt
+// to its braces.
+let savedSnapshot = ''
+function markSaved() { savedSnapshot = JSON.stringify(config) }
 
 // Make older saved configs forward-compatible with newer schema fields.
 // Fill in any newer fields that an older saved config might be missing,
@@ -341,6 +401,7 @@ function renderChart() {
   undoBtn.disabled = !history.canUndo()
   redoBtn.disabled = !history.canRedo()
   renderTally()
+  scheduleAutosave()   // debounced mirror to localStorage; cheap to call often
   // Keep the Layout tab's per-row boxes in sync with the geometry the render
   // just produced (renderer.layoutRows). A row-handle / default-arc drag is the
   // only kind that changes those numbers, so it gets a lightweight in-place
@@ -601,6 +662,7 @@ async function handleLibraryAction(action: string, id: string | null, folder: st
     if (!chart) return
     setConfig(chart.config)
     currentChartId = id
+    markSaved()        // freshly loaded from the library = clean
     updateLibraryCurrentTitle()
     closeLibrary()
     return
@@ -2154,8 +2216,18 @@ function bindEvents() {
     }
   })
 
+  // Warn before leaving with unsaved edits (relative to the last Save/Load).
+  // Flush the autosave synchronously first so the work is recoverable whatever
+  // the user chooses. Browsers show their own generic message, not returnValue.
+  window.addEventListener('beforeunload', (e) => {
+    persistWorkingChart()
+    if (JSON.stringify(config) === savedSnapshot) return
+    e.preventDefault()
+    e.returnValue = ''
+  })
+
   // Save / load
-  saveBtn.addEventListener('click', () => saveToJson(config))
+  saveBtn.addEventListener('click', () => { saveToJson(config); markSaved() })
   loadInput.addEventListener('change', async () => {
     const file = loadInput.files?.[0]
     if (!file) return
@@ -2163,6 +2235,7 @@ function bindEvents() {
       setConfig(await loadFromJson(file))
       // Loaded from disk → no library entry yet. Next Save creates one.
       currentChartId = null
+      markSaved()        // matches the file just loaded = clean
       updateLibraryCurrentTitle()
     } catch {
       alert('Could not load chart file.')
@@ -2260,6 +2333,7 @@ function bindEvents() {
       }
       const id = await library.saveChart(currentChartId, title, folder, config)
       currentChartId = id
+      markSaved()        // persisted to the library = clean
       updateLibraryCurrentTitle()
       await renderLibrary()
     } catch {
@@ -2271,6 +2345,7 @@ function bindEvents() {
     if (currentChartId && !window.confirm('Discard current chart and start a new blank one? Anything unsaved here will be lost — use Save first if you want to keep it.')) return
     setConfig(makeDefaultConfig())
     currentChartId = null
+    markSaved()        // a brand-new blank chart has nothing unsaved yet
     updateLibraryCurrentTitle()
     closeLibrary()
   })
