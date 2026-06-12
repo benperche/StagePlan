@@ -183,10 +183,12 @@ export interface RotateHandleHit {
 export interface LayoutHandleHit {
   // -1 for the chart-wide default arc-range handles (kind 'arc-range-*').
   rowIndex: number
-  kind: 'distance' | 'span-start' | 'span-end' | 'arc-range-start' | 'arc-range-end'
+  kind: 'distance' | 'span-start' | 'span-end' | 'arc-range-start' | 'arc-range-end' | 'desk'
   cx: number
   cy: number
   radius: number
+  // For 'desk' handles: index of the first chair of the dragged desk pair.
+  chairIndex?: number
 }
 
 // Per-row geometry snapshot the Layout drag handlers need (populated by the

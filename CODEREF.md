@@ -195,6 +195,25 @@ Hit tests are populated as a side effect of (6) and (7). `main.ts` calls `render
 - Fitting the chart to the canvas is handled by the auto-fit scale (see above), **not** by squeezing row spacing — `effectiveRowSpacing` is now a pass-through that always returns the user's value.
 - Sized so the seat number behind one row doesn't collide with the shared stand drawn in front of the row behind (stand reaches ~35 px forward, number ~28 px behind — 65 px floor; 70 gives a small gap).
 
+### Layout-tab drag handles (`renderLayoutHandles`)
+
+Drawn only in layout mode; recorded in `layoutHandles` (hit-tested by
+`layoutHandleHitTest`) with this-frame geometry in `layoutRows`:
+
+- **distance** (blue diamond, per row) → `row.gapBefore`; **span-start/end**
+  (blue dots) → `row.arcStart/arcEnd` (arc) or `straightSpacing/straightOffset`
+  (straight); **arc-range-start/end** (purple, chart-wide) → `config.arcRange`.
+- Dragging a **chair** body sets that one chair's `chair.offset` (tangential
+  nudge), clamped to `LAYOUT_MIN_SPACING` from its neighbours (`applyChairDrag`).
+- **desk** (teal dot, one per two-chair desk) → drags the whole desk: both
+  chairs of the pair get the *same* tangential `offset` delta, so the pair and
+  its shared stand slide along the row as a unit (`applyDeskDrag`), clamped so
+  neither outer chair overlaps the chair beyond it. The dot is placed behind the
+  desk's midpoint (radially out from the conductor on arcs, +`yDir` on straight
+  rows) so it clears the shared stand × drawn toward the front. Desk midpoints
+  are captured into `deskHandles` while the rows render, then drawn/registered in
+  `renderLayoutHandles`. Double-clicking the dot clears both chairs' offsets.
+
 ## Chair tools & labelling
 
 The **Edit chairs** panel is the one workspace for "what a chair click does".

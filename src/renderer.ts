@@ -76,6 +76,10 @@ export class Renderer {
   // geometry main.ts needs to drive the drags. Empty otherwise.
   private layoutHandles: LayoutHandleHit[] = []
   layoutRows: RowGeometry[] = []
+  // One entry per two-chair desk (shared stand, both seats filled), populated
+  // while rendering the rows. Drives the Layout-tab "drag the whole desk" dot,
+  // drawn behind each desk's midpoint in renderLayoutHandles.
+  private deskHandles: Array<{ rowIndex: number; chairIndex: number; cx: number; cy: number }> = []
 
   render(canvas: HTMLCanvasElement, config: ChartConfig, opts: RenderOptions = {}): void {
     // The backing store is dpr-bigger than the CSS box (see resizeCanvas), so
@@ -102,6 +106,7 @@ export class Renderer {
     this.instrumentHits = []
     this.layoutHandles = []
     this.layoutRows = []
+    this.deskHandles = []
     this.conductorHit = null
     this.rotateHandleHit = null
     this.deleteHandleHit = null
@@ -583,7 +588,16 @@ export class Renderer {
       if (!chair.enabled || !next.enabled) return
       const a = positions[chairIndex]
       const b = positions[chairIndex + 1]
-      this.drawStandX(ctx, (a.cx + b.cx) / 2, (a.cy + b.cy) / 2, ox, oy)
+      const mx = (a.cx + b.cx) / 2, my = (a.cy + b.cy) / 2
+      this.drawStandX(ctx, mx, my, ox, oy)
+      // Group-drag handle sits just behind the desk (radially out from the
+      // conductor) so it clears the shared stand × drawn toward the front.
+      const dl = Math.hypot(mx - ox, my - oy) || 1
+      this.deskHandles.push({
+        rowIndex, chairIndex,
+        cx: mx + ((mx - ox) / dl) * (CHAIR_HALF + 14),
+        cy: my + ((my - oy) / dl) * (CHAIR_HALF + 14),
+      })
     })
 
     if (config.showRowLabels) {
@@ -659,7 +673,11 @@ export class Renderer {
       if (chair.standAfter && chair.enabled && next?.enabled && chairIndex + 1 < positions.length) {
         const a = positions[chairIndex]
         const b = positions[chairIndex + 1]
-        this.drawStandX(ctx, (a.cx + b.cx) / 2, (a.cy + b.cy) / 2, a.cx, oy)
+        const mx = (a.cx + b.cx) / 2, my = (a.cy + b.cy) / 2
+        this.drawStandX(ctx, mx, my, a.cx, oy)
+        // Group-drag handle behind the desk (away from the conductor in y).
+        const yDir = config.flipped ? 1 : -1
+        this.deskHandles.push({ rowIndex, chairIndex, cx: mx, cy: my + yDir * (CHAIR_HALF + 14) })
       }
     })
 
@@ -800,6 +818,28 @@ export class Renderer {
         this.layoutHandles.push({ rowIndex: -1, kind, cx: ex, cy: ey, radius: 12 })
       }
     }
+
+    // Per-desk group handles: a teal dot behind each two-chair desk. Dragging
+    // it slides the pair (and their shared stand) along the row together.
+    for (const d of this.deskHandles) {
+      this.drawDeskDot(ctx, d.cx, d.cy)
+      this.layoutHandles.push({
+        rowIndex: d.rowIndex, kind: 'desk', chairIndex: d.chairIndex,
+        cx: d.cx, cy: d.cy, radius: 12,
+      })
+    }
+  }
+
+  // Group-move handle for a desk pair: a teal disc with a white ring and centre
+  // pip, distinct from the blue per-row dots and the purple arc-range handles.
+  private drawDeskDot(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
+    ctx.save()
+    ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2)
+    ctx.fillStyle = '#0d9488'; ctx.fill()
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke()
+    ctx.beginPath(); ctx.arc(cx, cy, 2, 0, Math.PI * 2)
+    ctx.fillStyle = '#fff'; ctx.fill()
+    ctx.restore()
   }
 
   private drawLayoutDiamond(ctx: CanvasRenderingContext2D, cx: number, cy: number) {

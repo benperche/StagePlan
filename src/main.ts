@@ -97,6 +97,27 @@ let chairDrag: {
   moved: boolean
 } | null = null
 
+// Active Layout-tab desk-group drag: slides a two-chair desk (and its shared
+// stand) along the row as a unit. Tracks both chairs' starting offsets plus the
+// frozen start centres of the pair and its outer neighbours (for overlap
+// clamping), since the pair moves while the neighbours stay put.
+let deskDrag: {
+  rowIndex: number
+  i: number              // first chair of the pair
+  isStraight: boolean
+  r: number
+  off0: [number, number]
+  centers: {
+    i: { x: number; y: number }
+    i1: { x: number; y: number }
+    left: { x: number; y: number } | null
+    right: { x: number; y: number } | null
+  }
+  start: { x: number; y: number }
+  preDragConfig: ChartConfig
+  moved: boolean
+} | null = null
+
 // Canonical instrument list, grouped by section (rough score order).
 // Each instrument appears once — synonyms and instrument-key variants
 // (Eb / Bb, TC / BC, etc.) are collapsed since the seating chart only
@@ -416,7 +437,7 @@ function renderChart() {
 // row boxes (instrument move/rotate, conductor move, per-chair nudge, title),
 // so we can skip rebuilding them mid-drag.
 function quietDragMoved(): boolean {
-  return !!(chairDrag?.moved || conductorDragState?.moved || dragState?.moved
+  return !!(chairDrag?.moved || deskDrag?.moved || conductorDragState?.moved || dragState?.moved
     || rotateState?.moved || titleDrag?.moved)
 }
 
@@ -1160,6 +1181,56 @@ function applyChairDrag(e: MouseEvent) {
   renderChart()
 }
 
+// Slides a whole desk (both chairs + their shared stand) along its row,
+// applying the same tangential displacement to both chairs' offsets and
+// clamping so the pair can't overlap the chairs on either side.
+function applyDeskDrag(e: MouseEvent) {
+  if (!deskDrag) return
+  const cv = pointerCanvasCoords(e)
+  const { x, y } = canvasToChart(cv.x, cv.y)
+  if (!deskDrag.moved) {
+    if (Math.hypot(x - deskDrag.start.x, y - deskDrag.start.y) < DRAG_THRESHOLD) return
+    history.push(deskDrag.preDragConfig)
+    deskDrag.moved = true
+  }
+
+  const { ox, oy, yDir } = renderer.conductorOrigin
+  const xDir = -yDir
+  const { rowIndex, i, off0, centers } = deskDrag
+  const chairs = config.rows[rowIndex].chairs
+  const ci = chairs[i], ci1 = chairs[i + 1]
+
+  if (deskDrag.isStraight) {
+    const exOf = (px: number) => (px - ox) / xDir
+    // Raw tangential displacement the pointer has travelled along the row.
+    let delta = exOf(x) - exOf(deskDrag.start.x)
+    // Clamp: leftmost chair stays clear of the left neighbour, rightmost of the
+    // right neighbour (exOf grows with chair index).
+    if (centers.left) delta = Math.max(delta, exOf(centers.left.x) + LAYOUT_MIN_SPACING - exOf(centers.i.x))
+    if (centers.right) delta = Math.min(delta, exOf(centers.right.x) - LAYOUT_MIN_SPACING - exOf(centers.i1.x))
+    ci.offset = off0[0] + delta
+    ci1.offset = off0[1] + delta
+  } else {
+    const r = deskDrag.r
+    const angOf = (px: number, py: number) => Math.atan2((py - oy) / yDir, (px - ox) / xDir)
+    const norm = (a: number) => Math.atan2(Math.sin(a), Math.cos(a))
+    // Angular displacement of the desk; +ve drives the pair toward the row end
+    // (decreasing angle), which is what a positive chair.offset encodes.
+    let dA = norm(angOf(deskDrag.start.x, deskDrag.start.y) - angOf(x, y))
+    const minGap = LAYOUT_MIN_SPACING / r
+    // Outer chairs' start angles; after the drag chair i sits at angle_i − dA.
+    const aI = angOf(centers.i.x, centers.i.y)
+    const aI1 = angOf(centers.i1.x, centers.i1.y)
+    // chair i must stay minGap below the left neighbour (larger angle): aI − dA ≤ aLeft − minGap.
+    if (centers.left) dA = Math.max(dA, aI - (angOf(centers.left.x, centers.left.y) - minGap))
+    // chair i+1 must stay minGap above the right neighbour (smaller angle): aI1 − dA ≥ aRight + minGap.
+    if (centers.right) dA = Math.min(dA, aI1 - (angOf(centers.right.x, centers.right.y) + minGap))
+    ci.offset = off0[0] + dA * r
+    ci1.offset = off0[1] + dA * r
+  }
+  renderChart()
+}
+
 // --- Presets ---
 
 function populatePresets() {
@@ -1394,8 +1465,29 @@ canvas.addEventListener('pointerdown', (e) => {
         arcRangeDrag = { startX: x, startY: y, preDragConfig: cloneConfig(config), moved: false }
         return
       }
+      if (handle.kind === 'desk' && handle.chairIndex !== undefined) {
+        const g = renderer.layoutRows[handle.rowIndex]
+        const i = handle.chairIndex
+        const row = config.rows[handle.rowIndex]
+        const ci = renderer.chairCenter(handle.rowIndex, i)
+        const ci1 = renderer.chairCenter(handle.rowIndex, i + 1)
+        if (g && ci && ci1) {
+          deskDrag = {
+            rowIndex: handle.rowIndex, i, isStraight: g.isStraight, r: g.r,
+            off0: [row.chairs[i].offset ?? 0, row.chairs[i + 1].offset ?? 0],
+            centers: {
+              i: ci, i1: ci1,
+              left: i > 0 ? renderer.chairCenter(handle.rowIndex, i - 1) : null,
+              right: i + 2 < row.chairs.length ? renderer.chairCenter(handle.rowIndex, i + 2) : null,
+            },
+            start: { x, y },
+            preDragConfig: cloneConfig(config), moved: false,
+          }
+          return
+        }
+      }
       const geom0 = renderer.layoutRows[handle.rowIndex]
-      if (geom0) {
+      if (geom0 && (handle.kind === 'distance' || handle.kind === 'span-start' || handle.kind === 'span-end')) {
         layoutDrag = {
           rowIndex: handle.rowIndex,
           kind: handle.kind,
@@ -1487,6 +1579,11 @@ window.addEventListener('pointermove', (e) => {
   // Layout-tab handle drag (distance / span).
   if (layoutDrag) {
     applyLayoutDrag(e)
+    return
+  }
+  // Layout-tab desk-group drag (slides a two-chair desk along the row).
+  if (deskDrag) {
+    applyDeskDrag(e)
     return
   }
   // Layout-tab per-chair nudge.
@@ -1602,13 +1699,15 @@ window.addEventListener('pointerup', (e) => {
       renderChart()
     }
   }
-  const finishedLayoutDrag = layoutDrag?.moved || chairDrag?.moved || conductorDragState?.moved || arcRangeDrag?.moved
+  const finishedLayoutDrag = layoutDrag?.moved || chairDrag?.moved || deskDrag?.moved
+    || conductorDragState?.moved || arcRangeDrag?.moved
   dragState = null
   rotateState = null
   conductorDragState = null
   panState = null
   layoutDrag = null
   chairDrag = null
+  deskDrag = null
   titleDrag = null
   arcRangeDrag = null
   canvas.classList.remove('panning')
@@ -1645,6 +1744,17 @@ canvas.addEventListener('dblclick', (e) => {
       return
     }
     const row = config.rows[handle.rowIndex]
+    // Desk handle → clear the sideways nudge on both chairs of the pair.
+    if (handle.kind === 'desk' && handle.chairIndex !== undefined) {
+      const a = row.chairs[handle.chairIndex], b = row.chairs[handle.chairIndex + 1]
+      if (a?.offset !== undefined || b?.offset !== undefined) {
+        history.push(config)
+        if (a) delete a.offset
+        if (b) delete b.offset
+        renderChart()
+      }
+      return
+    }
     history.push(config)
     if (handle.kind === 'distance') {
       delete row.gapBefore
