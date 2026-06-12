@@ -306,6 +306,7 @@ is then a thin wrapper that calls `buildPreset`, pushes the result into
   the old "in front of the conductor" fallback. Positions are stored polar, so
   the renderer's flip mirroring keeps them behind the band when flipped.
 - Drag/rotate handled by `DragState` / `RotateState` in main.ts. Selected instrument shows a green MS-Office-style rotate handle.
+- A fixed instrument can carry its own music stand (`hasStand`). With the **Stand** chair-tool active (Edit/Setup, not Layout), pressing an instrument always arms a drag (`DragState.toggleStandOnClick`); a press that never crosses `DRAG_THRESHOLD` toggles the stand on `pointerup`, while an actual drag just repositions it. So instruments stay draggable in stand mode instead of every press toggling the stand.
 
 ## Persistence
 

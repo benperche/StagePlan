@@ -180,6 +180,10 @@ interface DragState extends DragBase {
   instrumentId: string
   offsetX: number      // pointer x minus instrument centre x at drag start
   offsetY: number
+  // When the Stand tool is active, a press that never crosses the drag
+  // threshold toggles the instrument's music stand on pointerup; an actual
+  // drag still just moves it. Lets you reposition instruments in stand mode.
+  toggleStandOnClick?: boolean
 }
 let dragState: DragState | null = null
 
@@ -1259,18 +1263,6 @@ canvas.addEventListener('pointerdown', (e) => {
   }
   const instHit = renderer.instrumentHitTest(x, y)
   if (instHit) {
-    // Music Stand chair-tool toggles a stand on the instrument — only in the
-    // chair-tool tabs (Edit/Setup), not while reshaping in Layout.
-    if (!layoutMode && activeTool === 'stand') {
-      const inst = config.instruments.find(i => i.id === instHit.id)
-      if (inst) {
-        history.push(config)
-        inst.hasStand = !inst.hasStand
-        setSelectedInstrument(inst.id)
-        renderChart()
-      }
-      return
-    }
     setSelectedInstrument(instHit.id)
     dragState = {
       instrumentId: instHit.id,
@@ -1278,6 +1270,9 @@ canvas.addEventListener('pointerdown', (e) => {
       offsetY: y - instHit.cy,
       preDragConfig: cloneConfig(config),
       moved: false,
+      // Stand tool (in the chair-tool tabs, not Layout): a plain click toggles
+      // the stand, but the instrument is still draggable to reposition it.
+      toggleStandOnClick: !layoutMode && activeTool === 'stand',
     }
     renderChart()
     return
@@ -1512,6 +1507,16 @@ window.addEventListener('pointermove', (e) => {
 window.addEventListener('pointerup', (e) => {
   if (!e.isPrimary) return
   if (panState?.moved) suppressClickAfterPan = true
+  // Stand tool: a press on an instrument that never became a drag toggles its
+  // music stand (a real drag just repositioned it instead).
+  if (dragState && !dragState.moved && dragState.toggleStandOnClick) {
+    const inst = config.instruments.find(i => i.id === dragState!.instrumentId)
+    if (inst) {
+      history.push(config)
+      inst.hasStand = !inst.hasStand
+      renderChart()
+    }
+  }
   const finishedLayoutDrag = layoutDrag?.moved || chairDrag?.moved || conductorDragState?.moved || arcRangeDrag?.moved
   dragState = null
   rotateState = null
