@@ -14,6 +14,7 @@ export const tabNavButtons = document.querySelectorAll<HTMLButtonElement>('[data
 
 // --- Chart panel ---
 export const titleInput = document.getElementById('title') as HTMLInputElement
+export const titleGapInput = document.getElementById('title-gap') as HTMLInputElement
 export const layoutSelect = document.getElementById('layout') as HTMLSelectElement
 export const notesArea = document.getElementById('notes') as HTMLTextAreaElement
 export const showNumbersCheck = document.getElementById('show-numbers') as HTMLInputElement

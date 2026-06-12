@@ -131,14 +131,9 @@ export class Renderer {
     // tallest fixed instrument under it, or the conductor when flipped) rather
     // than floating at the canvas top, plus any manual drag offset. Drawn at
     // canvas scale so it stays crisp.
-    const titleOffsetX = config.titleOffsetX ?? 0
-    const titleCx = w / 2 + titleOffsetX
-    ctx.save(); ctx.font = 'bold 18px sans-serif'
-    const titleHalfW = ctx.measureText(config.title).width / 2
-    ctx.restore()
     this.drawTitle(ctx, config.title, w,
-      this.contentTopY(config, ox, oy, rowSpacing, chartScale, titleCx, titleHalfW),
-      titleOffsetX, config.titleOffsetY ?? 0)
+      this.contentTopY(config, oy, rowSpacing, chartScale),
+      config.titleOffsetX ?? 0, config.titleOffsetY ?? 0, config.titleGap ?? 0)
 
     const scaling = chartScale !== 1
     if (scaling) {
@@ -323,7 +318,9 @@ export class Renderer {
     if (config.rows.length === 0 && (config.instruments?.length ?? 0) === 0) return 1
     const chartScale = config.chartScale ?? 1
     const { halfW, back, front } = this.contentExtents(config)
-    const TITLE_PAD = 44   // title sits above the back row (drawn at canvas scale)
+    // Title sits above the back row (drawn at canvas scale), plus any extra
+    // user-requested title gap so widening it never pushes the title off-canvas.
+    const TITLE_PAD = 44 + (config.titleGap ?? 0)
     const FAR_PAD = 22
     const SIDE_PAD = 14
     const naturalWidth = 2 * halfW + 2 * SIDE_PAD
@@ -355,6 +352,13 @@ export class Renderer {
     // pulled music stands up onto the chairs of the row behind. The signature
     // keeps `h`/`numRows` so callers don't all have to change.
     return userRowSpacing
+  }
+
+  // Outermost row radius (px from the conductor) — used by main.ts to place
+  // newly added fixed instruments just beyond the back row.
+  backRowRadius(config: ChartConfig): number {
+    const radii = this.computeRowRadii(config.rows, config.rowSpacing ?? ROW_SPACING_DEFAULT)
+    return radii.length ? radii[radii.length - 1] : BASE_RADIUS
   }
 
   // Cumulative per-row radius from the conductor. Base step is the (already
@@ -1083,11 +1087,11 @@ export class Renderer {
   // Topmost y of the drawn chart (post-chartScale), in canvas pixels: the back
   // row's seat numbers when unflipped, the conductor podium when flipped — and
   // any fixed instrument that sits higher (e.g. percussion behind the band), so
-  // the title clears them instead of overlapping. `titleCx`/`titleHalfW` let it
-  // ignore instruments off to the side that the centred title won't touch.
+  // the title clears them instead of overlapping. Every instrument counts, even
+  // ones off to the side the title wouldn't touch — a stable title beats one
+  // that jumps up and down while an instrument is dragged across its span.
   private contentTopY(
-    config: ChartConfig, ox: number, oy: number, rowSpacing: number, scale: number,
-    titleCx: number, titleHalfW: number,
+    config: ChartConfig, oy: number, rowSpacing: number, scale: number,
   ): number {
     const radii = this.computeRowRadii(config.rows, rowSpacing)
     const maxR = radii.length ? Math.max(...radii) : BASE_RADIUS
@@ -1100,26 +1104,21 @@ export class Renderer {
     for (const inst of config.instruments ?? []) {
       const dims = this.glyphDims(inst)
       const rot = inst.rotation + (config.flipped && !this.keepUpright(inst) ? Math.PI : 0)
-      // Rotated bounding-box half extents.
+      // Rotated bounding-box vertical half extent.
       const vExt = Math.abs(dims.hw * Math.sin(rot)) + Math.abs(dims.hh * Math.cos(rot))
-      const hExt = Math.abs(dims.hw * Math.cos(rot)) + Math.abs(dims.hh * Math.sin(rot))
-      const cx = ox + mirror * inst.distance * Math.cos(inst.angle) * scale
       const cyTop = oy + (mirror * inst.distance * Math.sin(inst.angle) - vExt) * scale
-      // Only let it raise the title if it overlaps the title's horizontal span.
-      if (Math.abs(cx - titleCx) - hExt * scale < titleHalfW + 8) {
-        top = Math.min(top, cyTop)
-      }
+      top = Math.min(top, cyTop)
     }
     return top
   }
 
   private drawTitle(
     ctx: CanvasRenderingContext2D, title: string, w: number, chartTop: number,
-    offsetX: number, offsetY: number,
+    offsetX: number, offsetY: number, extraGap: number,
   ) {
     if (!title) { this.titleHit = null; return }
     const TITLE_HEIGHT = 20   // approx height of the 18px bold line
-    const GAP = 26            // breathing room between the title and the chart
+    const GAP = 26 + extraGap // breathing room between the title and the chart
     const MIN_TOP = 12        // never crowd the canvas top edge
     const baseY = Math.max(MIN_TOP, chartTop - GAP - TITLE_HEIGHT)
     const cx = w / 2 + offsetX

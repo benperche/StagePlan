@@ -111,6 +111,9 @@ export interface ChartConfig {
   // the back row. Set by dragging the title in the Layout tab; (0,0) = auto.
   titleOffsetX?: number
   titleOffsetY?: number
+  // Extra breathing room (canvas px) between the title and the top of the
+  // chart, on top of the built-in gap. Default 0.
+  titleGap?: number
   instruments: FixedInstrument[]
   // Angular range of the chair arc in radians. Default Math.PI (180°),
   // i.e. a full semicircle. Smaller values draw a narrower arc, useful for

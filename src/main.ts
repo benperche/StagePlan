@@ -129,22 +129,35 @@ const INSTRUMENT_GROUPS: Array<{ name: string; items: string[] }> = [
 ]
 
 // Short labels the Instruments picker stamps into the (small) chair boxes, so
-// they read like the preset charts ("Fl 1" rather than "Flute 1"). Every value
-// here is a label used verbatim by a built-in preset (presets.ts / orchestra
-// notation) — instruments without a preset short form keep their full name.
+// they read like the preset charts ("Fl 1" rather than "Flute 1"). Where a
+// built-in preset (presets.ts / orchestra notation) uses a short form, the
+// value here matches it verbatim; the rest use standard score abbreviations.
+// Names short enough to fit a chair box already (Tuba, Bass, Solo…) are
+// simply absent and pass through unchanged.
 const INSTRUMENT_ABBREV: Record<string, string> = {
   // Woodwinds
-  Piccolo: 'Picc', Flute: 'Fl', Oboe: 'Ob', Clarinet: 'Cl',
-  'Bass Clarinet': 'B Cl', Bassoon: 'Bsn',
+  Piccolo: 'Picc', Flute: 'Fl', Oboe: 'Ob', 'Cor Anglais': 'CA',
+  'Eb Clarinet': 'Eb Cl', Clarinet: 'Cl', 'Alto Clarinet': 'A Cl',
+  'Bass Clarinet': 'B Cl', 'Contrabass Clarinet': 'CB Cl',
+  Bassoon: 'Bsn', Contrabassoon: 'Cbsn',
   // Saxophones
-  'Alto Sax': 'AS', 'Tenor Sax': 'TS', 'Bari Sax': 'BS',
+  'Soprano Sax': 'SS', 'Alto Sax': 'AS', 'Tenor Sax': 'TS', 'Bari Sax': 'BS',
+  'Bass Sax': 'B Sax',
   // Brass
-  Horn: 'Hn', Trumpet: 'Tpt', Trombone: 'Tbn', Euphonium: 'Euph',
+  Horn: 'Hn', Trumpet: 'Tpt', Cornet: 'Cnt', Flugelhorn: 'Flug',
+  Trombone: 'Tbn', 'Bass Trombone': 'B Tbn', Baritone: 'Bar', Euphonium: 'Euph',
   // Strings
-  Viola: 'Va', Cello: 'Vc', 'Double Bass': 'Cb',
+  Violin: 'Vn', Viola: 'Va', Cello: 'Vc', 'Double Bass': 'Cb',
+  // Rhythm and keyboards
+  Piano: 'Pno', Keyboard: 'Kbd', Organ: 'Org', Harp: 'Hp', Celeste: 'Cel',
+  Guitar: 'Gtr', 'Electric Guitar': 'E Gtr', 'Electric Bass': 'E Bass',
   // Percussion
-  Timpani: 'Timp', Glockenspiel: 'Glock', Xylophone: 'Xylo',
-  Vibraphone: 'Vibes', Percussion: 'Perc', Auxiliary: 'Aux',
+  Timpani: 'Timp', 'Snare Drum': 'SD', 'Bass Drum': 'BD', Cymbals: 'Cym',
+  Tambourine: 'Tamb', Glockenspiel: 'Glock', Xylophone: 'Xylo',
+  Vibraphone: 'Vibes', Marimba: 'Mba', Mallets: 'Mlts',
+  Percussion: 'Perc', Auxiliary: 'Aux',
+  // Voices
+  Voice: 'Vox', Soprano: 'Sop', Tenor: 'Ten',
 }
 
 const abbrevInstrument = (name: string): string => INSTRUMENT_ABBREV[name] ?? name
@@ -197,7 +210,7 @@ let conductorDragState: ConductorDragState | null = null
 // All DOM refs live in dom.ts; pull them in by name.
 import {
   canvas, tabButtons, tabContents, tabNavButtons,
-  titleInput, layoutSelect, notesArea, showNumbersCheck, restartNumbersCheck,
+  titleInput, titleGapInput, layoutSelect, notesArea, showNumbersCheck, restartNumbersCheck,
   showRowLabelsCheck, conductorStandCheck, showConductorCheck, showArcCheck, showStageDirectionsCheck,
   chartScaleInput, bgInput, bgClearBtn, bgStatus, bgFitSelect, showCreditCheck,
   flipCheck, straightRowsInput, straightRowsLabel, arcRangeInput, arcRangeLabel,
@@ -654,6 +667,9 @@ function bindNumber(el: HTMLInputElement, get: () => number, set: (v: number) =>
 }
 
 bindText(titleInput, () => config.title, v => { config.title = v })
+bindNumber(titleGapInput,
+  () => config.titleGap ?? 0,
+  v => { config.titleGap = Math.max(0, Math.min(200, v || 0)) })
 bindText(layoutSelect, () => config.layout, v => { config.layout = v as ChartConfig['layout'] })
 bindText(notesArea, () => config.notes, v => { config.notes = v })
 bindBool(showNumbersCheck, () => config.showNumbers, v => { config.showNumbers = v })
@@ -1698,7 +1714,7 @@ function bindEvents() {
       const type = btn.dataset['addInstrument'] as InstrumentType
       history.push(config)
       const sameTypeCount = config.instruments.filter(i => i.type === type).length
-      const inst = makeInstrument(type, config.flipped, sameTypeCount)
+      const inst = makeInstrument(type, config.flipped, sameTypeCount, renderer.backRowRadius(config))
       config.instruments.push(inst)
       setSelectedInstrument(inst.id)
       renderChart()

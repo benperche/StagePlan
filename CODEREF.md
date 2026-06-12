@@ -155,7 +155,7 @@ chart below the floating undo/zoom buttons.
 
 1. Clear canvas, apply `config.chartScale`
 2. Draw background image (if any), per `config.backgroundFit`
-3. Draw chart title — sits a fixed gap above the chart top (`contentTopY`, post-chartScale), not pinned to the canvas top, plus an optional manual `titleOffsetX/Y`. Drawn at canvas scale; `titleHit` (raw canvas px) lets the Layout tab drag it (double-click to reset). `contentTopY` clears the back chair row, the conductor (when flipped), **and any fixed instrument that sits higher and overlaps the centred title horizontally** (e.g. percussion behind a concert band) — instrument sizes come from `glyphDims`, which measures the real glyph code on a throwaway off-screen context so there's no duplicated size table.
+3. Draw chart title — sits a fixed gap above the chart top (`contentTopY`, post-chartScale) plus the user's optional `config.titleGap` ("Title gap (px)" in Setup, also folded into `computeFitScale`'s TITLE_PAD so a big gap never pushes the title off-canvas), not pinned to the canvas top, plus an optional manual `titleOffsetX/Y`. Drawn at canvas scale; `titleHit` (raw canvas px) lets the Layout tab drag it (double-click to reset). `contentTopY` clears the back chair row, the conductor (when flipped), **and any fixed instrument that sits higher** (e.g. percussion behind a concert band) — *every* instrument counts, even ones off to the side the centred title wouldn't touch, so the title stays put instead of jumping while an instrument is dragged across its span. Instrument sizes come from `glyphDims`, which measures the real glyph code on a throwaway off-screen context so there's no duplicated size table.
 4. Draw notes (bottom-left)
 5. Draw stage directions if enabled (left/right edges, light grey)
 6. Dispatch to `renderSemicircle` or `renderStraight` based on `config.layout`
@@ -208,8 +208,10 @@ six tools (`ChairTool`) and their sub-panels:
   picker button arms `selectedLabel`; subsequent chair clicks stamp it. Buttons
   show the full instrument name but stamp the **abbreviated** form
   (`INSTRUMENT_ABBREV`, e.g. Flute → `Fl`, numbered → `Fl 1`) so it fits the
-  chair box and matches the preset charts. Every abbreviation is a label used
-  verbatim by a preset; the tally's matcher list includes both full and
+  chair box and matches the preset charts. Where a preset uses a short form
+  the abbreviation matches it verbatim; the rest use standard score
+  abbreviations (every instrument has one except names already short enough —
+  Tuba, Bass, Alto, Solo…). The tally's matcher list includes both full and
   abbreviated forms so preset/abbreviated labels classify into their section
   instead of "Other".
 
@@ -294,6 +296,15 @@ is then a thin wrapper that calls `buildPreset`, pushes the result into
 - **Microphone** is a slim vocal-mic silhouette (handle + slight grille bulge, not a ball mic). Carries two extra booleans: `micStand` (default true — drawn on a pole + base; false = handheld) and `wireless` (default false = wired, drawn with a trailing cable; true = radio-wave arcs above the head, no cable). Both are toggled from the instrument inspector and only shown for the microphone type, mirroring how the timpani drum-count field is gated.
 - **Gong** is a square stand frame holding a flattened disc (white rim ring + central boss). Drawn wide-and-short on purpose so it stays compact vertically in the top-down chart.
 - Each glyph is a pure `draw*` function in `instrument-glyphs.ts` returning `{ hw, hh, labelInside }` for the bounding box.
+- **Smart insert position**: `makeInstrument` (state.ts) places new instruments
+  where ensembles actually put them via the `INSERT_DEFAULTS` table — a
+  per-type `{ angle, pad }` where `pad` is px beyond the back row
+  (`renderer.backRowRadius(config)`, passed in by main.ts), so the defaults
+  scale with the chart. Tuned from the Concert Band / Big Band presets:
+  timpani back-right, mallets back-left, kit/gong/aux back-centre, piano +
+  amps + harp on the left flank. Small props (mic, stand, chair, stool) keep
+  the old "in front of the conductor" fallback. Positions are stored polar, so
+  the renderer's flip mirroring keeps them behind the band when flipped.
 - Drag/rotate handled by `DragState` / `RotateState` in main.ts. Selected instrument shows a green MS-Office-style rotate handle.
 
 ## Persistence
