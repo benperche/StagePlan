@@ -672,12 +672,41 @@ button.danger:hover { background: #fff0f0; }
 /* About modal */
 .about-card {
   position: relative;
-  width: min(380px, 92vw);
+  width: min(460px, 92vw);
   align-items: center;
   text-align: center;
   gap: 10px;
   padding: 28px 24px 26px;
 }
+.about-guide {
+  width: 100%;
+  text-align: left;
+  margin: 6px 0 2px;
+  padding: 14px 4px 4px;
+  border-top: 1px solid var(--border);
+}
+.about-guide h3 {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin: 12px 0 6px;
+}
+.about-guide h3:first-child { margin-top: 0; }
+.about-guide ul {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.about-guide li {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
+}
+.about-guide b { font-weight: 600; }
 .about-close {
   position: absolute;
   top: 10px;

@@ -314,6 +314,18 @@ is then a thin wrapper that calls `buildPreset`, pushes the result into
 - **PNG export / Print**: rendered to **A4-landscape proportions** (`EXPORT_W`×`EXPORT_H`, 2100×1485 ≈ √2), not the screen-shaped on-screen canvas, so the chart auto-fills the page. PNG renders to a throwaway off-screen canvas; print re-renders the live canvas at that size in a `beforeprint` handler (and restores it in `afterprint`). Both suppress the instrument selection box. The print `@media` CSS then `object-fit: contain`s the now-A4 canvas onto the A4 page with no letterboxing.
 - **URL hash on load**: decoded by `decodeFromHash`, passed through `migrateConfig` (which merges in any newer default fields the saved config is missing).
 
+## About / intro modal
+
+The ⓘ button opens `#about-modal` — branding/support links **plus a short
+how-it-works guide** (`.about-guide`: a tab-by-tab overview and a "worth
+knowing" list, aimed at non-technical first-time users). `maybeShowIntro()`
+(called at the end of `init`) pops it **automatically on the first visit only**,
+gated by a `localStorage` flag (`stageplan_intro_seen`); thereafter it's
+ⓘ-only. Skipped when the URL has a hash (a shared-chart link — that visitor
+wants the chart, not a tour) and wrapped in try/catch for storage-blocked
+browsers. The guide is hand-written HTML in `index.html`; keep it in step with
+the actual tab/feature layout.
+
 ## Coordinate conventions
 
 - Canvas y is downward (HTML5 standard).

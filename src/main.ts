@@ -247,9 +247,27 @@ function init() {
   updateAllInputs()
   renderInspector()
   bindEvents()
+  maybeShowIntro()
   // setConfig isn't usable here yet (bindEvents hasn't wired things up
   // until after this returns). The default/hash-loaded path is the one
   // case where we mutate config in place and then sync everything below.
+}
+
+// Pop the About / how-it-works modal automatically the very first time someone
+// opens the app on this device (a localStorage flag, so it's once-only — after
+// that it's reachable only via the ⓘ button). Wrapped in try/catch because
+// localStorage throws in private-mode / cookie-blocked browsers; failing to
+// remember just means a returning visitor sees the intro again, which is
+// harmless. Don't barge in over a shared chart (a hash link) — that visitor
+// asked for a specific chart, not a tour.
+const INTRO_SEEN_KEY = 'stageplan_intro_seen'
+function maybeShowIntro() {
+  if (location.hash) return
+  try {
+    if (localStorage.getItem(INTRO_SEEN_KEY)) return
+    localStorage.setItem(INTRO_SEEN_KEY, '1')
+  } catch { /* storage unavailable — show it this once anyway */ }
+  aboutModal.style.display = 'flex'
 }
 
 // Make older saved configs forward-compatible with newer schema fields.
