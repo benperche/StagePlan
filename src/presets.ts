@@ -139,8 +139,15 @@ export const PRESETS: Preset[] = [
     layout: 'semicircle',
     sections: [],
     // Late-romantic full symphony (Tchaikovsky-ish): triple winds, full
-    // brass, timpani + perc, full strings.
-    notation: '3.3.3.3 - 4.3.3.1 - 1.2 - 14.12.10.8.6',
+    // brass, full strings. The percussion block is dropped from the notation so
+    // it isn't a row of chairs; instead the timpani + a small percussion bench
+    // sit behind the brass as fixed instruments (polar coords from conductor).
+    notation: '3.3.3.3 - 4.3.3.1 - 14.12.10.8.6',
+    instruments: [
+      { type: 'timpani', angle: -1.46, distance: 850, count: 4 },
+      { type: 'square',  angle: -1.74, distance: 855, label: 'Perc' },
+      { type: 'square',  angle: -1.96, distance: 835, label: 'Perc' },
+    ],
   },
   {
     id: 'concert-band',
@@ -463,6 +470,32 @@ function makePlaceholderChair(color: string): Chair {
   }
 }
 
+// Number the players of each instrument section in a row so the 1st (principal)
+// sits innermost — toward the centre of the row, where the conductor is — and
+// the higher numbers fan out to the edges. Matches standard wind/brass seating.
+// Only runs of ≥2 identical labels are numbered; soloists (e.g. a lone Tuba) and
+// doubled chairs (whose labels differ) are left as-is.
+function numberSections(chairs: Chair[]): void {
+  const rowCenter = (chairs.length - 1) / 2
+  let i = 0
+  while (i < chairs.length) {
+    const base = chairs[i].label
+    if (!chairs[i].enabled || !base) { i++; continue }
+    let j = i
+    while (j < chairs.length && chairs[j].enabled && chairs[j].label === base) j++
+    const n = j - i
+    if (n >= 2) {
+      // Section on the left of centre → 1st on its right (inner) edge; section
+      // on the right → 1st on its left edge.
+      const leftOfCentre = (i + j - 1) / 2 <= rowCenter
+      for (let k = 0; k < n; k++) {
+        chairs[i + k].label = `${base} ${leftOfCentre ? n - k : k + 1}`
+      }
+    }
+    i = j
+  }
+}
+
 function rowFromSlots(
   slots: ParsedSlot[],
   color: string,
@@ -517,9 +550,12 @@ export function buildOrchestraRows(comp: OrchestraComposition): OrchestraRowsRes
     })
     if (isArc) arcRowCount++
   }
-  const pushSectionRow = (slots: ParsedSlot[], color: string, mode: 'solo' | 'shared') => {
+  const pushSectionRow = (slots: ParsedSlot[], color: string, mode: 'solo' | 'shared', numbered = false) => {
     const r = rowFromSlots(slots, color, mode, '')
-    if (r) pushRow(r.chairs, false)
+    if (r) {
+      if (numbered) numberSections(r.chairs)
+      pushRow(r.chairs, false)
+    }
   }
 
   // ---- Strings: integrated semicircle rows, slot-aware, with back-row doubling ----
@@ -641,15 +677,15 @@ export function buildOrchestraRows(comp: OrchestraComposition): OrchestraRowsRes
     ((fl?.parsed.count ?? 0) + (ob?.parsed.count ?? 0)) > 0 &&
     ((cl?.parsed.count ?? 0) + (bn?.parsed.count ?? 0)) > 0
   if (splitWinds) {
-    pushSectionRow([fl, ob], COLORS.woodwind, 'solo')
-    pushSectionRow([cl, bn], COLORS.woodwind, 'solo')
+    pushSectionRow([fl, ob], COLORS.woodwind, 'solo', true)
+    pushSectionRow([cl, bn], COLORS.woodwind, 'solo', true)
   } else if (totalWinds > 0) {
-    pushSectionRow(comp.woodwinds, COLORS.woodwind, 'solo')
+    pushSectionRow(comp.woodwinds, COLORS.woodwind, 'solo', true)
   }
 
   // ---- Brass: one straight row ----
   if (comp.brass.reduce((s, slot) => s + slot.parsed.count, 0) > 0) {
-    pushSectionRow(comp.brass, COLORS.brass, 'solo')
+    pushSectionRow(comp.brass, COLORS.brass, 'solo', true)
   }
 
   // ---- Percussion: back straight row ----

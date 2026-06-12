@@ -272,7 +272,10 @@ Each block is dot-separated counts. Doublings in parens (`N(Roman=Label)`) get a
   - The rightmost column is shared between Vc and Cb — cellos fill the front of that column, basses take over behind them, putting them naturally behind the cellos.
   - Exhausted sections get disabled placeholder desks so the column structure stays consistent.
 - **Winds, brass, percussion** are straight rows at the back. The wind row splits into Fl/Ob front + Cl/Bn back when totals > 6.
+- **Wind/brass numbering** (`numberSections`, applied via the `numbered` flag on `pushSectionRow`): each section of ≥2 players is numbered so the **1st sits innermost** (toward the row centre / conductor) and higher numbers fan to the edges — e.g. `Fl 3 Fl 2 Fl 1 | Ob 1 Ob 2 Ob 3`, `Hn 4 Hn 3 Hn 2 Hn 1 | Tp 3 Tp 2 Tp 1 | …`. Soloists (a lone Tuba) and doubled chairs (different labels) are left unnumbered. Strings are never numbered (they're desks).
 - Returned `straightRows` count tells `applyPreset` how many trailing rows to render as straight lines instead of arcs.
+
+The **Symphony Orchestra** preset drops the percussion block from its notation (so it isn't a row of chairs) and instead places a real **timpani glyph** plus a small `Perc` bench behind the brass as fixed `instruments` — `buildPreset` reads `preset.instruments` regardless of how the rows were specified, so a notation preset can still carry fixed instruments.
 
 ## Presets architecture
 
