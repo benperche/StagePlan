@@ -590,14 +590,10 @@ export class Renderer {
       const b = positions[chairIndex + 1]
       const mx = (a.cx + b.cx) / 2, my = (a.cy + b.cy) / 2
       this.drawStandX(ctx, mx, my, ox, oy)
-      // Group-drag handle sits just behind the desk (radially out from the
-      // conductor) so it clears the shared stand × drawn toward the front.
-      const dl = Math.hypot(mx - ox, my - oy) || 1
-      this.deskHandles.push({
-        rowIndex, chairIndex,
-        cx: mx + ((mx - ox) / dl) * (CHAIR_HALF + 14),
-        cy: my + ((my - oy) / dl) * (CHAIR_HALF + 14),
-      })
+      // Group-drag handle sits on the arc, in the gap between the desk's two
+      // chairs, so it's unambiguously tied to them (and clear of the shared
+      // stand ×, which is offset toward the conductor in front of this point).
+      this.deskHandles.push({ rowIndex, chairIndex, cx: mx, cy: my })
     })
 
     if (config.showRowLabels) {
@@ -675,9 +671,8 @@ export class Renderer {
         const b = positions[chairIndex + 1]
         const mx = (a.cx + b.cx) / 2, my = (a.cy + b.cy) / 2
         this.drawStandX(ctx, mx, my, a.cx, oy)
-        // Group-drag handle behind the desk (away from the conductor in y).
-        const yDir = config.flipped ? 1 : -1
-        this.deskHandles.push({ rowIndex, chairIndex, cx: mx, cy: my + yDir * (CHAIR_HALF + 14) })
+        // Group-drag handle on the row line, between the desk's two chairs.
+        this.deskHandles.push({ rowIndex, chairIndex, cx: mx, cy: my })
       }
     })
 

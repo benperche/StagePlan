@@ -208,10 +208,13 @@ Drawn only in layout mode; recorded in `layoutHandles` (hit-tested by
 - **desk** (teal dot, one per two-chair desk) → drags the whole desk: both
   chairs of the pair get the *same* tangential `offset` delta, so the pair and
   its shared stand slide along the row as a unit (`applyDeskDrag`), clamped so
-  neither outer chair overlaps the chair beyond it. The dot is placed behind the
-  desk's midpoint (radially out from the conductor on arcs, +`yDir` on straight
-  rows) so it clears the shared stand × drawn toward the front. Desk midpoints
-  are captured into `deskHandles` while the rows render, then drawn/registered in
+  neither outer chair overlaps the chair beyond it. The dot sits **on the row
+  line, in the gap between the desk's two chairs** (the exact pair midpoint), so
+  it's unambiguously tied to them — it's clear of the shared stand ×, which
+  `drawStandX` offsets toward the conductor in front of that point. (An earlier
+  version pushed the dot radially out behind the desk, which put it near the row
+  behind and made it easy to grab the wrong desk.) Desk midpoints are captured
+  into `deskHandles` while the rows render, then drawn/registered in
   `renderLayoutHandles`. Double-clicking the dot clears both chairs' offsets.
 
 ## Chair tools & labelling
