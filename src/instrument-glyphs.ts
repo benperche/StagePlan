@@ -61,43 +61,58 @@ export function drawDrumkit(ctx: CanvasRenderingContext2D): GlyphResult {
 }
 
 // ---------------------------------------------------------------------------
-// Grand piano — top-down silhouette with a straight LEFT/TOP/BOTTOM and a
-// multi-segment bezier curve for the rounded right tail.
+// Grand piano — top-down silhouette: keyboard along the bottom, a wide rounded
+// bass dome over the top, and the curved bentside down the right with a concave
+// waist pinching in before a small lobe near the keyboard.
 // ---------------------------------------------------------------------------
 export function drawPiano(ctx: CanvasRenderingContext2D): GlyphResult {
-  const halfW = 55
-  const halfH = 26
-  const straightX = halfW * 0.15   // top/bottom run straight to here, then curve
+  // Top-down grand piano. Keyboard runs along the bottom; the body above it is
+  // the classic grand outline: a straight "spine" down the left, a wide rounded
+  // bass dome across the top, and the curved "bentside" down the right that
+  // pinches inward (concave waist) before swelling back out to a small lobe
+  // near the keyboard.
+  const hw = 38
+  const hh = 44
 
   ctx.fillStyle = '#1a1a1a'
   ctx.beginPath()
-  // Top-left corner (start of straight left edge)
-  ctx.moveTo(-halfW, -halfH)
-  // Straight top edge — runs most of the way across
-  ctx.lineTo(straightX, -halfH)
-  // Top-right curve: bezier easing down to the rounded tail tip
-  ctx.bezierCurveTo(
-    halfW * 0.55, -halfH,        // c1: continues horizontal
-    halfW + 2, -halfH * 0.55,    // c2: pulls slightly past halfW
-    halfW + 2, 0,                // tip of tail
-  )
-  // Bottom-right curve: mirrors the top, returning to the straight bottom
-  ctx.bezierCurveTo(
-    halfW + 2, halfH * 0.55,
-    halfW * 0.55, halfH,
-    straightX, halfH,
-  )
-  // Bottom edge with a gentle bass bulge along the back portion
-  ctx.bezierCurveTo(
-    -halfW * 0.1, halfH + 4,     // c1: bulges slightly down
-    -halfW * 0.55, halfH + 3,    // c2: continues the bulge
-    -halfW, halfH,               // back to bottom-left corner
-  )
-  // closePath draws the straight left edge back to start
+  // Bottom-left corner of the keyboard.
+  ctx.moveTo(-hw, hh)
+  // Straight spine up the left edge.
+  ctx.lineTo(-hw, -hh * 0.5)
+  // Bass dome: sweep up and over the top, left → apex (slightly left of centre)
+  // → out to the dome's widest point on the right.
+  ctx.bezierCurveTo(-hw, -hh,  -hw * 0.4, -hh,  hw * 0.05, -hh)
+  ctx.bezierCurveTo(hw * 0.68, -hh,  hw, -hh * 0.66,  hw, -hh * 0.28)
+  // Bentside concave waist: ease inward toward the centre (control points sit
+  // well left of the dome's right extent so the edge caves in).
+  ctx.bezierCurveTo(hw, -hh * 0.02,  hw * 0.56, -hh * 0.04,  hw * 0.56, hh * 0.16)
+  // Lower lobe: swell gently back out, then drop to the keyboard's right end.
+  ctx.bezierCurveTo(hw * 0.56, hh * 0.4,  hw * 0.86, hh * 0.38,  hw * 0.74, hh)
+  // closePath draws the straight keyboard-front edge back to the start.
   ctx.closePath()
   ctx.fill()
 
-  return { hw: halfW + 2, hh: halfH + 4, labelInside: true }
+  // Keyboard: a white keybed inset inside a thin black frame, with black key
+  // separations stopping short of the front so a solid white lip remains.
+  const kbTop = hh * 0.58
+  const kbBot = hh - 5
+  const kbLeft = -hw + 5
+  const kbRight = hw * 0.52
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(kbLeft, kbTop, kbRight - kbLeft, kbBot - kbTop)
+  ctx.strokeStyle = '#1a1a1a'
+  ctx.lineWidth = 1.3
+  const keys = 12
+  for (let i = 1; i < keys; i++) {
+    const x = kbLeft + (i / keys) * (kbRight - kbLeft)
+    ctx.beginPath()
+    ctx.moveTo(x, kbTop)
+    ctx.lineTo(x, kbBot - 4)
+    ctx.stroke()
+  }
+
+  return { hw, hh, labelInside: true }
 }
 
 // ---------------------------------------------------------------------------
