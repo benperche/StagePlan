@@ -7,7 +7,7 @@ import {
 } from './presets'
 import { saveToJson, loadFromJson, encodeToHash, decodeFromHash, exportToPng } from './serializer'
 import * as library from './library'
-import type { ChartConfig, InstrumentType } from './types'
+import type { ChartConfig, InstrumentType, Chair } from './types'
 
 // --- App state ---
 let config: ChartConfig = makeDefaultConfig()
@@ -876,6 +876,25 @@ function renderRowList() {
   rowsContainer.scrollTop = scrollTop
 }
 
+// Hiding/showing a chair re-packs the row's labels so none get stranded on a
+// hidden seat: the toggled chair and every still-enabled chair after it rotate
+// their labels by one. Hiding rotates "right" — the toggled (now hidden) seat
+// parks the trailing label while the later chairs slide up to fill the gap;
+// showing rotates "left", the exact inverse, so un-hiding the same chair
+// restores the original order. Pre-existing hidden chairs (e.g. preset spacers)
+// are skipped so their blanks never flow into a visible seat.
+function repackLabelsAfterToggle(chairs: Chair[], i: number, nowHidden: boolean): void {
+  const idxs = [i]
+  for (let j = i + 1; j < chairs.length; j++) {
+    if (chairs[j].enabled) idxs.push(j)
+  }
+  if (idxs.length < 2) return   // nothing after it to shift into
+  const labels = idxs.map(k => chairs[k].label)
+  if (nowHidden) labels.unshift(labels.pop()!)   // rotate right
+  else           labels.push(labels.shift()!)    // rotate left
+  idxs.forEach((k, n) => { chairs[k].label = labels[n] })
+}
+
 // The "paste a list" label editor in the Labels panel — one textarea per row,
 // one label per line. Kept in sync with renderRowList (rebuilt on row changes).
 function renderLabelList() {
@@ -1694,6 +1713,9 @@ canvas.addEventListener('click', (e) => {
     chair.color = activeColor
   } else if (activeTool === 'toggle') {
     chair.enabled = !chair.enabled
+    // Re-pack labels so the hidden seat doesn't strand its label (and un-hiding
+    // restores it) — see repackLabelsAfterToggle.
+    repackLabelsAfterToggle(config.rows[hit.rowIndex].chairs, hit.chairIndex, !chair.enabled)
   } else if (activeTool === 'stool') {
     // Cycle: chair → stool → standing (no seat) → chair.
     if (chair.noSeat) {

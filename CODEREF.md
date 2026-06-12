@@ -203,7 +203,13 @@ toggles the tool-button highlights, shows exactly one contextual sub-panel,
 clears any armed instrument selection, and closes the inline label editor. The
 six tools (`ChairTool`) and their sub-panels:
 
-- **Hide** (`toggle`) — toggles `chair.enabled`.
+- **Hide** (`toggle`) — toggles `chair.enabled`, then `repackLabelsAfterToggle`
+  re-flows the row's labels so none strand on the hidden seat: the toggled chair
+  and every still-enabled chair after it rotate labels by one (hide = rotate
+  right, so the hidden seat parks the trailing label and the later chairs pack
+  up; show = rotate left, the exact inverse, so un-hiding the same chair
+  restores the original order). Pre-existing hidden chairs (preset spacers) are
+  skipped so their blanks never flow into a visible seat.
 - **Stand** — cycles the music stand; reveals `#stand-bulk`.
 - **Stool** — toggles `chair.isStool`; reveals `#stool-bulk`.
 - **Colour** — paints `chair.color`; reveals the `#color-picker` swatch.
