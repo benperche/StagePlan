@@ -418,7 +418,9 @@ function isLibraryOpen() {
 
 function renderChart() {
   resizeCanvas()
-  renderer.render(canvas, config, { layoutMode, dpr: renderDpr })
+  // Hidden seats show their ghost outline while editing, but not in the Export
+  // tab preview — that mirrors the PNG/print output, which omits them entirely.
+  renderer.render(canvas, config, { layoutMode, dpr: renderDpr, showGhosts: activeTab !== 'export' })
   undoBtn.disabled = !history.canUndo()
   redoBtn.disabled = !history.canRedo()
   renderTally()
@@ -2426,7 +2428,7 @@ function bindEvents() {
     const savedSel = renderer.selectedInstrumentId
     renderer.selectedInstrumentId = null
     try {
-      renderer.render(ex, config, { dpr: 1 })
+      renderer.render(ex, config, { dpr: 1, showGhosts: false })
       exportToPng(ex, config.title)
     } finally {
       renderer.selectedInstrumentId = savedSel
@@ -2445,7 +2447,7 @@ function bindEvents() {
     renderer.selectedInstrumentId = null
     canvas.width = EXPORT_W
     canvas.height = EXPORT_H
-    renderer.render(canvas, config, { dpr: 1 })
+    renderer.render(canvas, config, { dpr: 1, showGhosts: false })
     renderer.selectedInstrumentId = savedSel
   })
   window.addEventListener('afterprint', () => renderChart())

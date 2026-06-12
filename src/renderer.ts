@@ -40,6 +40,11 @@ export interface RenderOptions {
   // screens; the renderer draws everything dpr-bigger and exposes the css-space
   // scale separately for DOM positioning / hit-testing.
   dpr?: number
+  // Whether to draw the dashed ghost outline for hidden (disabled) chairs.
+  // True while editing (so hidden seats remain visible and clickable); false
+  // for PNG/print output and the Export-tab preview, where a hidden seat
+  // should leave no mark at all. Defaults to true.
+  showGhosts?: boolean
 }
 
 export class Renderer {
@@ -72,6 +77,9 @@ export class Renderer {
   // Set per-render from RenderOptions.layoutMode. When true the chart shows
   // arc guides + geometry handles regardless of config.showArc.
   private layoutMode = false
+  // Set per-render from RenderOptions.showGhosts. When false, hidden chairs
+  // draw nothing at all (output / export). Defaults to true (editing views).
+  private showGhosts = true
   // Populated each render in layout mode: the draggable handles + the per-row
   // geometry main.ts needs to drive the drags. Empty otherwise.
   private layoutHandles: LayoutHandleHit[] = []
@@ -97,6 +105,7 @@ export class Renderer {
     this.viewScale = fit
     const scale = fit * dpr   // logical → backing pixels
     this.layoutMode = opts.layoutMode ?? false
+    this.showGhosts = opts.showGhosts ?? true
     const ctx = canvas.getContext('2d')!
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     ctx.save()
@@ -574,7 +583,7 @@ export class Renderer {
           }
           seatNumber++
         }
-      } else {
+      } else if (this.showGhosts) {
         this.drawGhostChair(ctx, cx, cy, ox, oy)
       }
       this.hitTargets.push({ rowIndex, chairIndex, x: cx, y: cy, radius: CHAIR_HALF * 1.1 })
@@ -655,7 +664,7 @@ export class Renderer {
           }
           seatNumber++
         }
-      } else {
+      } else if (this.showGhosts) {
         this.drawGhostChair(ctx, cx, rowY, cx, oy)
       }
 
