@@ -18,6 +18,10 @@ export interface GlyphResult {
   hw: number
   hh: number
   labelInside: boolean
+  // Optional nudge for a labelInside label, in screen px from the glyph centre
+  // (the label is drawn horizontally, so this is screen-space). Lets an
+  // off-centre glyph (e.g. the grand piano) keep its label clear of the edges.
+  labelOffset?: { x: number; y: number }
 }
 
 // ---------------------------------------------------------------------------
@@ -61,58 +65,67 @@ export function drawDrumkit(ctx: CanvasRenderingContext2D): GlyphResult {
 }
 
 // ---------------------------------------------------------------------------
-// Grand piano — top-down silhouette: keyboard along the bottom, a wide rounded
-// bass dome over the top, and the curved bentside down the right with a concave
-// waist pinching in before a small lobe near the keyboard.
+// Grand piano — top-down silhouette traced from a reference outline. Canonical
+// orientation: keyboard along the bottom. Dead-straight left spine; rounded
+// lid; the right side runs straight down from the lid's inflection, eases
+// through a 40px fillet into the bentside bulge, then a short outer edge to the
+// keyboard. Drawn in a 314×405 design space and scaled/centred into the glyph.
 // ---------------------------------------------------------------------------
 export function drawPiano(ctx: CanvasRenderingContext2D): GlyphResult {
-  // Top-down grand piano. Keyboard runs along the bottom; the body above it is
-  // the classic grand outline: a straight "spine" down the left, a wide rounded
-  // bass dome across the top, and the curved "bentside" down the right that
-  // pinches inward (concave waist) before swelling back out to a small lobe
-  // near the keyboard.
-  const hw = 38
-  const hh = 44
+  const SCALE = 0.225
+  const CX = 157, CY = 204          // design-space bounding-box centre (0..314 × 1.6..406)
 
+  ctx.save()
+  ctx.scale(SCALE, SCALE)
+  ctx.translate(-CX, -CY)
+
+  // Body
   ctx.fillStyle = '#1a1a1a'
   ctx.beginPath()
-  // Bottom-left corner of the keyboard.
-  ctx.moveTo(-hw, hh)
-  // Straight spine up the left edge.
-  ctx.lineTo(-hw, -hh * 0.5)
-  // Bass dome: sweep up and over the top, left → apex (slightly left of centre)
-  // → out to the dome's widest point on the right.
-  ctx.bezierCurveTo(-hw, -hh,  -hw * 0.4, -hh,  hw * 0.05, -hh)
-  ctx.bezierCurveTo(hw * 0.68, -hh,  hw, -hh * 0.66,  hw, -hh * 0.28)
-  // Bentside concave waist: ease inward toward the centre (control points sit
-  // well left of the dome's right extent so the edge caves in).
-  ctx.bezierCurveTo(hw, -hh * 0.02,  hw * 0.56, -hh * 0.04,  hw * 0.56, hh * 0.16)
-  // Lower lobe: swell gently back out, then drop to the keyboard's right end.
-  ctx.bezierCurveTo(hw * 0.56, hh * 0.4,  hw * 0.86, hh * 0.38,  hw * 0.74, hh)
-  // closePath draws the straight keyboard-front edge back to the start.
+  ctx.moveTo(195.98, 77.265)
+  ctx.quadraticCurveTo(195.98, 72.265, 193.035, 64.707)            // tiny fillet at the lid inflection
+  ctx.bezierCurveTo(176.409, 26.128, 140.598, 1.631, 99.789, 1.631)
+  ctx.bezierCurveTo(73.778, 1.631, 49.219, 11.094, 30.637, 28.275)
+  ctx.bezierCurveTo(12.061, 45.449, 1.222, 68.693, 0.119, 93.724)
+  ctx.bezierCurveTo(0.115, 93.826, 0.112, 93.926, 0.112, 94.027)
+  ctx.lineTo(0, 332.399)                                           // straight left spine
+  ctx.bezierCurveTo(-0.001, 334.257, 0.735, 336.039, 2.048, 337.353)
+  ctx.bezierCurveTo(3.129, 338.435, 4.53, 339.119, 6.027, 339.329)
+  ctx.lineTo(6.027, 399.369)
+  ctx.bezierCurveTo(6.027, 403.235, 9.161, 406.369, 13.027, 406.369)
+  ctx.lineTo(300.972, 406.369)                                     // keyboard front
+  ctx.bezierCurveTo(304.838, 406.369, 307.972, 403.235, 307.972, 399.369)
+  ctx.lineTo(307.972, 339.216)
+  ctx.bezierCurveTo(311.047, 338.508, 313.354, 335.779, 313.397, 332.491)
+  ctx.bezierCurveTo(313.5, 327.491, 314, 323.356, 314, 318.356)    // short outer edge
+  ctx.bezierCurveTo(314, 280.651, 280, 247.546, 235.98, 247.546)   // bentside bulge
+  ctx.arcTo(195.98, 247.546, 195.98, 77.265, 40)                   // 40px fillet
+  ctx.lineTo(195.98, 77.265)                                       // straight upper-right edge
   ctx.closePath()
   ctx.fill()
 
-  // Keyboard: a white keybed inset inside a thin black frame, with black key
-  // separations stopping short of the front so a solid white lip remains.
-  const kbTop = hh * 0.58
-  const kbBot = hh - 5
-  const kbLeft = -hw + 5
-  const kbRight = hw * 0.52
+  // Keyboard: white keybed, black key dividers, and black keys in the 2-3 pattern.
+  const kbLeft = 22, kbRight = 292, kbTop = 344, kbBot = 396
+  const nW = 14, w = (kbRight - kbLeft) / nW
   ctx.fillStyle = '#fff'
   ctx.fillRect(kbLeft, kbTop, kbRight - kbLeft, kbBot - kbTop)
   ctx.strokeStyle = '#1a1a1a'
-  ctx.lineWidth = 1.3
-  const keys = 12
-  for (let i = 1; i < keys; i++) {
-    const x = kbLeft + (i / keys) * (kbRight - kbLeft)
-    ctx.beginPath()
-    ctx.moveTo(x, kbTop)
-    ctx.lineTo(x, kbBot - 4)
-    ctx.stroke()
+  ctx.lineWidth = 5.5                                              // ≈1.2px after SCALE
+  for (let i = 1; i < nW; i++) {
+    const x = kbLeft + i * w
+    ctx.beginPath(); ctx.moveTo(x, kbTop); ctx.lineTo(x, kbBot - 14); ctx.stroke()
+  }
+  const blackBoundaries = [1, 2, 4, 5, 6, 8, 9, 11, 12, 13]
+  const bH = (kbBot - 14 - kbTop) * 0.62, bW = w * 0.62
+  ctx.fillStyle = '#1a1a1a'
+  for (const b of blackBoundaries) {
+    ctx.fillRect(kbLeft + b * w - bW / 2, kbTop, bW, bH)
   }
 
-  return { hw, hh, labelInside: true }
+  ctx.restore()
+  // The bbox centre lands low on the rotated body (down by the bentside bulge),
+  // so lift the label into the body rather than dead-centring it.
+  return { hw: 314 * SCALE / 2, hh: 404.738 * SCALE / 2, labelInside: true, labelOffset: { x: 0, y: -52 } }
 }
 
 // ---------------------------------------------------------------------------

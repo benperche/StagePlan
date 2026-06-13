@@ -957,7 +957,7 @@ export class Renderer {
       ctx.translate(cx, cy)
       ctx.rotate(worldRotation)
 
-      const { hw, hh, labelInside } = this.drawGlyph(ctx, inst)
+      const { hw, hh, labelInside, labelOffset } = this.drawGlyph(ctx, inst)
 
       // Selection highlight (still in rotated frame so it tracks the glyph)
       if (isSelected) {
@@ -980,7 +980,7 @@ export class Renderer {
         ctx.font = 'bold 11px sans-serif'
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
-        ctx.fillText(text, cx, cy)
+        ctx.fillText(text, cx + (labelOffset?.x ?? 0), cy + (labelOffset?.y ?? 0))
         ctx.restore()
       } else {
         // Below the rotated bounding box's lowest point

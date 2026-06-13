@@ -74,7 +74,7 @@ const INSERT_DEFAULTS: Partial<Record<InstrumentType, { angle: number; pad: numb
   rectangle: { angle: -1.55, pad: 100 },
   // Rhythm section flanks the band on the left (as in the Big Band preset);
   // the piano angles in toward the conductor.
-  piano:      { angle: -2.42, pad: 40, rotation: -0.52 },
+  piano:      { angle: -2.42, pad: 40, rotation: 1.5708 },
   'guitar-amp': { angle: -2.15, pad: 40 },
   'bass-amp':   { angle: -2.45, pad: 70 },
   // Harp tucks in at the front-left, beside the outer string desks.

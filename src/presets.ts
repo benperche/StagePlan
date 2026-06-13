@@ -120,7 +120,7 @@ export const PRESETS: Preset[] = [
     instruments: [
       { type: 'bass-amp',   angle: -2.3121, distance: 316.8 },
       { type: 'drumkit',    angle: -1.9446, distance: 258.4 },
-      { type: 'piano',      angle: -2.4155, distance: 233.3, rotation: -0.5161 },
+      { type: 'piano',      angle: -2.4155, distance: 233.3, rotation: 1.5708 },
       { type: 'guitar-amp', angle: -2.1855, distance: 164.4 },
     ],
   },
