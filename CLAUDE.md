@@ -12,6 +12,26 @@ There is no test suite and no linter configured. "Verification" means running
 the dev server and checking behaviour in the browser. The app is deployed to
 GitHub Pages (https://benperche.github.io/StagePlan/).
 
+### Preview serves stale renders (important)
+
+This is a vanilla imperative-canvas app with **no HMR wiring** (`import.meta.hot`
+is unused), so a Vite hot-update never repaints the `<canvas>` — it keeps
+showing the last `renderChart()` frame until an event fires, and Vite's
+fallback full-reload doesn't always land in the embedded preview browser. The
+result: after editing a `src/*.ts` file, the preview (and `preview_screenshot`)
+often still shows the **old output**, which silently invalidates visual checks.
+
+Before trusting a screenshot of any glyph/render change:
+
+1. Hard-navigate reload — `location.href = location.origin + location.pathname`
+   (a plain HMR tick is not enough), or restart the preview server.
+2. Wait ~1–2s for re-init + first render, then re-apply state (preset, tab).
+3. *Then* screenshot.
+
+If a change still doesn't appear, confirm the dev server actually has it
+(`curl localhost:<port>/src/<file>.ts | grep <identifier>` — note Vite strips
+comments, so grep for code, not comments) before assuming the edit is wrong.
+
 ### tsc noEmit footgun (important)
 
 `tsconfig.json` sets `noEmit: true` on purpose. The `tsc` in `npm run build`
