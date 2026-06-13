@@ -123,9 +123,9 @@ export function drawPiano(ctx: CanvasRenderingContext2D): GlyphResult {
   }
 
   ctx.restore()
-  // The bbox centre lands low on the rotated body (down by the bentside bulge),
-  // so lift the label into the body rather than dead-centring it.
-  return { hw: 314 * SCALE / 2, hh: 404.738 * SCALE / 2, labelInside: true, labelOffset: { x: 0, y: -52 } }
+  // The bbox centre sits just above the bentside bulge edge once rotated, so
+  // lift the label a little to keep it fully on the black body.
+  return { hw: 314 * SCALE / 2, hh: 404.738 * SCALE / 2, labelInside: true, labelOffset: { x: 0, y: -22 } }
 }
 
 // ---------------------------------------------------------------------------
