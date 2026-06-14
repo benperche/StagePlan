@@ -75,6 +75,14 @@ let marqueeState: {
 // Set when a marquee with the free-type Label tool opens the floating input in
 // bulk mode: committing writes the value to every listed chair at once.
 let bulkLabelTargets: { rowIndex: number; chairIndex: number }[] | null = null
+// When labelling via a marquee, replace existing labels (true) or fill only
+// blanks (false). Toggled by the floating #drag-overwrite button.
+let overwriteLabels = false
+// A marquee needs a precise pointer, so the gesture is only started for
+// mouse/pen (per-event), and its UI is shown only when the device has any fine
+// pointer (desktop, or a tablet with a mouse/trackpad attached).
+const hasFinePointer = window.matchMedia?.('(any-pointer: fine)')?.matches ?? true
+document.body.classList.toggle('marquee-capable', hasFinePointer)
 
 // Active Layout-tab handle drag. geom0 is the row's geometry snapshot captured
 // at grab time; start is the chart-space pointer at grab time.
@@ -266,7 +274,7 @@ import {
   customOrchestraBtn, customOrchestraModal, customOrchestraTitle, customOrchestraNotation,
   customOrchestraPreview, customOrchestraApply, customOrchestraCancel,
   toolButtons, chairLabelInput, editChairsHint, labelPanel, instrumentPanel,
-  marqueeBox, overwriteLabelsCheck, dragOverwriteControl,
+  marqueeBox, dragOverwriteBtn,
   standBulkPanel, stoolBulkPanel, standBulkButtons, stoolBulkButtons,
   instrumentPickerList, labelList, instrumentPickerStatus,
   showTallyBtn, tallyOverlay, tallyBody, tallyTotal, tallyMinimizeBtn, tallyCloseBtn,
@@ -1354,8 +1362,8 @@ function commitChairLabel() {
   }
   if (bulkLabelTargets) {
     // Free-type bulk label from a marquee: write to every target (skipping
-    // already-labelled chairs unless "Overwrite existing labels" is ticked).
-    const overwrite = overwriteLabelsCheck.checked
+    // already-labelled chairs unless "Overwrite labels" is on).
+    const overwrite = overwriteLabels
     const targets = bulkLabelTargets.filter(r => {
       const c = config.rows[r.rowIndex]?.chairs[r.chairIndex]
       return c?.enabled && (overwrite || !c.label)
@@ -1570,10 +1578,11 @@ canvas.addEventListener('pointerdown', (e) => {
     setSelectedInstrument(null)
     renderChart()
   }
-  // Edit tab at 100% zoom: a drag is a marquee bulk-select. When zoomed in,
-  // keep the existing drag-to-pan behaviour instead (no transform to fight at
-  // 100%, so the screen-space overlay box maps 1:1 to the canvas).
-  if (activeTab === 'edit' && viewZoom === 1) {
+  // Edit tab at 100% zoom: a mouse/pen drag is a marquee bulk-select (touch
+  // drags never marquee — a finger needs to pan/scroll, not draw a box). When
+  // zoomed in, keep the existing drag-to-pan behaviour instead (no transform to
+  // fight at 100%, so the screen-space overlay box maps 1:1 to the canvas).
+  if (activeTab === 'edit' && viewZoom === 1 && e.pointerType !== 'touch') {
     marqueeState = { startClientX: e.clientX, startClientY: e.clientY, startChart: { x, y }, moved: false }
   } else if (viewZoom > 1) {
     panState = { startX: e.clientX, startY: e.clientY, panX0: viewPanX, panY0: viewPanY, moved: false }
@@ -1915,12 +1924,13 @@ function openBulkLabelEditor(targets: { rowIndex: number; chairIndex: number }[]
   showLabelEditor(pos, '')
 }
 
-// The floating "drag overwrites existing labels" control only matters while
-// bulk-labelling, so it's shown over the canvas just for the Label / Instruments
-// tools in the Edit tab.
+// The floating "Overwrite labels" toggle only matters while bulk-labelling with
+// a mouse, so it's shown over the canvas just for the Label / Instruments tools
+// in the Edit tab, and only where a marquee is possible (a fine pointer).
 function syncDragControls() {
-  const show = activeTab === 'edit' && (activeTool === 'label' || activeTool === 'instrument')
-  dragOverwriteControl.style.display = show ? '' : 'none'
+  const show = hasFinePointer && activeTab === 'edit'
+    && (activeTool === 'label' || activeTool === 'instrument')
+  dragOverwriteBtn.style.display = show ? '' : 'none'
 }
 
 // Apply the active chair tool to every enabled chair caught by a marquee drag,
@@ -1932,8 +1942,7 @@ function applyBulkTool(refs: { rowIndex: number; chairIndex: number }[], centre:
 
   if (activeTool === 'label' || activeTool === 'instrument') {
     if (selectedLabel === null) { openBulkLabelEditor(targets, chartPointToScreen(centre)); return }
-    const overwrite = overwriteLabelsCheck.checked
-    const toWrite = targets.filter(r => overwrite || !config.rows[r.rowIndex].chairs[r.chairIndex].label)
+    const toWrite = targets.filter(r => overwriteLabels || !config.rows[r.rowIndex].chairs[r.chairIndex].label)
     if (toWrite.length === 0) return
     history.push(config)
     for (const r of toWrite) config.rows[r.rowIndex].chairs[r.chairIndex].label = selectedLabel
@@ -2272,6 +2281,12 @@ function bindEvents() {
       stoolMode = STOOL_MODE_MAP[btn.dataset['stoolBulk'] ?? 'chairs'] ?? 'chair'
       stoolBulkButtons.forEach(b => b.classList.toggle('active', b === btn))
     })
+  })
+
+  // "Overwrite labels" drag toggle (floats over the canvas for Label/Instruments).
+  dragOverwriteBtn.addEventListener('click', () => {
+    overwriteLabels = !overwriteLabels
+    dragOverwriteBtn.classList.toggle('active', overwriteLabels)
   })
 
   // Reset every chair's colour back to the default (Colour tool bulk action).

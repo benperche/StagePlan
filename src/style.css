@@ -865,26 +865,33 @@ button.danger:hover { background: #fff0f0; }
 }
 .canvas-zoom-controls button:disabled { opacity: 0.4; }
 
-/* Drag-behaviour control under the zoom row (Edit tab, Label/Instruments). */
+/* Drag-behaviour toggle under the zoom row (Edit tab, Label/Instruments).
+   A one-line pill that fills accent when on, matching the tool/mode buttons. */
 .canvas-drag-controls {
   position: absolute;
   top: 52px;
   left: 12px;
   z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 9px;
+  height: 30px;
+  padding: 0 10px;
   font-size: 12px;
+  white-space: nowrap;
   color: var(--text);
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid var(--border);
   border-radius: 6px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   cursor: pointer;
-  user-select: none;
 }
-.canvas-drag-controls input { margin: 0; cursor: pointer; }
+.canvas-drag-controls:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
+.canvas-drag-controls.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+/* A marquee needs a mouse — hide the "drag a box" hint where there's no fine pointer. */
+body:not(.marquee-capable) .marquee-hint { display: none; }
 
 /* Allocate Instruments panel */
 #instrument-picker-list {
