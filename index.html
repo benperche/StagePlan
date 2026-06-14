@@ -145,7 +145,7 @@
 
         <section class="panel">
           <h2>Edit chairs</h2>
-          <p class="hint">Pick what a chair click does, then click chairs on the chart.</p>
+          <p class="hint">Pick what a chair click does, then click chairs on the chart — or <strong>drag a box</strong> over several to apply it to them all at once.</p>
           <div class="tool-group">
             <button data-tool="toggle" class="tool-btn active">Hide</button>
             <button data-tool="stand" class="tool-btn">Stand</button>
@@ -163,15 +163,15 @@
             <button id="reset-colors-btn" class="secondary">↺ Reset all colours</button>
           </div>
           <div id="stand-bulk" class="bulk-actions" style="display:none">
-            <span class="bulk-actions-label">Stands on all chairs:</span>
-            <button data-stand-bulk="per-chair">Per chair</button>
-            <button data-stand-bulk="per-desk">Per desk</button>
-            <button data-stand-bulk="remove">Remove all</button>
+            <span class="bulk-actions-label">Stand type:</span>
+            <button data-stand-bulk="per-chair" class="active">Solo</button>
+            <button data-stand-bulk="per-desk">In desks</button>
+            <button data-stand-bulk="remove">Remove</button>
           </div>
           <div id="stool-bulk" class="bulk-actions" style="display:none">
-            <span class="bulk-actions-label">Convert every seat to:</span>
-            <button data-stool-bulk="chairs">Chairs</button>
-            <button data-stool-bulk="stools">Stools</button>
+            <span class="bulk-actions-label">Seat type:</span>
+            <button data-stool-bulk="chairs" class="active">Chair</button>
+            <button data-stool-bulk="stools">Stool</button>
             <button data-stool-bulk="standing">Standing</button>
           </div>
           <!-- Label tool: free-type + bulk paste -->
@@ -313,6 +313,9 @@
         <button id="redo-btn" disabled title="Redo (Cmd/Ctrl + Shift + Z)">↪</button>
       </div>
       <canvas id="chart-canvas"></canvas>
+      <!-- Marquee selection box: drawn over the canvas while dragging in the
+           Edit tab to bulk-apply the active tool to the chairs inside it. -->
+      <div id="marquee-box" style="display:none"></div>
       <!-- Inline label editor: floated over a chair when the Label tool is
            used, so you type a chair's name right on the chart. -->
       <input id="chair-label-input" type="text" maxlength="24" style="display:none" />
@@ -324,6 +327,13 @@
         <button id="zoom-reset-btn" title="Reset zoom (click to fit)">100%</button>
         <button id="zoom-in-btn" title="Zoom in">+</button>
       </div>
+      <!-- Drag-behaviour control: shown only for the Label / Instruments tools.
+           Governs whether a marquee drag overwrites chairs that already have a
+           label, or only fills blank ones. -->
+      <label class="canvas-drag-controls" id="drag-overwrite" style="display:none"
+             title="When you drag a box to label chairs: ON replaces labels that are already set; OFF fills only blank chairs.">
+        <input type="checkbox" id="overwrite-labels" /> Drag overwrites existing labels
+      </label>
     </main>
 
     <!-- =================  LIBRARY DRAWER  =================

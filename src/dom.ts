@@ -6,6 +6,8 @@
 // If a control gets added to index.html, register it here too.
 
 export const canvas = document.getElementById('chart-canvas') as HTMLCanvasElement
+export const canvasArea = document.getElementById('canvas-area') as HTMLElement
+export const marqueeBox = document.getElementById('marquee-box') as HTMLElement
 
 // --- Tab bar ---
 export const tabButtons = document.querySelectorAll<HTMLButtonElement>('[data-tab]')
@@ -67,6 +69,8 @@ export const toolButtons = document.querySelectorAll<HTMLButtonElement>('[data-t
 export const chairLabelInput = document.getElementById('chair-label-input') as HTMLInputElement
 export const editChairsHint = document.getElementById('edit-chairs-hint') as HTMLElement
 export const labelPanel = document.getElementById('label-panel') as HTMLElement
+export const dragOverwriteControl = document.getElementById('drag-overwrite') as HTMLElement
+export const overwriteLabelsCheck = document.getElementById('overwrite-labels') as HTMLInputElement
 export const instrumentPanel = document.getElementById('instrument-panel') as HTMLElement
 export const standBulkPanel = document.getElementById('stand-bulk') as HTMLElement
 export const stoolBulkPanel = document.getElementById('stool-bulk') as HTMLElement

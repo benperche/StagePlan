@@ -232,8 +232,11 @@ six tools (`ChairTool`) and their sub-panels:
   up; show = rotate left, the exact inverse, so un-hiding the same chair
   restores the original order). Pre-existing hidden chairs (preset spacers) are
   skipped so their blanks never flow into a visible seat.
-- **Stand** — cycles the music stand; reveals `#stand-bulk`.
-- **Stool** — toggles `chair.isStool`; reveals `#stool-bulk`.
+- **Stand** — `#stand-bulk` is an **armed-mode selector** (Solo / In desks /
+  Remove → `standMode`); the armed mode is what both a single click
+  (`applyStandToChair`) and a marquee drag apply.
+- **Stool** — `#stool-bulk` is an armed-mode selector (Chair / Stool / Standing
+  → `stoolMode`, via `applyStoolToChair`), same click + marquee model.
 - **Colour** — paints `chair.color`; reveals the `#color-picker` swatch.
 - **Label** — reveals `#label-panel`. Clicking a chair floats
   `#chair-label-input` on it (`openChairLabelEditor`, positioned through the
@@ -287,13 +290,16 @@ fall through to an "Other" bucket at the bottom.
 
 - `Chair.hasStand` = solo stand in front of this chair (× drawn between chair and conductor).
 - `Chair.standAfter` = shared stand in the gap between this chair and the next.
-- The Music Stand tool cycles: `none → solo → shared-with-next → none`. When going to shared, the next chair's `hasStand` is automatically cleared.
+- The Stand tool applies the armed `standMode` (Solo / In desks / Remove) — `applyStandToChair` mutates one chair (In desks shares a stand with the next enabled neighbour and dissolves any desk that paired *into* this chair). The sub-panel buttons just set the mode; "apply to all" is now "marquee the whole chart".
 - **Clicking the right-hand chair of a desk splits it.** If the chair to the left has `standAfter` (i.e. you clicked the second player of a desk), the desk is dissolved and *both* players get their own solo stand back — instead of stacking a second stand in front of the right chair on top of the shared one.
 - **A desk needs two present players.** A `standAfter` desk is only active when *both* the chair and its next neighbour are `enabled` — the tool refuses to form one into a hidden/absent seat (`canPairNext`), and the renderer (arc + straight positioning, stand drawing) and the summary count all skip a desk whose neighbour is hidden, so you never get a stand drawn toward a ghost chair. Hiding one half of an existing desk dissolves it cleanly; re-showing the seat brings it back.
 - Stand × is drawn by `drawStandX`. Rotated by the chair→conductor angle so the diagonals stay diagonal (not aligned with the radial — that would look like `+`).
 - Default `makeChair()` returns `hasStand: true`.
-- The Stand tool also exposes chart-wide bulk actions (`#stand-bulk`): **One per chair** (solo × on every enabled chair), **One per desk** (pairs consecutive enabled chairs into a shared `standAfter`, leftover singles get a solo stand), **Remove all** (clears both flags). All operate on every row and push one undo snapshot.
-- **Seat type is three-way.** The Stool tool *cycles* a chair `chair → stool → standing → chair`. `isStool` = round double-bass stool; `noSeat` = a **standing player** (no chair/stool glyph at all, just the stand + label, and it's not given a seat number / doesn't consume one). Big-band trumpets standing in a row are the motivating case. `#stool-bulk` has three buttons (Chairs / Stools / Standing) that set both flags across every chair. The row summary breaks the totals into chairs · stools · standing · stands.
+- **Seat type is three-way.** The Stool tool applies the armed `stoolMode` (Chair / Stool / Standing) via `applyStoolToChair`. `isStool` = round double-bass stool; `noSeat` = a **standing player** (no chair/stool glyph at all, just the stand + label, and it's not given a seat number / doesn't consume one). Big-band trumpets standing in a row are the motivating case. The row summary breaks the totals into chairs · stools · standing · stands.
+
+### Marquee bulk-apply (Edit tab)
+
+A drag over the canvas in the **Edit tab at 100% view-zoom** is a rubber-band selection (`marqueeState`; a screen-space `#marquee-box` overlay; gated to 100% so the untransformed canvas maps 1:1 — when zoomed in, a drag still pans). On release `renderer.chairsInRect()` returns the boxed chairs and `applyBulkTool()` applies the active tool to the **enabled** ones in **one undo step** (Hide hides them; the trailing click is swallowed via `suppressClickAfterPan`). Set-semantics, not the per-click cycle: Colour→`activeColor`; Stand/Stool→the armed mode (`applyStandModeToTargets` pairs *consecutive adjacent* selected chairs for In-desks); Label/Instruments→the armed `selectedLabel` (or a one-shot bulk `#chair-label-input` via `bulkLabelTargets` + `openBulkLabelEditor`, mirroring the `editingConductor` branch in `commitChairLabel`). Labelling **fills only blank chairs** unless the floating **`#drag-overwrite`** control (`overwriteLabelsCheck`, shown over the canvas under the zoom row for Label/Instruments only — `syncDragControls`) is ticked.
 - The Colour tool reveals the swatch (`#color-picker-label`) plus a **Reset all colours** bulk button (`#color-bulk` → `DEFAULT_CHAIR_COLOR`); it doesn't auto-open the native picker — the user clicks the swatch when they want to change the colour.
 
 ## Orchestra preset (notation → rows)

@@ -27,8 +27,8 @@ let activeTool: ChairTool = 'toggle'
 // whichever tool is active (set in setChairTool).
 const TOOL_HINTS: Record<ChairTool, string> = {
   toggle: "Click a chair to hide it — its place is kept so the row doesn't shift. Click again to bring it back.",
-  stand: 'Click a chair to cycle its music stand: solo × → shared × with the next chair → none.',
-  stool: 'Click a chair to cycle it: chair → stool → standing (just stand + label) → chair.',
+  stand: 'Pick a stand type below, then click a chair (or drag a box over several) to apply it.',
+  stool: 'Pick a seat type below, then click a chair (or drag a box over several) to apply it.',
   color: 'Click a chair to paint it the swatch colour. Click the swatch to change the colour.',
   label: 'Click a chair to type a name on it (Enter jumps to the next chair), or paste a list below.',
   instrument: 'Pick an instrument below, then click chairs to stamp it on them.',
@@ -60,6 +60,21 @@ const VIEW_ZOOM_MIN = 1      // 1 = fit (the canvas already fills the area)
 const VIEW_ZOOM_MAX = 6
 let panState: { startX: number; startY: number; panX0: number; panY0: number; moved: boolean } | null = null
 let suppressClickAfterPan = false
+
+// Edit-tab marquee bulk-select. Active while dragging a box over chairs at 100%
+// view-zoom; on release the active tool is applied to every chair inside it.
+type StandMode = 'solo' | 'desk' | 'remove'
+type StoolMode = 'chair' | 'stool' | 'standing'
+let standMode: StandMode = 'solo'
+let stoolMode: StoolMode = 'chair'
+let marqueeState: {
+  startClientX: number; startClientY: number
+  startChart: { x: number; y: number }
+  moved: boolean
+} | null = null
+// Set when a marquee with the free-type Label tool opens the floating input in
+// bulk mode: committing writes the value to every listed chair at once.
+let bulkLabelTargets: { rowIndex: number; chairIndex: number }[] | null = null
 
 // Active Layout-tab handle drag. geom0 is the row's geometry snapshot captured
 // at grab time; start is the chart-space pointer at grab time.
@@ -234,7 +249,7 @@ let conductorDragState: ConductorDragState | null = null
 
 // All DOM refs live in dom.ts; pull them in by name.
 import {
-  canvas, tabButtons, tabContents, tabNavButtons,
+  canvas, canvasArea, tabButtons, tabContents, tabNavButtons,
   titleInput, titleGapInput, layoutSelect, notesArea, showNumbersCheck, restartNumbersCheck,
   showRowLabelsCheck, conductorStandCheck, showConductorCheck, showArcCheck, showStageDirectionsCheck,
   chartScaleInput, bgInput, bgClearBtn, bgStatus, bgFitSelect, showCreditCheck,
@@ -251,6 +266,7 @@ import {
   customOrchestraBtn, customOrchestraModal, customOrchestraTitle, customOrchestraNotation,
   customOrchestraPreview, customOrchestraApply, customOrchestraCancel,
   toolButtons, chairLabelInput, editChairsHint, labelPanel, instrumentPanel,
+  marqueeBox, overwriteLabelsCheck, dragOverwriteControl,
   standBulkPanel, stoolBulkPanel, standBulkButtons, stoolBulkButtons,
   instrumentPickerList, labelList, instrumentPickerStatus,
   showTallyBtn, tallyOverlay, tallyBody, tallyTotal, tallyMinimizeBtn, tallyCloseBtn,
@@ -1336,6 +1352,21 @@ function commitChairLabel() {
     }
     return
   }
+  if (bulkLabelTargets) {
+    // Free-type bulk label from a marquee: write to every target (skipping
+    // already-labelled chairs unless "Overwrite existing labels" is ticked).
+    const overwrite = overwriteLabelsCheck.checked
+    const targets = bulkLabelTargets.filter(r => {
+      const c = config.rows[r.rowIndex]?.chairs[r.chairIndex]
+      return c?.enabled && (overwrite || !c.label)
+    })
+    if (targets.length && chairLabelInput.value !== '') {
+      history.push(config)
+      for (const r of targets) config.rows[r.rowIndex].chairs[r.chairIndex].label = chairLabelInput.value
+      renderChart()
+    }
+    return
+  }
   if (!editingChair) return
   const chair = config.rows[editingChair.rowIndex]?.chairs[editingChair.chairIndex]
   if (chair && (chair.label ?? '') !== chairLabelInput.value) {
@@ -1348,13 +1379,14 @@ function commitChairLabel() {
 function closeChairLabelEditor() {
   editingChair = null
   editingConductor = false
+  bulkLabelTargets = null
   chairLabelInput.style.display = 'none'
 }
 
 // After Enter: commit, then hop to the next enabled chair in the same row.
 // The conductor isn't part of a row, so there's nowhere to advance to — close.
 function advanceChairLabel() {
-  if (editingConductor) { closeChairLabelEditor(); return }
+  if (editingConductor || bulkLabelTargets) { closeChairLabelEditor(); return }
   if (!editingChair) return
   const { rowIndex, chairIndex } = editingChair
   const chairs = config.rows[rowIndex].chairs
@@ -1538,7 +1570,12 @@ canvas.addEventListener('pointerdown', (e) => {
     setSelectedInstrument(null)
     renderChart()
   }
-  if (viewZoom > 1) {
+  // Edit tab at 100% zoom: a drag is a marquee bulk-select. When zoomed in,
+  // keep the existing drag-to-pan behaviour instead (no transform to fight at
+  // 100%, so the screen-space overlay box maps 1:1 to the canvas).
+  if (activeTab === 'edit' && viewZoom === 1) {
+    marqueeState = { startClientX: e.clientX, startClientY: e.clientY, startChart: { x, y }, moved: false }
+  } else if (viewZoom > 1) {
     panState = { startX: e.clientX, startY: e.clientY, panX0: viewPanX, panY0: viewPanY, moved: false }
   }
 })
@@ -1591,6 +1628,24 @@ window.addEventListener('pointermove', (e) => {
   // Layout-tab per-chair nudge.
   if (chairDrag) {
     applyChairDrag(e)
+    return
+  }
+
+  // Edit-tab marquee — resize the screen-space overlay box from the grab point
+  // to the pointer. Positioned within #canvas-area (the box's offset parent).
+  if (marqueeState) {
+    if (!marqueeState.moved) {
+      if (Math.hypot(e.clientX - marqueeState.startClientX, e.clientY - marqueeState.startClientY) < DRAG_THRESHOLD) return
+      marqueeState.moved = true
+      marqueeBox.style.display = ''
+    }
+    const area = canvasArea.getBoundingClientRect()
+    const x0 = Math.min(marqueeState.startClientX, e.clientX) - area.left
+    const y0 = Math.min(marqueeState.startClientY, e.clientY) - area.top
+    marqueeBox.style.left = `${x0}px`
+    marqueeBox.style.top = `${y0}px`
+    marqueeBox.style.width = `${Math.abs(e.clientX - marqueeState.startClientX)}px`
+    marqueeBox.style.height = `${Math.abs(e.clientY - marqueeState.startClientY)}px`
     return
   }
 
@@ -1691,6 +1746,21 @@ window.addEventListener('pointermove', (e) => {
 window.addEventListener('pointerup', (e) => {
   if (!e.isPrimary) return
   if (panState?.moved) suppressClickAfterPan = true
+  // Edit-tab marquee release: apply the active tool to every chair in the box.
+  // A box that never moved is just a click — let the click handler do its thing.
+  if (marqueeState) {
+    if (marqueeState.moved) {
+      const cv = pointerCanvasCoords(e)
+      const end = canvasToChart(cv.x, cv.y)
+      const start = marqueeState.startChart
+      const refs = renderer.chairsInRect(start.x, start.y, end.x, end.y)
+      const centre = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }
+      applyBulkTool(refs, centre)
+      suppressClickAfterPan = true   // swallow the trailing click
+    }
+    marqueeState = null
+    marqueeBox.style.display = 'none'
+  }
   // Stand tool: a press on an instrument that never became a drag toggles its
   // music stand (a real drag just repositioned it instead).
   if (dragState && !dragState.moved && dragState.toggleStandOnClick) {
@@ -1781,6 +1851,109 @@ canvas.addEventListener('dblclick', (e) => {
   }
 })
 
+// --- Shared chair mutations (single click + marquee bulk-apply) ---
+
+function applyStoolToChair(chair: Chair, mode: StoolMode) {
+  chair.isStool = mode === 'stool'
+  chair.noSeat = mode === 'standing'
+}
+
+// Stand for one chair. 'desk' shares a stand with the next enabled neighbour;
+// any desk that paired *into* this chair from the left is dissolved first so we
+// never leave a half-desk pointing at a now-soloed/removed seat.
+function applyStandToChair(rowChairs: Chair[], i: number, mode: StandMode) {
+  const chair = rowChairs[i]
+  const prev = rowChairs[i - 1]
+  if (prev?.standAfter) prev.standAfter = false
+  chair.hasStand = false
+  chair.standAfter = false
+  if (mode === 'remove') return
+  if (mode === 'solo') { chair.hasStand = true; return }
+  const next = rowChairs[i + 1]
+  if (next?.enabled) { chair.standAfter = true; next.hasStand = false; next.standAfter = false }
+  else chair.hasStand = true   // no neighbour to desk with → solo
+}
+
+// Marquee Stand: 'desk' pairs *consecutive adjacent* selected chairs within each
+// row into shared desks (leftover → solo); solo/remove go per-chair.
+function applyStandModeToTargets(targets: { rowIndex: number; chairIndex: number }[]) {
+  const byRow = new Map<number, number[]>()
+  for (const r of targets) (byRow.get(r.rowIndex) ?? byRow.set(r.rowIndex, []).get(r.rowIndex)!).push(r.chairIndex)
+  for (const [rowIndex, idxs] of byRow) {
+    idxs.sort((a, b) => a - b)
+    const rowChairs = config.rows[rowIndex].chairs
+    if (standMode !== 'desk') {
+      for (const i of idxs) applyStandToChair(rowChairs, i, standMode)
+      continue
+    }
+    // Clear own + incoming pairing across the whole selection first.
+    for (const i of idxs) {
+      const prev = rowChairs[i - 1]; if (prev?.standAfter) prev.standAfter = false
+      rowChairs[i].hasStand = false; rowChairs[i].standAfter = false
+    }
+    let k = 0
+    while (k < idxs.length) {
+      const i = idxs[k], j = idxs[k + 1]
+      if (j === i + 1 && rowChairs[j].enabled) {
+        rowChairs[i].standAfter = true
+        rowChairs[j].hasStand = false; rowChairs[j].standAfter = false
+        k += 2
+      } else {
+        rowChairs[i].hasStand = true
+        k += 1
+      }
+    }
+  }
+}
+
+// Open the floating label input in bulk mode (free-type Label tool + marquee):
+// committing writes the typed value to every target at once.
+function openBulkLabelEditor(targets: { rowIndex: number; chairIndex: number }[], pos: { x: number; y: number }) {
+  editingChair = null
+  editingConductor = false
+  bulkLabelTargets = targets
+  showLabelEditor(pos, '')
+}
+
+// The floating "drag overwrites existing labels" control only matters while
+// bulk-labelling, so it's shown over the canvas just for the Label / Instruments
+// tools in the Edit tab.
+function syncDragControls() {
+  const show = activeTab === 'edit' && (activeTool === 'label' || activeTool === 'instrument')
+  dragOverwriteControl.style.display = show ? '' : 'none'
+}
+
+// Apply the active chair tool to every enabled chair caught by a marquee drag,
+// in a single undo step. `centre` is the box centre (chart coords), used only to
+// place the free-type bulk-label input.
+function applyBulkTool(refs: { rowIndex: number; chairIndex: number }[], centre: { x: number; y: number }) {
+  const targets = refs.filter(r => config.rows[r.rowIndex]?.chairs[r.chairIndex]?.enabled)
+  if (targets.length === 0) return
+
+  if (activeTool === 'label' || activeTool === 'instrument') {
+    if (selectedLabel === null) { openBulkLabelEditor(targets, chartPointToScreen(centre)); return }
+    const overwrite = overwriteLabelsCheck.checked
+    const toWrite = targets.filter(r => overwrite || !config.rows[r.rowIndex].chairs[r.chairIndex].label)
+    if (toWrite.length === 0) return
+    history.push(config)
+    for (const r of toWrite) config.rows[r.rowIndex].chairs[r.chairIndex].label = selectedLabel
+    renderChart()
+    return
+  }
+
+  history.push(config)
+  if (activeTool === 'color') {
+    for (const r of targets) config.rows[r.rowIndex].chairs[r.chairIndex].color = activeColor
+  } else if (activeTool === 'toggle') {
+    for (const r of targets) config.rows[r.rowIndex].chairs[r.chairIndex].enabled = false
+  } else if (activeTool === 'stool') {
+    for (const r of targets) applyStoolToChair(config.rows[r.rowIndex].chairs[r.chairIndex], stoolMode)
+  } else if (activeTool === 'stand') {
+    applyStandModeToTargets(targets)
+  }
+  renderChart()
+}
+
 canvas.addEventListener('click', (e) => {
   // A drag-pan just ended — swallow the click so it doesn't toggle a chair.
   if (suppressClickAfterPan) {
@@ -1829,45 +2002,12 @@ canvas.addEventListener('click', (e) => {
     // restores it) — see repackLabelsAfterToggle.
     repackLabelsAfterToggle(config.rows[hit.rowIndex].chairs, hit.chairIndex, !chair.enabled)
   } else if (activeTool === 'stool') {
-    // Cycle: chair → stool → standing (no seat) → chair.
-    if (chair.noSeat) {
-      chair.noSeat = false
-    } else if (chair.isStool) {
-      chair.isStool = false
-      chair.noSeat = true
-    } else {
-      chair.isStool = true
-    }
+    // Apply the armed seat type (Chair / Stool / Standing) — the sub-panel acts
+    // as a mode selector for both clicks and marquee drags.
+    applyStoolToChair(chair, stoolMode)
   } else if (activeTool === 'stand') {
-    const rowChairs = config.rows[hit.rowIndex].chairs
-    const prevChair = rowChairs[hit.chairIndex - 1]
-    const nextChair = rowChairs[hit.chairIndex + 1]
-    // You can only form a desk with a real neighbour — not the row end and not
-    // a hidden seat (that would draw a stand toward a ghost chair).
-    const canPairNext = !!nextChair?.enabled
-    if (prevChair?.standAfter) {
-      // This chair is the right-hand half of a desk shared with the chair on
-      // its left. Clicking it splits the desk and gives each player their own
-      // solo stand back (rather than stacking a second stand in front of it).
-      prevChair.standAfter = false
-      prevChair.hasStand = true
-      chair.hasStand = true
-      chair.standAfter = false
-    } else if (!chair.hasStand && !chair.standAfter) {
-      chair.hasStand = true
-    } else if (chair.hasStand) {
-      // Solo → shared with next. Drop the next chair's own stand, since
-      // they're now sharing this one — otherwise you'd see both a stand
-      // between the two chairs AND a stand in front of the next chair.
-      chair.hasStand = false
-      if (canPairNext) {
-        chair.standAfter = true
-        nextChair.hasStand = false
-      }
-      // No valid neighbour → just turn the stand off (skip the desk state).
-    } else {
-      chair.standAfter = false
-    }
+    // Apply the armed stand mode (Solo / In desks / Remove).
+    applyStandToChair(config.rows[hit.rowIndex].chairs, hit.chairIndex, standMode)
   }
 
   renderChart()
@@ -2059,6 +2199,7 @@ function bindEvents() {
       layoutMode = nowLayout
       renderChart()
     }
+    syncDragControls()   // canvas drag-behaviour control is Edit-tab only
   }
   tabButtons.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset['tab'])))
   tabNavButtons.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset['tabNav'])))
@@ -2084,6 +2225,7 @@ function bindEvents() {
     standBulkPanel.style.display = tool === 'stand' ? '' : 'none'
     stoolBulkPanel.style.display = tool === 'stool' ? '' : 'none'
     labelPanel.style.display = tool === 'label' ? '' : 'none'
+    syncDragControls()
     // Rebuild the paste list on entry so it reflects any chairs hidden/shown
     // since it was last drawn (the toggle tool only re-renders the canvas).
     if (tool === 'label') renderLabelList()
@@ -2113,48 +2255,22 @@ function bindEvents() {
   renderInstrumentPicker()
 
   // Stand bulk actions (apply to every chair in every row)
+  // Stand sub-panel is a mode selector: the armed mode (Solo / In desks /
+  // Remove) is what both a single chair click and a marquee drag apply.
+  const STAND_MODE_MAP: Record<string, StandMode> = { 'per-chair': 'solo', 'per-desk': 'desk', 'remove': 'remove' }
   standBulkButtons.forEach(btn => {
     btn.addEventListener('click', () => {
-      const mode = btn.dataset['standBulk']
-      history.push(config)
-      config.rows.forEach(row => {
-        // Start from a clean slate, then apply the chosen pattern.
-        row.chairs.forEach(c => { c.hasStand = false; c.standAfter = false })
-        if (mode === 'per-chair') {
-          row.chairs.forEach(c => { if (c.enabled) c.hasStand = true })
-        } else if (mode === 'per-desk') {
-          // Pair up consecutive enabled chairs into desks (a shared × in the
-          // gap). A leftover single enabled chair gets its own solo stand.
-          let i = 0
-          while (i < row.chairs.length) {
-            if (!row.chairs[i].enabled) { i++; continue }
-            const next = row.chairs[i + 1]
-            if (next && next.enabled) {
-              row.chairs[i].standAfter = true
-              i += 2
-            } else {
-              row.chairs[i].hasStand = true
-              i += 1
-            }
-          }
-        }
-        // mode === 'remove' leaves the cleared slate as-is.
-      })
-      renderChart()
+      standMode = STAND_MODE_MAP[btn.dataset['standBulk'] ?? 'per-chair'] ?? 'solo'
+      standBulkButtons.forEach(b => b.classList.toggle('active', b === btn))
     })
   })
 
-  // Stool bulk actions — convert every seat in the chart to chairs, stools,
-  // or standing (no seat).
+  // Stool sub-panel is a mode selector (Chair / Stool / Standing).
+  const STOOL_MODE_MAP: Record<string, StoolMode> = { 'chairs': 'chair', 'stools': 'stool', 'standing': 'standing' }
   stoolBulkButtons.forEach(btn => {
     btn.addEventListener('click', () => {
-      const mode = btn.dataset['stoolBulk']   // 'chairs' | 'stools' | 'standing'
-      history.push(config)
-      config.rows.forEach(row => row.chairs.forEach(c => {
-        c.isStool = mode === 'stools'
-        c.noSeat = mode === 'standing'
-      }))
-      renderChart()
+      stoolMode = STOOL_MODE_MAP[btn.dataset['stoolBulk'] ?? 'chairs'] ?? 'chair'
+      stoolBulkButtons.forEach(b => b.classList.toggle('active', b === btn))
     })
   })
 

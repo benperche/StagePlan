@@ -887,6 +887,21 @@ export class Renderer {
     return null
   }
 
+  // Every chair whose drawn centre falls inside the given rect (chart/logical
+  // coords). Used by the Edit-tab marquee bulk-apply. The rect corners are
+  // normalised so the drag direction doesn't matter.
+  chairsInRect(ax: number, ay: number, bx: number, by: number): Array<{ rowIndex: number; chairIndex: number }> {
+    const x0 = Math.min(ax, bx), x1 = Math.max(ax, bx)
+    const y0 = Math.min(ay, by), y1 = Math.max(ay, by)
+    const out: Array<{ rowIndex: number; chairIndex: number }> = []
+    for (const t of this.hitTargets) {
+      if (t.x >= x0 && t.x <= x1 && t.y >= y0 && t.y <= y1) {
+        out.push({ rowIndex: t.rowIndex, chairIndex: t.chairIndex })
+      }
+    }
+    return out
+  }
+
   // ---------------------------------------------------------------------------
   // Fixed instruments (rhythm section, timpani, mallets, etc.)
   // ---------------------------------------------------------------------------
