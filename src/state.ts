@@ -68,10 +68,12 @@ const INSERT_DEFAULTS: Partial<Record<InstrumentType, { angle: number; pad: numb
   // (mirroring the Concert Band preset), kit and aux in between.
   timpani:  { angle: -0.95, pad: 150 },
   mallet:   { angle: -2.2,  pad: 115, rotation: -0.65 },
-  drumkit:  { angle: -1.27, pad: 130 },
+  drumkit:  { angle: -1.15, pad: 130 },
   gong:     { angle: -1.75, pad: 120 },
-  square:   { angle: -1.55, pad: 100 },
-  rectangle: { angle: -1.55, pad: 100 },
+  cymbal:   { angle: -1.62, pad: 115 },
+  snare:    { angle: -1.88, pad: 110 },
+  square:   { angle: -1.40, pad: 100 },
+  rectangle: { angle: -1.40, pad: 100 },
   // Rhythm section flanks the band on the left (as in the Big Band preset);
   // the piano angles in toward the conductor.
   piano:      { angle: -2.42, pad: 40, rotation: 1.5708 },

@@ -973,6 +973,8 @@ const INSTRUMENT_LABEL: Record<InstrumentType, string> = {
   'harp': 'Harp',
   'microphone': 'Microphone',
   'gong': 'Gong',
+  'cymbal': 'Suspended Cymbal',
+  'snare': 'Snare Drum',
   'chair': 'Chair',
   'stand': 'Music Stand',
   'stool': 'Stool',

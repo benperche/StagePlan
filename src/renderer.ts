@@ -5,7 +5,8 @@ import type {
 } from './types'
 import {
   drawDrumkit, drawPiano, drawAmp, drawTimpani, drawMallet, drawHarp,
-  drawMicrophone, drawGong, drawSingleChair, drawSingleStand, drawStool, drawGenericRect,
+  drawMicrophone, drawGong, drawSuspendedCymbal, drawSnareDrum,
+  drawSingleChair, drawSingleStand, drawStool, drawGenericRect,
 } from './instrument-glyphs'
 import type { GlyphResult } from './instrument-glyphs'
 
@@ -912,7 +913,7 @@ export class Renderer {
     return inst.type === 'drumkit' || inst.type === 'guitar-amp'
       || inst.type === 'bass-amp' || inst.type === 'stand'
       || inst.type === 'stool' || inst.type === 'microphone'
-      || inst.type === 'gong'
+      || inst.type === 'gong' || inst.type === 'cymbal' || inst.type === 'snare'
   }
 
   // Draws one instrument glyph in the current (already translated/rotated)
@@ -929,6 +930,8 @@ export class Renderer {
       case 'harp':       return drawHarp(ctx)
       case 'microphone': return drawMicrophone(ctx, inst)
       case 'gong':       return drawGong(ctx)
+      case 'cymbal':     return drawSuspendedCymbal(ctx)
+      case 'snare':      return drawSnareDrum(ctx)
       case 'chair':      return drawSingleChair(ctx)
       case 'stand':      return drawSingleStand(ctx)
       case 'stool':      return drawStool(ctx)
@@ -972,7 +975,7 @@ export class Renderer {
       ctx.translate(cx, cy)
       ctx.rotate(worldRotation)
 
-      const { hw, hh, labelInside, labelOffset } = this.drawGlyph(ctx, inst)
+      const { hw, hh, labelInside, labelOffset, radius } = this.drawGlyph(ctx, inst)
 
       // Selection highlight (still in rotated frame so it tracks the glyph)
       if (isSelected) {
@@ -1011,12 +1014,19 @@ export class Renderer {
 
       // 3) Optional music stand attached to this instrument — drawn
       // between the instrument body and the conductor regardless of
-      // the glyph's own rotation. Sized so it sits just outside the
-      // instrument's bounding-circle radius so it never overlaps the
-      // glyph itself.
+      // the glyph's own rotation. Sized so it sits just outside the glyph in
+      // the direction it's drawn — for a box that's the extent of the rotated
+      // bounding box toward the conductor (so a square's corner on the diagonal
+      // doesn't poke through), and for a circular glyph it's the disc radius.
       if (inst.hasStand) {
-        const standDist = Math.max(hw, hh) + STAND_GAP + STAND_SIZE
-        this.drawStandX(ctx, cx, cy, ox, oy, standDist)
+        let reach: number
+        if (radius != null) {
+          reach = radius
+        } else {
+          const a = Math.atan2(oy - cy, ox - cx) - worldRotation
+          reach = hw * Math.abs(Math.cos(a)) + hh * Math.abs(Math.sin(a))
+        }
+        this.drawStandX(ctx, cx, cy, ox, oy, reach + STAND_GAP + STAND_SIZE)
       }
 
       // 4) Selection adornments (only on the selected instrument)
@@ -1047,6 +1057,8 @@ export class Renderer {
       case 'harp':       return 'Harp'
       case 'microphone': return 'Mic'
       case 'gong':       return 'Gong'
+      case 'cymbal':     return 'Susp. Cym.'
+      case 'snare':      return 'Snare'
       // Single chair / single stand default to no label — they're often
       // used as decorations rather than annotated items. Users can still
       // type a label in the inspector if they want one.

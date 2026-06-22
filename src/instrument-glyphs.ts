@@ -22,6 +22,10 @@ export interface GlyphResult {
   // (the label is drawn horizontally, so this is screen-space). Lets an
   // off-centre glyph (e.g. the grand piano) keep its label clear of the edges.
   labelOffset?: { x: number; y: number }
+  // For circular glyphs: the disc radius. The renderer uses it to place an
+  // attached music stand the same distance away in every direction (a box's
+  // hw/hh would over- or under-shoot a circle on the diagonal).
+  radius?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -416,6 +420,48 @@ export function drawGong(ctx: CanvasRenderingContext2D): GlyphResult {
   ctx.stroke()
 
   return { hw, hh, labelInside: false }
+}
+
+// ---------------------------------------------------------------------------
+// Suspended cymbal — top-down: a filled disc with a small white dome (bell)
+// ring at the centre and one faint lathe groove.
+// ---------------------------------------------------------------------------
+export function drawSuspendedCymbal(ctx: CanvasRenderingContext2D): GlyphResult {
+  const r = 19
+  ctx.fillStyle = '#1a1a1a'
+  ctx.beginPath()
+  ctx.arc(0, 0, r, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.strokeStyle = '#fff'
+  // A faint lathe groove partway out.
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.arc(0, 0, r * 0.62, 0, Math.PI * 2)
+  ctx.stroke()
+  // Central dome / bell.
+  ctx.lineWidth = 1.4
+  ctx.beginPath()
+  ctx.arc(0, 0, r * 0.28, 0, Math.PI * 2)
+  ctx.stroke()
+  return { hw: r, hh: r, labelInside: false, radius: r }
+}
+
+// ---------------------------------------------------------------------------
+// Snare drum — top-down drumhead: a filled disc with a thin white counter-hoop
+// ring just inside the rim (the two tightly concentric circles near the edge).
+// ---------------------------------------------------------------------------
+export function drawSnareDrum(ctx: CanvasRenderingContext2D): GlyphResult {
+  const r = 16
+  ctx.fillStyle = '#1a1a1a'
+  ctx.beginPath()
+  ctx.arc(0, 0, r, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.strokeStyle = '#fff'
+  ctx.lineWidth = 1.3
+  ctx.beginPath()
+  ctx.arc(0, 0, r - 3, 0, Math.PI * 2)
+  ctx.stroke()
+  return { hw: r, hh: r, labelInside: false, radius: r }
 }
 
 // ---------------------------------------------------------------------------

@@ -67,6 +67,8 @@ export type InstrumentType =
   | 'harp'
   | 'microphone'
   | 'gong'
+  | 'cymbal'
+  | 'snare'
   | 'chair'
   | 'stand'
   | 'stool'
