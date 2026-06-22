@@ -66,7 +66,7 @@ let suppressClickAfterPan = false
 type StandMode = 'solo' | 'desk' | 'remove'
 type StoolMode = 'chair' | 'stool' | 'standing'
 let standMode: StandMode = 'solo'
-let stoolMode: StoolMode = 'chair'
+let stoolMode: StoolMode = 'stool'
 let marqueeState: {
   startClientX: number; startClientY: number
   startChart: { x: number; y: number }
