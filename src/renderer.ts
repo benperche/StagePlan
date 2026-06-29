@@ -64,10 +64,12 @@ export class Renderer {
   // Throwaway context for measuring glyph sizes without drawing to the canvas.
   private measureCtx: CanvasRenderingContext2D | null = null
   selectedInstrumentId: string | null = null
-  // Row to softly highlight (set on hover from the canvas or the row controls,
-  // to make it obvious which sidebar row maps to which row of chairs). Drawn as
-  // a translucent overlay; never affects export/print.
+  // Softly highlight chairs on hover, to make it obvious which sidebar row maps
+  // to which chairs. hoverRowIndex highlights a whole row (set from the sidebar
+  // row controls); hoverChair highlights a single chair (set from canvas hover).
+  // Drawn as a translucent wash on each chair; never affects export/print.
   hoverRowIndex: number | null = null
+  hoverChair: { rowIndex: number; chairIndex: number } | null = null
   rotateHandleHit: RotateHandleHit | null = null
   // Same-shape hit-test target for the red ✕ delete button drawn next to
   // the selected instrument.
@@ -575,7 +577,7 @@ export class Renderer {
     chairs.forEach((chair, chairIndex) => {
       const { cx, cy } = positions[chairIndex]
       if (chair.enabled) {
-        this.drawChair(ctx, chair, cx, cy, ox, oy, row.fontSize, this.isNudged(chair), rowIndex === this.hoverRowIndex)
+        this.drawChair(ctx, chair, cx, cy, ox, oy, row.fontSize, this.isNudged(chair), this.isChairHovered(rowIndex, chairIndex))
         if (chair.hasStand) this.drawStandX(ctx, cx, cy, ox, oy)
         // Standing players aren't numbered seats — no number drawn, and they
         // don't consume one (so the seated chairs stay sequential).
@@ -657,7 +659,7 @@ export class Renderer {
       positions.push({ cx, cy: rowY })
 
       if (chair.enabled) {
-        this.drawChair(ctx, chair, cx, rowY, cx, oy, row.fontSize, this.isNudged(chair), rowIndex === this.hoverRowIndex)
+        this.drawChair(ctx, chair, cx, rowY, cx, oy, row.fontSize, this.isNudged(chair), this.isChairHovered(rowIndex, chairIndex))
         if (chair.hasStand) this.drawStandX(ctx, cx, rowY, cx, oy)
         // Standing players aren't numbered seats (see semicircle path).
         if (!chair.noSeat) {
@@ -885,6 +887,14 @@ export class Renderer {
 
   // The drawn centre of a specific chair (for clamping a per-chair nudge
   // against its neighbours). Reads this frame's hit targets.
+  // Whether a chair should show the hover wash: either its whole row is hovered
+  // (sidebar) or it is the single hovered chair (canvas).
+  private isChairHovered(rowIndex: number, chairIndex: number): boolean {
+    if (this.hoverRowIndex === rowIndex) return true
+    const c = this.hoverChair
+    return c !== null && c.rowIndex === rowIndex && c.chairIndex === chairIndex
+  }
+
   chairCenter(rowIndex: number, chairIndex: number): { x: number; y: number } | null {
     for (const t of this.hitTargets) {
       if (t.rowIndex === rowIndex && t.chairIndex === chairIndex) return { x: t.x, y: t.y }

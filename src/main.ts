@@ -936,15 +936,15 @@ function renderRowList() {
   rowsContainer.scrollTop = scrollTop
 }
 
-// --- Row hover highlight (bidirectional: canvas <-> sidebar row controls) ---
-// Softly highlights a row of chairs on the canvas and its matching control in
-// the Edit/Layout row lists, so it's obvious which is which in a busy chart.
+// --- Hover highlight (bidirectional: canvas <-> sidebar row controls) ---
+// Makes it obvious which sidebar row maps to which chairs. Hovering a row
+// control highlights that whole row of chairs; hovering a chair on the canvas
+// highlights just that chair — but both light up the matching row control.
 // Re-renders the canvas only (not the row lists) so the highlight classes and
 // any input focus survive.
-function setHoverRow(i: number | null) {
-  if (renderer.hoverRowIndex === i) return
-  renderer.hoverRowIndex = i
-  renderer.render(canvas, config, { layoutMode, dpr: renderDpr, showGhosts: activeTab !== 'export' })
+
+// Highlights the matching row control(s) in the Edit/Layout lists, or clears.
+function highlightRowControl(i: number | null) {
   for (const el of document.querySelectorAll('.row-item.row-hover, .layout-row-item.row-hover')) {
     el.classList.remove('row-hover')
   }
@@ -955,17 +955,43 @@ function setHoverRow(i: number | null) {
   }
 }
 
+function rerenderCanvasOnly() {
+  renderer.render(canvas, config, { layoutMode, dpr: renderDpr, showGhosts: activeTab !== 'export' })
+}
+
+// Sidebar → highlight the whole row of chairs.
+function setHoverRow(i: number | null) {
+  if (renderer.hoverRowIndex === i && renderer.hoverChair === null) return
+  renderer.hoverRowIndex = i
+  renderer.hoverChair = null
+  rerenderCanvasOnly()
+  highlightRowControl(i)
+}
+
+// Canvas → highlight just the hovered chair (and flag its row control).
+function setHoverChair(hit: { rowIndex: number; chairIndex: number } | null) {
+  const c = renderer.hoverChair
+  const sameChair = (!c && !hit) ||
+    (!!c && !!hit && c.rowIndex === hit.rowIndex && c.chairIndex === hit.chairIndex)
+  if (sameChair && renderer.hoverRowIndex === null) return
+  renderer.hoverChair = hit
+  renderer.hoverRowIndex = null
+  rerenderCanvasOnly()
+  highlightRowControl(hit ? hit.rowIndex : null)
+}
+
 // True while any canvas drag is in progress, so hover detection stays quiet.
 function anyDragActive(): boolean {
   return !!(titleDrag || arcRangeDrag || layoutDrag || deskDrag || chairDrag
     || marqueeState || panState || conductorDragState || rotateState || dragState)
 }
 
-// The row index under a canvas pointer event (via the chair hit targets), or null.
-function rowAtPointer(e: PointerEvent): number | null {
+// The chair under a canvas pointer event (via the chair hit targets), or null.
+function chairAtPointer(e: PointerEvent): { rowIndex: number; chairIndex: number } | null {
   const cv = pointerCanvasCoords(e)
   const { x, y } = canvasToChart(cv.x, cv.y)
-  return renderer.hitTest(x, y)?.rowIndex ?? null
+  const hit = renderer.hitTest(x, y)
+  return hit ? { rowIndex: hit.rowIndex, chairIndex: hit.chairIndex } : null
 }
 
 // Wires a row-control list so hovering or focusing a row highlights the matching
@@ -2146,9 +2172,9 @@ function bindEvents() {
   canvas.addEventListener('pointermove', (e) => {
     if (!e.isPrimary || anyDragActive()) return
     if (activeTab !== 'edit' && activeTab !== 'layout') return
-    setHoverRow(rowAtPointer(e))
+    setHoverChair(chairAtPointer(e))
   })
-  canvas.addEventListener('pointerleave', () => setHoverRow(null))
+  canvas.addEventListener('pointerleave', () => setHoverChair(null))
   bindRowControlHover(rowsContainer)
   bindRowControlHover(layoutRowList)
 
@@ -2701,6 +2727,7 @@ function bindEvents() {
     const savedSel = renderer.selectedInstrumentId
     renderer.selectedInstrumentId = null
     renderer.hoverRowIndex = null
+    renderer.hoverChair = null
     try {
       renderer.render(ex, config, { dpr: 1, showGhosts: false })
       exportToPng(ex, config.title)
@@ -2720,6 +2747,7 @@ function bindEvents() {
     const savedSel = renderer.selectedInstrumentId
     renderer.selectedInstrumentId = null
     renderer.hoverRowIndex = null
+    renderer.hoverChair = null
     canvas.width = EXPORT_W
     canvas.height = EXPORT_H
     renderer.render(canvas, config, { dpr: 1, showGhosts: false })
