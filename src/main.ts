@@ -273,7 +273,7 @@ import {
   librarySearch, libraryList,
   customOrchestraBtn, customOrchestraModal, customOrchestraTitle, customOrchestraNotation,
   customOrchestraPreview, customOrchestraApply, customOrchestraCancel,
-  toolButtons, chairLabelInput, editChairsHint, labelPanel, instrumentPanel,
+  toolButtons, chairLabelInput, editChairsHint, labelPanel, clearLabelsBtn, instrumentPanel,
   marqueeBox, dragOverwriteBtn,
   standBulkPanel, stoolBulkPanel, standBulkButtons, stoolBulkButtons,
   instrumentPickerList, labelList, instrumentPickerStatus,
@@ -2308,6 +2308,17 @@ function bindEvents() {
   resetColorsBtn.addEventListener('click', () => {
     history.push(config)
     config.rows.forEach(row => row.chairs.forEach(c => { c.color = DEFAULT_CHAIR_COLOR }))
+    renderChart()
+  })
+
+  clearLabelsBtn.addEventListener('click', () => {
+    const labelled = config.rows.reduce(
+      (n, row) => n + row.chairs.filter(c => c.label).length, 0)
+    if (labelled === 0) return
+    if (!confirm(`Clear ${labelled} chair label${labelled !== 1 ? 's' : ''}? This can be undone.`)) return
+    history.push(config)
+    config.rows.forEach(row => row.chairs.forEach(c => { c.label = '' }))
+    renderLabelList()
     renderChart()
   })
 

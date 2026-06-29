@@ -69,6 +69,7 @@ export const toolButtons = document.querySelectorAll<HTMLButtonElement>('[data-t
 export const chairLabelInput = document.getElementById('chair-label-input') as HTMLInputElement
 export const editChairsHint = document.getElementById('edit-chairs-hint') as HTMLElement
 export const labelPanel = document.getElementById('label-panel') as HTMLElement
+export const clearLabelsBtn = document.getElementById('clear-labels-btn') as HTMLButtonElement
 export const dragOverwriteBtn = document.getElementById('drag-overwrite') as HTMLButtonElement
 export const instrumentPanel = document.getElementById('instrument-panel') as HTMLElement
 export const standBulkPanel = document.getElementById('stand-bulk') as HTMLElement
