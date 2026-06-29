@@ -175,7 +175,13 @@ export function drawTimpani(ctx: CanvasRenderingContext2D, inst: FixedInstrument
   const count = Math.max(2, Math.min(6, inst.count ?? 4))
   const drumR = 18
   const chord = drumR * 2 + 1                      // touching with a 1px hair of gap
-  const totalAngle = (3 * Math.PI) / 5             // 108°
+  // Wrap the cluster tighter as drums are added — more drums curl further
+  // around the player. 2–3 drums keep the original 108° spread; each drum
+  // past that adds 18°, capped at 162°.
+  const totalAngle = Math.min(
+    Math.PI * 0.9,
+    (3 * Math.PI) / 5 + Math.max(0, count - 3) * (Math.PI / 10),
+  )
   const angleStep = count > 1 ? totalAngle / (count - 1) : 0
   const arcR = count > 1 ? chord / (2 * Math.sin(angleStep / 2)) : drumR
   const startAngle = Math.PI / 2 - totalAngle / 2
@@ -213,9 +219,18 @@ export function drawTimpani(ctx: CanvasRenderingContext2D, inst: FixedInstrument
   // Optional player stool, tucked in just behind the back (outer) timpani —
   // not way out at the arc's geometric focus. The outer drums sit at
   // y = minY + offsetY after recentring; drop the stool a drum-radius behind
-  // that line so it nestles right behind the back drums.
+  // that line so it nestles right behind the back drums. But never let the
+  // seat disc overlap a drum: with only 2–3 drums they sit side-by-side near
+  // x=0, so push the stool further back until it clears every drum.
   const backDrumY = minY + offsetY
-  const playerY = backDrumY - drumR
+  const stoolSeatR = 13
+  const clearR = drumR + stoolSeatR + 2
+  let playerY = backDrumY - drumR
+  positions.forEach(p => {
+    if (Math.abs(p.x) < clearR) {
+      playerY = Math.min(playerY, p.y - Math.sqrt(clearR * clearR - p.x * p.x))
+    }
+  })
   let stoolHalfBound = 0
   if (inst.stool) {
     ctx.save()
