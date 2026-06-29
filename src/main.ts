@@ -504,7 +504,7 @@ function updateLayoutRowList() {
     const spread = g.isStraight
       ? `<label>Spacing<input type="number" class="lay-spread" data-row="${i}" min="20" max="200" step="1" value="${rowSpreadValue(g)}"></label>`
       : `<label>Arc°<input type="number" class="lay-spread" data-row="${i}" min="10" max="350" step="1" value="${rowSpreadValue(g)}"></label>`
-    return `<div class="layout-row-item">
+    return `<div class="layout-row-item" data-row-index="${i}">
       <span class="layout-row-name">${label}</span>
       <label>Dist<input type="number" class="lay-dist" data-row="${i}" min="40" max="2000" step="1" value="${Math.round(g.r)}"></label>
       ${spread}
@@ -914,6 +914,7 @@ function renderRowList() {
 
     const div = document.createElement('div')
     div.className = 'row-item'
+    div.dataset['rowIndex'] = String(i)
     div.innerHTML = `
       <div class="row-item-header">
         <span class="row-item-name">Row ${row.label}</span>
@@ -933,6 +934,54 @@ function renderRowList() {
   })
 
   rowsContainer.scrollTop = scrollTop
+}
+
+// --- Row hover highlight (bidirectional: canvas <-> sidebar row controls) ---
+// Softly highlights a row of chairs on the canvas and its matching control in
+// the Edit/Layout row lists, so it's obvious which is which in a busy chart.
+// Re-renders the canvas only (not the row lists) so the highlight classes and
+// any input focus survive.
+function setHoverRow(i: number | null) {
+  if (renderer.hoverRowIndex === i) return
+  renderer.hoverRowIndex = i
+  renderer.render(canvas, config, { layoutMode, dpr: renderDpr, showGhosts: activeTab !== 'export' })
+  for (const el of document.querySelectorAll('.row-item.row-hover, .layout-row-item.row-hover')) {
+    el.classList.remove('row-hover')
+  }
+  if (i !== null) {
+    for (const el of document.querySelectorAll(`.row-item[data-row-index="${i}"], .layout-row-item[data-row-index="${i}"]`)) {
+      el.classList.add('row-hover')
+    }
+  }
+}
+
+// True while any canvas drag is in progress, so hover detection stays quiet.
+function anyDragActive(): boolean {
+  return !!(titleDrag || arcRangeDrag || layoutDrag || deskDrag || chairDrag
+    || marqueeState || panState || conductorDragState || rotateState || dragState)
+}
+
+// The row index under a canvas pointer event (via the chair hit targets), or null.
+function rowAtPointer(e: PointerEvent): number | null {
+  const cv = pointerCanvasCoords(e)
+  const { x, y } = canvasToChart(cv.x, cv.y)
+  return renderer.hitTest(x, y)?.rowIndex ?? null
+}
+
+// Wires a row-control list so hovering or focusing a row highlights the matching
+// chairs on the canvas (the canvas->control direction is handled separately).
+function bindRowControlHover(container: HTMLElement) {
+  const indexFrom = (t: EventTarget | null): number | null => {
+    const item = (t as HTMLElement | null)?.closest?.('[data-row-index]')
+    return item ? Number(item.getAttribute('data-row-index')) : null
+  }
+  container.addEventListener('pointermove', (e) => setHoverRow(indexFrom(e.target)))
+  container.addEventListener('pointerleave', () => setHoverRow(null))
+  // Keyboard focus / typing in a row's inputs also highlights it.
+  container.addEventListener('focusin', (e) => setHoverRow(indexFrom(e.target)))
+  container.addEventListener('focusout', (e) => {
+    if (!container.contains((e as FocusEvent).relatedTarget as Node)) setHoverRow(null)
+  })
 }
 
 // Hiding/showing a chair re-packs the row's labels so none get stranded on a
@@ -2091,6 +2140,18 @@ function bindEvents() {
     el.addEventListener('change', () => { readInputs(); updateAllInputs(); renderChart() })
   }
 
+  // Bidirectional row-hover highlight. Canvas hover -> highlight the chairs
+  // under the cursor and their sidebar row control; hovering/focusing a row
+  // control highlights the matching chairs on the canvas.
+  canvas.addEventListener('pointermove', (e) => {
+    if (!e.isPrimary || anyDragActive()) return
+    if (activeTab !== 'edit' && activeTab !== 'layout') return
+    setHoverRow(rowAtPointer(e))
+  })
+  canvas.addEventListener('pointerleave', () => setHoverRow(null))
+  bindRowControlHover(rowsContainer)
+  bindRowControlHover(layoutRowList)
+
   // Row list: chair count + row-label changes
   rowsContainer.addEventListener('change', (e) => {
     const target = e.target as HTMLInputElement
@@ -2260,6 +2321,7 @@ function bindEvents() {
   const switchTab = (tab: string | undefined) => {
     if (!tab) return
     activeTab = tab
+    setHoverRow(null)         // drop any row-hover highlight when changing tabs
     closeChairLabelEditor()   // don't leave the inline editor floating after a tab change
     // Export is view-only — drop any instrument selection so its (now
     // non-interactive) handles don't linger on the chart.
@@ -2638,6 +2700,7 @@ function bindEvents() {
     ex.height = EXPORT_H
     const savedSel = renderer.selectedInstrumentId
     renderer.selectedInstrumentId = null
+    renderer.hoverRowIndex = null
     try {
       renderer.render(ex, config, { dpr: 1, showGhosts: false })
       exportToPng(ex, config.title)
@@ -2656,6 +2719,7 @@ function bindEvents() {
   window.addEventListener('beforeprint', () => {
     const savedSel = renderer.selectedInstrumentId
     renderer.selectedInstrumentId = null
+    renderer.hoverRowIndex = null
     canvas.width = EXPORT_W
     canvas.height = EXPORT_H
     renderer.render(canvas, config, { dpr: 1, showGhosts: false })

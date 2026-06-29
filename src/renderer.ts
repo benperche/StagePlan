@@ -64,6 +64,10 @@ export class Renderer {
   // Throwaway context for measuring glyph sizes without drawing to the canvas.
   private measureCtx: CanvasRenderingContext2D | null = null
   selectedInstrumentId: string | null = null
+  // Row to softly highlight (set on hover from the canvas or the row controls,
+  // to make it obvious which sidebar row maps to which row of chairs). Drawn as
+  // a translucent overlay; never affects export/print.
+  hoverRowIndex: number | null = null
   rotateHandleHit: RotateHandleHit | null = null
   // Same-shape hit-test target for the red ✕ delete button drawn next to
   // the selected instrument.
@@ -163,6 +167,11 @@ export class Renderer {
     } else {
       this.renderStraight(ctx, config, w, h)
     }
+
+    // Soft row-hover highlight (driven by the sidebar row controls / canvas
+    // hover). Drawn over the chairs but under the instruments. Only ever set
+    // while editing — export and print leave hoverRowIndex null.
+    this.drawRowHover(ctx)
 
     // Instruments draw on top so they're always visible & selectable
     this.renderInstruments(ctx, config)
@@ -886,6 +895,22 @@ export class Renderer {
       if (t.rowIndex === rowIndex && t.chairIndex === chairIndex) return { x: t.x, y: t.y }
     }
     return null
+  }
+
+  // Translucent amber discs over every (visible) chair in hoverRowIndex, so the
+  // hovered sidebar row and its chairs read as the same thing. Uses the chair
+  // hit targets, which already live in the same transformed space as the chairs.
+  private drawRowHover(ctx: CanvasRenderingContext2D) {
+    if (this.hoverRowIndex === null) return
+    ctx.save()
+    ctx.fillStyle = 'rgba(245, 158, 11, 0.22)'
+    for (const t of this.hitTargets) {
+      if (t.rowIndex !== this.hoverRowIndex) continue
+      ctx.beginPath()
+      ctx.arc(t.x, t.y, t.radius + 3, 0, Math.PI * 2)
+      ctx.fill()
+    }
+    ctx.restore()
   }
 
   // Every chair whose drawn centre falls inside the given rect (chart/logical

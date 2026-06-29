@@ -445,6 +445,14 @@ button.secondary { border-style: dashed; }
   overflow: hidden;
 }
 
+/* Row-hover highlight: the canvas and the matching sidebar control glow the
+   same amber so it's clear which row is which. Set from JS (see setHoverRow). */
+.row-item.row-hover,
+.layout-row-item.row-hover {
+  background: #fff7ed;
+  border-color: #f59e0b;
+}
+
 .row-item-header {
   display: flex;
   align-items: center;
