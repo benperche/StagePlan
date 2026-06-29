@@ -243,6 +243,31 @@ body {
   margin-bottom: 2px;
 }
 
+/* Collapsible panel heading (<summary>), styled to match the <h2> headings
+   with a small ▸/▾ disclosure triangle. Used by the Rows panel so it can be
+   tucked away while working with the chair tools. */
+.panel-summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  position: relative;
+  padding-left: 16px;
+  user-select: none;
+}
+.panel-summary::-webkit-details-marker { display: none; }
+.panel-summary::before {
+  content: '▸';
+  position: absolute;
+  left: 0;
+  transition: transform 0.1s ease;
+}
+details.panel[open] > .panel-summary::before { transform: rotate(90deg); }
+.panel-summary:hover { color: var(--text); }
+
 /* Form controls */
 label {
   display: flex;
@@ -456,8 +481,8 @@ button.secondary { border-style: dashed; }
 .row-item-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 8px 3px;
+  gap: 8px;
+  padding: 7px 10px 5px;
 }
 
 /* Second line of the row item, shown even when collapsed */
@@ -507,15 +532,23 @@ button.secondary { border-style: dashed; }
   font-size: 12px;
 }
 
-.row-item input[type="number"] { width: 48px; }
-.row-item input[type="text"]   { width: 40px; }
+.row-item input[type="number"] { width: 52px; }
+.row-item input[type="text"]   { width: 44px; }
 
 .remove-row-btn {
   margin-left: auto;
-  padding: 2px 6px;
-  font-size: 11px;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1;
   color: #999;
   border-color: transparent;
+  border-radius: 6px;
 }
 .remove-row-btn:hover { color: #c00; background: #fff0f0; }
 

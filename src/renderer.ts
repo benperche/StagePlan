@@ -168,11 +168,6 @@ export class Renderer {
       this.renderStraight(ctx, config, w, h)
     }
 
-    // Soft row-hover highlight (driven by the sidebar row controls / canvas
-    // hover). Drawn over the chairs but under the instruments. Only ever set
-    // while editing — export and print leave hoverRowIndex null.
-    this.drawRowHover(ctx)
-
     // Instruments draw on top so they're always visible & selectable
     this.renderInstruments(ctx, config)
 
@@ -580,7 +575,7 @@ export class Renderer {
     chairs.forEach((chair, chairIndex) => {
       const { cx, cy } = positions[chairIndex]
       if (chair.enabled) {
-        this.drawChair(ctx, chair, cx, cy, ox, oy, row.fontSize, this.isNudged(chair))
+        this.drawChair(ctx, chair, cx, cy, ox, oy, row.fontSize, this.isNudged(chair), rowIndex === this.hoverRowIndex)
         if (chair.hasStand) this.drawStandX(ctx, cx, cy, ox, oy)
         // Standing players aren't numbered seats — no number drawn, and they
         // don't consume one (so the seated chairs stay sequential).
@@ -662,7 +657,7 @@ export class Renderer {
       positions.push({ cx, cy: rowY })
 
       if (chair.enabled) {
-        this.drawChair(ctx, chair, cx, rowY, cx, oy, row.fontSize, this.isNudged(chair))
+        this.drawChair(ctx, chair, cx, rowY, cx, oy, row.fontSize, this.isNudged(chair), rowIndex === this.hoverRowIndex)
         if (chair.hasStand) this.drawStandX(ctx, cx, rowY, cx, oy)
         // Standing players aren't numbered seats (see semicircle path).
         if (!chair.noSeat) {
@@ -895,22 +890,6 @@ export class Renderer {
       if (t.rowIndex === rowIndex && t.chairIndex === chairIndex) return { x: t.x, y: t.y }
     }
     return null
-  }
-
-  // Translucent amber discs over every (visible) chair in hoverRowIndex, so the
-  // hovered sidebar row and its chairs read as the same thing. Uses the chair
-  // hit targets, which already live in the same transformed space as the chairs.
-  private drawRowHover(ctx: CanvasRenderingContext2D) {
-    if (this.hoverRowIndex === null) return
-    ctx.save()
-    ctx.fillStyle = 'rgba(245, 158, 11, 0.22)'
-    for (const t of this.hitTargets) {
-      if (t.rowIndex !== this.hoverRowIndex) continue
-      ctx.beginPath()
-      ctx.arc(t.x, t.y, t.radius + 3, 0, Math.PI * 2)
-      ctx.fill()
-    }
-    ctx.restore()
   }
 
   // Every chair whose drawn centre falls inside the given rect (chart/logical
@@ -1391,6 +1370,7 @@ export class Renderer {
     condX: number, condY: number,
     fontSize: number,
     highlight = false,
+    rowHover = false,
   ) {
     const faceAngle = Math.atan2(condY - cy, condX - cx)
 
@@ -1443,6 +1423,26 @@ export class Renderer {
       ctx.strokeStyle = '#333'
       ctx.lineWidth = 4
       ctx.stroke()
+    }
+
+    // Row-hover highlight: a translucent amber wash matching the seat's shape
+    // (square chair / round stool) and orientation, so it never looks out of
+    // place against the square chairs. Drawn in the rotated frame.
+    if (rowHover) {
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.28)'
+      ctx.strokeStyle = 'rgba(217, 119, 6, 0.9)'
+      ctx.lineWidth = 2
+      if (chair.isStool) {
+        ctx.beginPath()
+        ctx.arc(0, 0, CHAIR_HALF + 2, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.stroke()
+      } else {
+        // Normal seats and standing slots both get a square so the row's
+        // position reads clearly even where a player is standing (no glyph).
+        ctx.fillRect(-CHAIR_HALF - 2, -CHAIR_HALF - 2, CHAIR_SIZE + 4, CHAIR_SIZE + 4)
+        ctx.strokeRect(-CHAIR_HALF - 2, -CHAIR_HALF - 2, CHAIR_SIZE + 4, CHAIR_SIZE + 4)
+      }
     }
 
     // Layout tab: a nudged chair gets a blue outline so it's obvious which
