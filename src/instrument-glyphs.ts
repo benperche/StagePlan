@@ -210,9 +210,12 @@ export function drawTimpani(ctx: CanvasRenderingContext2D, inst: FixedInstrument
     ctx.stroke()
   })
 
-  // Optional player stool at the centre of the arc (the focus the drums curve
-  // around). The arc centre sat at (0, -arcR) before the vertical recentre.
-  const playerY = -arcR + offsetY
+  // Optional player stool, tucked in just behind the back (outer) timpani —
+  // not way out at the arc's geometric focus. The outer drums sit at
+  // y = minY + offsetY after recentring; drop the stool a drum-radius behind
+  // that line so it nestles right behind the back drums.
+  const backDrumY = minY + offsetY
+  const playerY = backDrumY - drumR
   let stoolHalfBound = 0
   if (inst.stool) {
     ctx.save()
