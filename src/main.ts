@@ -67,6 +67,16 @@ type StandMode = 'solo' | 'desk' | 'remove'
 type StoolMode = 'chair' | 'stool' | 'standing'
 let standMode: StandMode = 'solo'
 let stoolMode: StoolMode = 'stool'
+
+// Repeated clicks on the SAME chair with the stand/stool tool cycle through
+// the options: the first click on a chair applies the armed sidebar mode,
+// and each further click on that same chair steps to the next option. We
+// track the last chair a cycling tool acted on; it's cleared whenever the
+// tool, config or a marquee changes things, so a fresh chair always starts
+// from the armed mode again.
+let lastCycledChair: { rowIndex: number; chairIndex: number; tool: ChairTool } | null = null
+const STAND_CYCLE: StandMode[] = ['solo', 'remove', 'desk']
+const STOOL_CYCLE: StoolMode[] = ['chair', 'stool', 'standing']
 let marqueeState: {
   startClientX: number; startClientY: number
   startChart: { x: number; y: number }
@@ -401,6 +411,7 @@ function migrateConfig(c: ChartConfig) {
 function setConfig(newConfig: ChartConfig) {
   config = newConfig
   migrateConfig(config)
+  lastCycledChair = null   // chair indices may no longer refer to the same seat
   setSelectedInstrument(null)
   updateAllInputs()
   renderChart()
@@ -1873,6 +1884,30 @@ function applyStoolToChair(chair: Chair, mode: StoolMode) {
   chair.noSeat = mode === 'standing'
 }
 
+// The seat/stand state a chair is currently in, expressed as a tool mode —
+// used to work out the next option when cycling on repeated clicks.
+function chairStoolMode(chair: Chair): StoolMode {
+  if (chair.noSeat) return 'standing'
+  if (chair.isStool) return 'stool'
+  return 'chair'
+}
+function chairStandMode(rowChairs: Chair[], i: number): StandMode {
+  const chair = rowChairs[i]
+  if (chair.standAfter) return 'desk'
+  if (chair.hasStand) return 'solo'
+  return 'remove'
+}
+function nextInCycle<T>(cycle: T[], current: T): T {
+  const i = cycle.indexOf(current)
+  return cycle[(i + 1) % cycle.length] as T
+}
+// True if this click lands on the same chair the cycling tool last acted on
+// (so it should step to the next option rather than re-apply the armed mode).
+function isRepeatCycleClick(tool: ChairTool, hit: { rowIndex: number; chairIndex: number }): boolean {
+  return lastCycledChair !== null && lastCycledChair.tool === tool
+    && lastCycledChair.rowIndex === hit.rowIndex && lastCycledChair.chairIndex === hit.chairIndex
+}
+
 // Stand for one chair. 'desk' shares a stand with the next enabled neighbour;
 // any desk that paired *into* this chair from the left is dissolved first so we
 // never leave a half-desk pointing at a now-soloed/removed seat.
@@ -1966,6 +2001,9 @@ function applyBulkTool(refs: { rowIndex: number; chairIndex: number }[], centre:
   } else if (activeTool === 'stand') {
     applyStandModeToTargets(targets)
   }
+  // A marquee isn't a single-chair click, so the next click should re-apply
+  // the armed mode rather than cycle.
+  lastCycledChair = null
   renderChart()
 }
 
@@ -2011,18 +2049,29 @@ canvas.addEventListener('click', (e) => {
 
   if (activeTool === 'color') {
     chair.color = activeColor
+    lastCycledChair = null
   } else if (activeTool === 'toggle') {
     chair.enabled = !chair.enabled
     // Re-pack labels so the hidden seat doesn't strand its label (and un-hiding
     // restores it) — see repackLabelsAfterToggle.
     repackLabelsAfterToggle(config.rows[hit.rowIndex].chairs, hit.chairIndex, !chair.enabled)
+    lastCycledChair = null
   } else if (activeTool === 'stool') {
-    // Apply the armed seat type (Chair / Stool / Standing) — the sub-panel acts
-    // as a mode selector for both clicks and marquee drags.
-    applyStoolToChair(chair, stoolMode)
+    // First click on a chair applies the armed seat type (the sub-panel acts as
+    // a mode selector for both clicks and marquee drags); clicking the same
+    // chair again cycles through Chair / Stool / Standing.
+    const mode = isRepeatCycleClick('stool', hit)
+      ? nextInCycle(STOOL_CYCLE, chairStoolMode(chair)) : stoolMode
+    applyStoolToChair(chair, mode)
+    lastCycledChair = { rowIndex: hit.rowIndex, chairIndex: hit.chairIndex, tool: 'stool' }
   } else if (activeTool === 'stand') {
-    // Apply the armed stand mode (Solo / In desks / Remove).
-    applyStandToChair(config.rows[hit.rowIndex].chairs, hit.chairIndex, standMode)
+    // First click applies the armed stand mode; repeated clicks on the same
+    // chair cycle through Solo / Remove / In desks.
+    const rowChairs = config.rows[hit.rowIndex].chairs
+    const mode = isRepeatCycleClick('stand', hit)
+      ? nextInCycle(STAND_CYCLE, chairStandMode(rowChairs, hit.chairIndex)) : standMode
+    applyStandToChair(rowChairs, hit.chairIndex, mode)
+    lastCycledChair = { rowIndex: hit.rowIndex, chairIndex: hit.chairIndex, tool: 'stand' }
   }
 
   renderChart()
@@ -2243,6 +2292,7 @@ function bindEvents() {
   // selection in sync.
   function setChairTool(tool: ChairTool) {
     activeTool = tool
+    lastCycledChair = null   // a new chair always starts from the armed mode
     toolButtons.forEach(b => b.classList.toggle('active', b.dataset['tool'] === tool))
     colorPickerLabel.style.display = tool === 'color' ? '' : 'none'
     colorBulkPanel.style.display = tool === 'color' ? '' : 'none'
