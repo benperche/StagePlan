@@ -281,6 +281,7 @@ import {
   addInstrumentButtons, inspector, inspectorType, inspectorLabel,
   inspectorCountLabel, inspectorCount, inspectorRotateLeft, inspectorRotateRight,
   inspectorDelete, inspectorMicOptions, inspectorMicStand, inspectorMicWireless,
+  inspectorTimpaniOptions, inspectorTimpaniStool,
 } from './dom'
 
 // --- Init ---
@@ -996,8 +997,11 @@ function renderInspector() {
   if (inst.type === 'timpani') {
     inspectorCountLabel.style.display = ''
     inspectorCount.value = String(inst.count ?? 4)
+    inspectorTimpaniOptions.style.display = ''
+    inspectorTimpaniStool.checked = inst.stool === true
   } else {
     inspectorCountLabel.style.display = 'none'
+    inspectorTimpaniOptions.style.display = 'none'
   }
 
   if (inst.type === 'microphone') {
@@ -2143,6 +2147,15 @@ function bindEvents() {
     if (!inst || inst.type !== 'timpani') return
     history.push(config)
     inst.count = Math.max(2, Math.min(6, Number(inspectorCount.value) || 4))
+    renderChart()
+  })
+
+  // Inspector — timpani player stool toggle
+  inspectorTimpaniStool.addEventListener('change', () => {
+    const inst = config.instruments.find(i => i.id === selectedInstrumentId)
+    if (!inst || inst.type !== 'timpani') return
+    history.push(config)
+    inst.stool = inspectorTimpaniStool.checked
     renderChart()
   })
 

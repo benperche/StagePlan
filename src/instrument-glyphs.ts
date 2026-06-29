@@ -210,10 +210,26 @@ export function drawTimpani(ctx: CanvasRenderingContext2D, inst: FixedInstrument
     ctx.stroke()
   })
 
+  // Optional player stool at the centre of the arc (the focus the drums curve
+  // around). The arc centre sat at (0, -arcR) before the vertical recentre.
+  const playerY = -arcR + offsetY
+  let stoolHalfBound = 0
+  if (inst.stool) {
+    ctx.save()
+    ctx.translate(0, playerY)
+    stoolHalfBound = drawStool(ctx).hh
+    ctx.restore()
+  }
+
   const minX = Math.min(...positions.map(p => p.x))
   const maxX = Math.max(...positions.map(p => p.x))
   const hw = Math.max(-(minX - drumR), maxX + drumR)
-  const hh = (maxY - minY) / 2 + drumR
+  let hh = (maxY - minY) / 2 + drumR
+  if (inst.stool) {
+    // Grow the bounds (symmetric about y=0) so the stool is enclosed by the
+    // selection box and the label clears it.
+    hh = Math.max(hh, -playerY + stoolHalfBound)
+  }
 
   return { hw, hh, labelInside: false }
 }

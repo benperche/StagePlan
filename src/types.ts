@@ -84,6 +84,9 @@ export interface FixedInstrument {
   distance: number
   rotation: number    // local rotation in radians (0 = default orientation)
   count?: number      // timpani: 2-6 drums (default 4)
+  // Timpani-only: when true, a player stool is drawn at the centre of the
+  // timpani arc and counted in the chart's stool total.
+  stool?: boolean
   label?: string      // optional override for the displayed label
   // Microphone-only: whether the mic sits on a mic stand (default true) and
   // whether it's a wireless unit (default false = wired, drawn with a cable).

@@ -1307,6 +1307,10 @@ export class Renderer {
         if (chair.standAfter && row.chairs[i + 1]?.enabled) totalStands++
       })
     }
+    // Timpani players sit on a stool too — include them in the stool total.
+    for (const inst of config.instruments ?? []) {
+      if (inst.type === 'timpani' && inst.stool) totalStools++
+    }
     if (config.rows.length > 1) {
       const plural = (n: number, word: string) => `${n} ${word}${n !== 1 ? 's' : ''}`
       const parts: string[] = []
