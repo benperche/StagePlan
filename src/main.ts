@@ -693,8 +693,8 @@ async function renderLibrary() {
       parts.push(`<div class="lib-chart-row${current ? ' current' : ''}">
         <button class="lib-chart-open" data-lib-action="open" data-id="${c.id}" title="Open ${escapeText(c.title)}">${escapeText(c.title)}</button>
         <span class="lib-chart-date">${fmtDate(c.updatedAt)}</span>
-        <button class="lib-chart-action" data-lib-action="rename" data-id="${c.id}" title="Rename">✏</button>
-        <button class="lib-chart-action" data-lib-action="duplicate" data-id="${c.id}" title="Duplicate">⎘</button>
+        <button class="lib-chart-action" data-lib-action="rename" data-id="${c.id}" title="Rename">✏️</button>
+        <button class="lib-chart-action" data-lib-action="duplicate" data-id="${c.id}" title="Duplicate">📋</button>
         <button class="lib-chart-action" data-lib-action="move" data-id="${c.id}" title="Move to folder">📁</button>
         <button class="lib-chart-action danger" data-lib-action="delete" data-id="${c.id}" title="Delete">🗑</button>
       </div>`)
