@@ -2059,17 +2059,21 @@ canvas.addEventListener('click', (e) => {
   } else if (activeTool === 'stool') {
     // First click on a chair applies the armed seat type (the sub-panel acts as
     // a mode selector for both clicks and marquee drags); clicking the same
-    // chair again cycles through Chair / Stool / Standing.
-    const mode = isRepeatCycleClick('stool', hit)
-      ? nextInCycle(STOOL_CYCLE, chairStoolMode(chair)) : stoolMode
+    // chair again cycles through Chair / Stool / Standing. If the chair is
+    // already in the armed mode, applying it would do nothing, so cycle instead.
+    const current = chairStoolMode(chair)
+    const mode = isRepeatCycleClick('stool', hit) || current === stoolMode
+      ? nextInCycle(STOOL_CYCLE, current) : stoolMode
     applyStoolToChair(chair, mode)
     lastCycledChair = { rowIndex: hit.rowIndex, chairIndex: hit.chairIndex, tool: 'stool' }
   } else if (activeTool === 'stand') {
     // First click applies the armed stand mode; repeated clicks on the same
-    // chair cycle through Solo / Remove / In desks.
+    // chair cycle through Solo / Remove / In desks. If the chair is already in
+    // the armed mode, applying it would do nothing, so cycle instead.
     const rowChairs = config.rows[hit.rowIndex].chairs
-    const mode = isRepeatCycleClick('stand', hit)
-      ? nextInCycle(STAND_CYCLE, chairStandMode(rowChairs, hit.chairIndex)) : standMode
+    const current = chairStandMode(rowChairs, hit.chairIndex)
+    const mode = isRepeatCycleClick('stand', hit) || current === standMode
+      ? nextInCycle(STAND_CYCLE, current) : standMode
     applyStandToChair(rowChairs, hit.chairIndex, mode)
     lastCycledChair = { rowIndex: hit.rowIndex, chairIndex: hit.chairIndex, tool: 'stand' }
   }
