@@ -276,7 +276,7 @@ import {
   rowsContainer,
   colorPicker, colorPickerLabel, colorBulkPanel, resetColorsBtn,
   undoBtn, redoBtn, zoomInBtn, zoomOutBtn, zoomResetBtn,
-  resetPositionBtn, resetLayoutBtn, layoutRowList, addRowBtn, saveBtn,
+  resetPositionBtn, resetLayoutBtn, tidySectionsBtn, layoutRowList, addRowBtn, saveBtn,
   loadInput, exportPngBtn, printBtn, shareLinkBtn, shareUrlDisplay, presetSelect, applyPresetBtn, clearPresetBtn,
   libraryDrawer, libraryBackdrop, libraryOpenBtn, libraryCloseBtn,
   libraryCurrentTitle, librarySaveBtn, libraryNewChartBtn, libraryNewFolderBtn,
@@ -2577,6 +2577,60 @@ function bindEvents() {
     }
     delete config.titleOffsetX
     delete config.titleOffsetY
+    renderChart()
+  })
+
+  // Tidy sections: infer a section grouping from existing chair labels and
+  // assign it as `chair.group`, so arc rows fan into one contiguous wedge
+  // per section (see renderArcRow's grouped placement) instead of being
+  // spread evenly across the row — without dragging a single chair.
+  //
+  // Two chairs are treated as the same section only if their labels match
+  // EXACTLY (after trimming). This app uses the label itself as the section
+  // name (e.g. every "Vln 1" chair IS the first-violin section) — there is
+  // no per-chair numbering to strip, and guessing at one risks merging
+  // genuinely different sections (e.g. "Tpt 1" / "Tpt 2"). An unlabelled
+  // chair gets its own one-wide wedge (keyed by its id) rather than no
+  // group at all, since a row needs every chair grouped for the wedge
+  // layout to apply (see renderArcRow's `allGrouped` check).
+  //
+  // Old-style hidden placeholder chairs (disabled, no label) were the only
+  // way to shape a section's density before grouped wedges existed — the
+  // wedge layout doesn't need them, so this also removes any that remain.
+  tidySectionsBtn.addEventListener('click', () => {
+    if (config.layout !== 'semicircle') {
+      alert('Tidy sections only applies to semicircle charts.')
+      return
+    }
+    const numRows = config.rows.length
+    const isStraightRow = (i: number) =>
+      config.rows[i].isStraight ?? (i >= numRows - config.straightRows)
+    const targetRows = config.rows
+      .map((row, i) => ({ row, i }))
+      .filter(({ row, i }) => !isStraightRow(i) && row.chairs.some(c => c.label.trim()))
+
+    if (targetRows.length === 0) {
+      alert('No labelled chairs found in any arc row — nothing to tidy.')
+      return
+    }
+    let spacerCount = 0, keptCount = 0
+    for (const { row } of targetRows) {
+      for (const c of row.chairs) {
+        if (!c.enabled && !c.label.trim()) spacerCount++
+        else keptCount++
+      }
+    }
+    const msg = spacerCount > 0
+      ? `Group ${keptCount} chairs into sections by label, and remove ${spacerCount} unused placeholder chair${spacerCount !== 1 ? 's' : ''}? This can be undone.`
+      : `Group ${keptCount} chairs into sections by label? This can be undone.`
+    if (!window.confirm(msg)) return
+
+    history.push(config)
+    for (const { row } of targetRows) {
+      row.chairs = row.chairs.filter(c => c.enabled || c.label.trim())
+      for (const c of row.chairs) c.group = c.label.trim() || c.id
+    }
+    renderLabelList()   // spacer chairs may have been removed → rebuild the paste list
     renderChart()
   })
 
