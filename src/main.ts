@@ -2189,8 +2189,13 @@ function bindEvents() {
       const count = Math.max(1, Math.min(30, Number(target.value)))
       const current = config.rows[rowIdx].chairs
       if (count > current.length) {
+        // New chairs inherit the row's prevailing stand state (the last
+        // existing chair's) instead of always defaulting to no stand —
+        // growing a row of stand-equipped chairs shouldn't silently add
+        // stand-less ones at the end.
+        const inheritStand = current.length > 0 ? current[current.length - 1].hasStand : true
         for (let i = current.length; i < count; i++) {
-          current.push({ id: crypto.randomUUID(), enabled: true, color: '#e8e8e8', label: '', hasStand: false, standAfter: false })
+          current.push({ id: crypto.randomUUID(), enabled: true, color: '#e8e8e8', label: '', hasStand: inheritStand, standAfter: false })
         }
       } else {
         config.rows[rowIdx].chairs = current.slice(0, count)
