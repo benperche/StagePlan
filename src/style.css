@@ -685,6 +685,18 @@ button.danger:hover { background: #fff0f0; }
   line-height: 1.4;
 }
 
+/* Friendly "new here?" pointer at the top of the Setup tab — slightly more
+   visible than a regular .hint so a first-time visitor's eye lands on it,
+   but quiet enough not to nag a returning user. */
+.setup-intro-hint {
+  font-size: 12px;
+  color: var(--text);
+  background: #f0f7ff;
+  border: 1px solid #dbeafe;
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
 /* Modal overlay (custom orchestra) */
 .modal-overlay {
   position: fixed;
