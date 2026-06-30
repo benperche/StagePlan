@@ -295,6 +295,7 @@ import {
   inspectorCountLabel, inspectorCount, inspectorRotateLeft, inspectorRotateRight,
   inspectorDelete, inspectorMicOptions, inspectorMicStand, inspectorMicWireless,
   inspectorTimpaniOptions, inspectorTimpaniStool,
+  setupIntroHint, dismissIntroHintBtn,
 } from './dom'
 
 // --- Init ---
@@ -2918,6 +2919,14 @@ function bindEvents() {
     presetSelect.value = ''
     updateAllInputs()
     renderChart()
+  })
+
+  // --- Setup intro hint (dismissable) ---
+  const HINT_KEY = 'sp_intro_dismissed'
+  if (setupIntroHint && localStorage.getItem(HINT_KEY)) setupIntroHint.style.display = 'none'
+  dismissIntroHintBtn?.addEventListener('click', () => {
+    if (setupIntroHint) setupIntroHint.style.display = 'none'
+    localStorage.setItem(HINT_KEY, '1')
   })
 
   // --- About modal ---

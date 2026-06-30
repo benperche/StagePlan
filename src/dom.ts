@@ -44,6 +44,8 @@ export const rowSpacingInput = document.getElementById('row-spacing') as HTMLInp
 export const showCreditCheck = document.getElementById('show-credit') as HTMLInputElement
 export const resetPositionBtn = document.getElementById('reset-position-btn') as HTMLButtonElement
 export const resetLayoutBtn = document.getElementById('reset-layout-btn') as HTMLButtonElement
+export const setupIntroHint = document.getElementById('setup-intro-hint') as HTMLElement | null
+export const dismissIntroHintBtn = document.getElementById('dismiss-intro-hint') as HTMLButtonElement | null
 export const tidySectionsBtn = document.getElementById('tidy-sections-btn') as HTMLButtonElement
 export const layoutRowList = document.getElementById('layout-row-list') as HTMLElement
 

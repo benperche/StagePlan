@@ -695,6 +695,19 @@ button.danger:hover { background: #fff0f0; }
   border: 1px solid #dbeafe;
   border-radius: 6px;
   padding: 8px 10px;
+  position: relative;
+}
+.dismiss-hint-btn {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-muted, #94a3b8);
+  padding: 0 2px;
+  line-height: 1;
 }
 
 /* Modal overlay (custom orchestra) */
