@@ -283,6 +283,9 @@ import {
   librarySearch, libraryList,
   customOrchestraBtn, customOrchestraModal, customOrchestraTitle, customOrchestraNotation,
   customOrchestraPreview, customOrchestraApply, customOrchestraCancel,
+  coModeSimpleBtn, coModeAdvancedBtn, coSimplePanel, coAdvancedPanel,
+  coFl, coOb, coCl, coBsn, coHn, coTpt, coTbn, coTuba,
+  coVn1, coVn2, coVa, coVc, coCb, coTimp, coHarp, coPiano,
   toolButtons, chairLabelInput, editChairsHint, labelPanel, clearLabelsBtn, instrumentPanel,
   marqueeBox, dragOverwriteBtn,
   standBulkPanel, stoolBulkPanel, standBulkButtons, stoolBulkButtons,
@@ -2925,18 +2928,46 @@ function bindEvents() {
   })
 
   // --- Custom orchestra modal ---
+  // Two ways to specify the composition: "Simple" (labelled per-section count
+  // fields, no notation syntax to learn) and "Advanced" (the raw Boosey &
+  // Hawkes notation box). Simple just assembles a notation string and feeds
+  // the same parseOrchestraNotation -> applyPreset pipeline as Advanced, plus
+  // Timpani/Harp/Piano which aren't expressible in notation — those are
+  // appended as fixed instruments the same way the Edit tab's add-instrument
+  // buttons do (makeInstrument, positioned from the resulting back row).
+  let coMode: 'simple' | 'advanced' = 'simple'
+
+  const setCoMode = (mode: 'simple' | 'advanced') => {
+    coMode = mode
+    coModeSimpleBtn.classList.toggle('active', mode === 'simple')
+    coModeAdvancedBtn.classList.toggle('active', mode === 'advanced')
+    coSimplePanel.style.display = mode === 'simple' ? '' : 'none'
+    coAdvancedPanel.style.display = mode === 'advanced' ? '' : 'none'
+    refreshCustomPreview()
+  }
+
+  // Assembles a 3-block notation string (Ww - Br - Str) from the Simple
+  // fields. Percussion is intentionally omitted from notation — like the
+  // built-in Symphony/Chamber presets, timpani is a fixed instrument instead.
+  const simpleNotation = (): string => {
+    const n = (el: HTMLInputElement) => Math.max(0, Math.min(99, Number(el.value) || 0))
+    const ww = [coFl, coOb, coCl, coBsn].map(n).join('.')
+    const br = [coHn, coTpt, coTbn, coTuba].map(n).join('.')
+    const str = [coVn1, coVn2, coVa, coVc, coCb].map(n).join('.')
+    return `${ww} - ${br} - ${str}`
+  }
+
   const openCustomModal = () => {
     customOrchestraTitle.value = ''
     customOrchestraNotation.value = ''
-    customOrchestraPreview.textContent = 'Type a notation above to see a preview.'
-    customOrchestraPreview.classList.remove('error')
+    setCoMode('simple')
     customOrchestraModal.style.display = 'flex'
-    setTimeout(() => customOrchestraNotation.focus(), 0)
+    setTimeout(() => customOrchestraTitle.focus(), 0)
   }
   const closeCustomModal = () => { customOrchestraModal.style.display = 'none' }
 
   const refreshCustomPreview = () => {
-    const text = customOrchestraNotation.value.trim()
+    const text = coMode === 'simple' ? simpleNotation() : customOrchestraNotation.value.trim()
     if (!text) {
       customOrchestraPreview.textContent = 'Type a notation above to see a preview.'
       customOrchestraPreview.classList.remove('error')
@@ -2949,7 +2980,16 @@ function bindEvents() {
       customOrchestraPreview.classList.add('error')
       return
     }
-    customOrchestraPreview.textContent = describeComposition(comp)
+    const lines = [describeComposition(comp)]
+    if (coMode === 'simple') {
+      const extras: string[] = []
+      const timp = Math.max(0, Math.min(6, Number(coTimp.value) || 0))
+      if (timp > 0) extras.push(`${timp} Timpani`)
+      if (coHarp.checked) extras.push('Harp')
+      if (coPiano.checked) extras.push('Piano')
+      if (extras.length) lines.push(`Extras: ${extras.join(', ')}`)
+    }
+    customOrchestraPreview.textContent = lines.join('\n')
     customOrchestraPreview.classList.remove('error')
   }
 
@@ -2959,9 +2999,15 @@ function bindEvents() {
   customOrchestraModal.addEventListener('click', (e) => {
     if (e.target === customOrchestraModal) closeCustomModal()
   })
+  coModeSimpleBtn.addEventListener('click', () => setCoMode('simple'))
+  coModeAdvancedBtn.addEventListener('click', () => setCoMode('advanced'))
+  for (const el of [coFl, coOb, coCl, coBsn, coHn, coTpt, coTbn, coTuba,
+    coVn1, coVn2, coVa, coVc, coCb, coTimp, coHarp, coPiano]) {
+    el.addEventListener('input', refreshCustomPreview)
+  }
   customOrchestraNotation.addEventListener('input', refreshCustomPreview)
   customOrchestraApply.addEventListener('click', () => {
-    const notation = customOrchestraNotation.value.trim()
+    const notation = coMode === 'simple' ? simpleNotation() : customOrchestraNotation.value.trim()
     if (!notation) return
     if (!parseOrchestraNotation(notation)) {
       refreshCustomPreview()
@@ -2975,6 +3021,26 @@ function bindEvents() {
       sections: [],
       notation,
     })
+    // Extras (Timpani/Harp/Piano) aren't expressible in notation — add them
+    // as fixed instruments now that the rows (and so the back-row radius
+    // they're placed relative to) exist. Folds into the same undo step as
+    // the preset apply above (no extra history.push).
+    if (coMode === 'simple') {
+      const timp = Math.max(0, Math.min(6, Number(coTimp.value) || 0))
+      const backRadius = renderer.backRowRadius(config)
+      if (timp > 0) {
+        const inst = makeInstrument('timpani', config.flipped, 0, backRadius)
+        inst.count = timp
+        config.instruments.push(inst)
+      }
+      if (coHarp.checked) {
+        config.instruments.push(makeInstrument('harp', config.flipped, 0, backRadius))
+      }
+      if (coPiano.checked) {
+        config.instruments.push(makeInstrument('piano', config.flipped, 0, backRadius))
+      }
+      if (timp > 0 || coHarp.checked || coPiano.checked) renderChart()
+    }
     closeCustomModal()
   })
 

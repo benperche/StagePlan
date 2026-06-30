@@ -430,20 +430,61 @@
   <div id="custom-orchestra-modal" class="modal-overlay" style="display:none">
     <div class="modal-card">
       <h2>Custom Orchestra</h2>
-      <p class="hint">
-        Boosey &amp; Hawkes shorthand: <code>Ww − Br [− Perc] − Str</code>.
-        Each block is dot-separated counts (Ww: Fl.Ob.Cl.Bn, Br: Hn.Tp.Tb.Tu,
-        Perc: Timp.Perc, Str: V1.V2.Va.Vc.Cb).
-        Doublings in parens, e.g. <code>3(III=Bass Clarinet)</code>.
-      </p>
       <label>Title
         <input type="text" id="custom-orchestra-title" placeholder="Custom Orchestra" />
       </label>
-      <label>Notation
-        <input type="text" id="custom-orchestra-notation"
-               placeholder="2.2.2.2 - 4.2.3.1 - 1.2 - 12.10.8.8.6"
-               autocomplete="off" spellcheck="false" />
-      </label>
+
+      <div class="row-controls">
+        <button id="co-mode-simple" type="button" class="tool-btn active">Simple</button>
+        <button id="co-mode-advanced" type="button" class="tool-btn">Advanced</button>
+      </div>
+
+      <div id="custom-orchestra-simple">
+        <p class="hint">Enter how many of each part you need — leave a section at 0 to skip it.</p>
+        <div class="co-grid">
+          <span class="co-grid-label">Woodwinds</span>
+          <label>Fl<input type="number" min="0" max="9" id="co-fl" value="2"></label>
+          <label>Ob<input type="number" min="0" max="9" id="co-ob" value="2"></label>
+          <label>Cl<input type="number" min="0" max="9" id="co-cl" value="2"></label>
+          <label>Bsn<input type="number" min="0" max="9" id="co-bsn" value="2"></label>
+        </div>
+        <div class="co-grid">
+          <span class="co-grid-label">Brass</span>
+          <label>Hn<input type="number" min="0" max="9" id="co-hn" value="4"></label>
+          <label>Tpt<input type="number" min="0" max="9" id="co-tpt" value="2"></label>
+          <label>Tbn<input type="number" min="0" max="9" id="co-tbn" value="3"></label>
+          <label>Tuba<input type="number" min="0" max="9" id="co-tuba" value="1"></label>
+        </div>
+        <div class="co-grid">
+          <span class="co-grid-label">Strings</span>
+          <label>Vn1<input type="number" min="0" max="20" id="co-vn1" value="8"></label>
+          <label>Vn2<input type="number" min="0" max="20" id="co-vn2" value="7"></label>
+          <label>Va<input type="number" min="0" max="20" id="co-va" value="6"></label>
+          <label>Vc<input type="number" min="0" max="20" id="co-vc" value="5"></label>
+          <label>Cb<input type="number" min="0" max="20" id="co-cb" value="3"></label>
+        </div>
+        <div class="co-grid">
+          <span class="co-grid-label">Extras</span>
+          <label>Timp<input type="number" min="0" max="6" id="co-timp" value="0"></label>
+          <label class="co-checkbox"><input type="checkbox" id="co-harp"> Harp</label>
+          <label class="co-checkbox"><input type="checkbox" id="co-piano"> Piano</label>
+        </div>
+      </div>
+
+      <div id="custom-orchestra-advanced" style="display:none">
+        <p class="hint">
+          Boosey &amp; Hawkes shorthand: <code>Ww − Br [− Perc] − Str</code>.
+          Each block is dot-separated counts (Ww: Fl.Ob.Cl.Bn, Br: Hn.Tp.Tb.Tu,
+          Perc: Timp.Perc, Str: V1.V2.Va.Vc.Cb).
+          Doublings in parens, e.g. <code>3(III=Bass Clarinet)</code>.
+        </p>
+        <label>Notation
+          <input type="text" id="custom-orchestra-notation"
+                 placeholder="2.2.2.2 - 4.2.3.1 - 1.2 - 12.10.8.8.6"
+                 autocomplete="off" spellcheck="false" />
+        </label>
+      </div>
+
       <div id="custom-orchestra-preview" class="preview-box">
         Type a notation above to see a preview.
       </div>

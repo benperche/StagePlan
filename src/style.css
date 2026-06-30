@@ -797,6 +797,35 @@ button.danger:hover { background: #fff0f0; }
   color: #334155;
 }
 
+/* Custom Orchestra modal: Simple-mode section grids (Woodwinds/Brass/
+   Strings/Extras), each a label + a row of small number inputs. */
+.co-grid {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.co-grid-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  width: 78px;
+  flex: none;
+}
+.co-grid label {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+.co-grid input[type="number"] { width: 42px; }
+.co-grid label.co-checkbox {
+  gap: 5px;
+  cursor: pointer;
+}
+
 .preview-box {
   background: #f8fafc;
   border: 1px solid var(--border);

@@ -58,6 +58,26 @@ export const customOrchestraNotation = document.getElementById('custom-orchestra
 export const customOrchestraPreview = document.getElementById('custom-orchestra-preview') as HTMLElement
 export const customOrchestraApply = document.getElementById('custom-orchestra-apply') as HTMLButtonElement
 export const customOrchestraCancel = document.getElementById('custom-orchestra-cancel') as HTMLButtonElement
+export const coModeSimpleBtn = document.getElementById('co-mode-simple') as HTMLButtonElement
+export const coModeAdvancedBtn = document.getElementById('co-mode-advanced') as HTMLButtonElement
+export const coSimplePanel = document.getElementById('custom-orchestra-simple') as HTMLElement
+export const coAdvancedPanel = document.getElementById('custom-orchestra-advanced') as HTMLElement
+export const coFl = document.getElementById('co-fl') as HTMLInputElement
+export const coOb = document.getElementById('co-ob') as HTMLInputElement
+export const coCl = document.getElementById('co-cl') as HTMLInputElement
+export const coBsn = document.getElementById('co-bsn') as HTMLInputElement
+export const coHn = document.getElementById('co-hn') as HTMLInputElement
+export const coTpt = document.getElementById('co-tpt') as HTMLInputElement
+export const coTbn = document.getElementById('co-tbn') as HTMLInputElement
+export const coTuba = document.getElementById('co-tuba') as HTMLInputElement
+export const coVn1 = document.getElementById('co-vn1') as HTMLInputElement
+export const coVn2 = document.getElementById('co-vn2') as HTMLInputElement
+export const coVa = document.getElementById('co-va') as HTMLInputElement
+export const coVc = document.getElementById('co-vc') as HTMLInputElement
+export const coCb = document.getElementById('co-cb') as HTMLInputElement
+export const coTimp = document.getElementById('co-timp') as HTMLInputElement
+export const coHarp = document.getElementById('co-harp') as HTMLInputElement
+export const coPiano = document.getElementById('co-piano') as HTMLInputElement
 
 // --- Row list + edit-chairs panel ---
 export const rowsContainer = document.getElementById('rows-container') as HTMLElement
