@@ -9,18 +9,12 @@ import {
   drawSingleChair, drawSingleStand, drawStool, drawGenericRect,
 } from './instrument-glyphs'
 import type { GlyphResult } from './instrument-glyphs'
+import { computeGroupLayout, BASE_RADIUS, ROW_SPACING_DEFAULT } from './section-layout'
 
 const CHAIR_SIZE = 30
 const CHAIR_HALF = CHAIR_SIZE / 2
 const STAND_GAP = 6
 const STAND_SIZE = 7   // half-arm of the ×
-// Default distance between adjacent arc rows. Configurable per chart via
-// ChartConfig.rowSpacing. Sized so the seat number drawn behind one row
-// doesn't clash with the shared stand drawn in front of the row behind it
-// (stand reaches ~35px forward of its chair, number ~28px behind, so 65px
-// is the floor — 70px gives a small breathing gap).
-const ROW_SPACING_DEFAULT = 70
-const BASE_RADIUS = 130
 const STRAIGHT_CHAIR_SPACING = 40
 // Centre-to-centre distance between the two chairs of a desk pair when the
 // renderer compresses them into a single arc slot. Chair size is 30, so 56
@@ -500,7 +494,7 @@ export class Renderer {
     // section's wedge boundaries land at the same angle in every row it
     // appears in — the fanned, depth-aligned look. Rows with no grouped
     // chairs are completely unaffected (existing even-spread behaviour).
-    const groupLayout = this.computeGroupLayout(config, isStraightRow)
+    const groupLayout = computeGroupLayout(config.rows, isStraightRow)
 
     let seatNumber = 1
     config.rows.forEach((row, rowIndex) => {
@@ -515,30 +509,6 @@ export class Renderer {
     if (this.layoutMode) {
       this.renderLayoutHandles(ctx, config, ox, oy, yDir, radii, rowSpacing, isStraightRow)
     }
-  }
-
-  // Across every (non-straight) row, find each distinct chair `group` in
-  // first-seen order and its largest single-row population. Returns null if
-  // no chair in the chart carries a group, so ungrouped charts pay zero cost.
-  private computeGroupLayout(
-    config: ChartConfig,
-    isStraightRow: (rowIndex: number) => boolean,
-  ): { order: string[]; maxCount: Map<string, number> } | null {
-    const order: string[] = []
-    const maxCount = new Map<string, number>()
-    config.rows.forEach((row, rowIndex) => {
-      if (isStraightRow(rowIndex)) return
-      const countsInRow = new Map<string, number>()
-      row.chairs.forEach(c => {
-        if (!c.group) return
-        countsInRow.set(c.group, (countsInRow.get(c.group) ?? 0) + 1)
-      })
-      countsInRow.forEach((count, g) => {
-        if (!maxCount.has(g)) order.push(g)
-        maxCount.set(g, Math.max(maxCount.get(g) ?? 0, count))
-      })
-    })
-    return order.length > 0 ? { order, maxCount } : null
   }
 
   private renderArcRow(

@@ -1,4 +1,5 @@
 import type { ChartConfig, Row, Chair, FixedInstrument, InstrumentType } from './types'
+import { computeGroupLayout, BASE_RADIUS, ROW_SPACING_DEFAULT } from './section-layout'
 
 export interface PresetSection {
   name: string
@@ -661,6 +662,44 @@ export function buildOrchestraRows(comp: OrchestraComposition): OrchestraRowsRes
   // ---- Percussion: back straight row ----
   if (comp.percussion.reduce((s, slot) => s + slot.parsed.count, 0) > 0) {
     pushSectionRow(comp.percussion, COLORS.percussion, 'solo')
+  }
+
+  // ---- Front-row spacing fix-up for grouped (wedged) string rows ----
+  // A row's wedge content needs a minimum amount of *arc length* per chair
+  // slot, but the renderer only controls *angle* — the same angular budget
+  // gives far less physical space on a small-radius (front) row than a
+  // large one. The front string rows are also the most crowded (every
+  // section is usually still active there), so without this fix-up they'd
+  // be the most cramped despite having the smallest radius. Bump the
+  // radius via `gapBefore` — the same field the Layout tab's distance
+  // handle drags — which is cumulative, so one bump on the front row
+  // carries through to every row behind it.
+  const arcRows = rows.slice(0, arcRowCount)
+  const groupLayout = computeGroupLayout(arcRows)
+  if (groupLayout) {
+    const { order, maxCount } = groupLayout
+    const MIN_UNIT_PX = 38      // minimum arc length per chair/gap slot
+    const GAP_UNITS = 1         // mirrors the renderer's inter-section gap
+    const totalSpan = Math.PI   // assumes the default full semicircle
+    let prevRadius = 0
+    arcRows.forEach((row, i) => {
+      const rowGroupSet = new Set(row.chairs.map(c => c.group).filter((g): g is string => !!g))
+      const activeGroups = order.filter(g => rowGroupSet.has(g))
+      const defaultRadius = i === 0 ? BASE_RADIUS : prevRadius + ROW_SPACING_DEFAULT
+      if (activeGroups.length === 0) { prevRadius = defaultRadius; return }
+      let cursor = 0
+      activeGroups.forEach((g, gi) => {
+        cursor += Math.max(1, maxCount.get(g) ?? 1)
+        if (gi < activeGroups.length - 1) cursor += GAP_UNITS
+      })
+      const requiredRadius = cursor > 1 ? MIN_UNIT_PX * (cursor - 1) / totalSpan : 0
+      if (requiredRadius > defaultRadius) {
+        row.gapBefore = requiredRadius - defaultRadius
+        prevRadius = requiredRadius
+      } else {
+        prevRadius = defaultRadius
+      }
+    })
   }
 
   return { rows, straightRows: rows.length - arcRowCount }
