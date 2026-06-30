@@ -455,19 +455,6 @@ function makeChairFromSlot(slot: ParsedSlot, chairIndex: number, color: string, 
   }
 }
 
-// A disabled placeholder used to keep the semicircle row shape consistent
-// when a string section runs out of players in the back rows.
-function makePlaceholderChair(color: string): Chair {
-  return {
-    id: crypto.randomUUID(),
-    enabled: false,
-    color,
-    label: '',
-    hasStand: false,
-    standAfter: false,
-  }
-}
-
 // Number the players of each instrument section in a row so the 1st (principal)
 // sits innermost — toward the centre of the row, where the conductor is — and
 // the higher numbers fan out to the edges. Matches standard wind/brass seating.
@@ -556,16 +543,19 @@ export function buildOrchestraRows(comp: OrchestraComposition): OrchestraRowsRes
     }
   }
 
-  // ---- Strings: integrated semicircle rows, slot-aware, with back-row doubling ----
+  // ---- Strings: each section is its own contiguous wedge, fanned across ----
+  // ---- the rows it needs. The renderer (`computeGroupLayout` in          ----
+  // ---- renderer.ts) clusters chairs sharing a `group` tag into one      ----
+  // ---- angular wedge per section, reserved at that section's GLOBAL max ----
+  // ---- per-row population — so no placeholder/spacer chairs are needed  ----
+  // ---- to shape the fan; the renderer does it from real chairs alone.   ----
   // Layout rules:
-  //   * Each row has one column per active string section, in left-to-right
-  //     order V1 | V2 | Va | (Vc → Cb). The rightmost column is shared:
-  //     cellos fill the front of that column, basses take over behind them.
-  //   * Rows 0–3 get 1 desk per section (a tight front for the principals).
-  //   * Rows 4+ get 2 desks per section (the section spreads back faster,
-  //     matching real orchestra seating).
-  //   * Exhausted sections in a row get placeholder desks so the slot count
-  //     and column structure stay consistent across the row.
+  //   * V1 | V2 | Va | (Vc → Cb) in left-to-right order. The rightmost
+  //     group is shared: cellos fill it first, basses take over once
+  //     cellos are placed.
+  //   * Rows 0–3 get 1 desk per active section (a tight front for the
+  //     principals). Rows 4+ get 2 desks per section (the section spreads
+  //     back faster, matching real orchestra seating).
   //   * Within a section, an odd lone last chair gets its own solo stand
   //     instead of a half-desk.
   const v1 = comp.strings[0], v2 = comp.strings[1], va = comp.strings[2], vc = comp.strings[3], cb = comp.strings[4]
@@ -577,49 +567,45 @@ export function buildOrchestraRows(comp: OrchestraComposition): OrchestraRowsRes
   const rightTotal = vcDesks + cbDesks
 
   if (v1Desks + v2Desks + vaDesks + rightTotal > 0) {
-    // Returns the chairs for one desk position. Full desk (2 paired chairs),
-    // lone last chair (1 chair, solo stand), or placeholder pair (2 disabled).
-    const oneDesk = (slot: ParsedSlot, deskIdx: number, asStool = false): Chair[] => {
+    // Returns the chairs for one desk position: a full desk (2 paired
+    // chairs, tagged with `group`) or a lone last chair (1 chair, solo
+    // stand). Empty once the section's real desks are exhausted.
+    const oneDesk = (slot: ParsedSlot, deskIdx: number, group: string, asStool = false): Chair[] => {
       const startIdx = deskIdx * 2
       const remaining = slot.parsed.count - startIdx
       if (remaining >= 2) {
         const c1 = makeChairFromSlot(slot, startIdx,     COLORS.strings, 'shared')
         const c2 = makeChairFromSlot(slot, startIdx + 1, COLORS.strings, 'shared')
         c1.standAfter = true
+        c1.group = group; c2.group = group
         if (asStool) { c1.isStool = true; c2.isStool = true }
         return [c1, c2]
       }
       if (remaining === 1) {
         const c = makeChairFromSlot(slot, startIdx, COLORS.strings, 'solo')
+        c.group = group
         if (asStool) c.isStool = true
         return [c]
       }
-      return [makePlaceholderChair(COLORS.strings), makePlaceholderChair(COLORS.strings)]
+      return []
     }
-    const placeholderDesk = (): Chair[] => [
-      makePlaceholderChair(COLORS.strings),
-      makePlaceholderChair(COLORS.strings),
-    ]
 
     // Each column tracks how many desks it has already placed, then hands
-    // out the next `n` desks on request (padding with placeholder desks
-    // once its real desks are exhausted).
+    // out up to `n` more on request — stopping once its real desks run out
+    // (no padding; the renderer reserves the column's width regardless).
     let v1Used = 0, v2Used = 0, vaUsed = 0, rightUsed = 0
     const takeFrom = (
       slot: ParsedSlot | undefined,
+      group: string,
       used: () => number,
       bump: () => void,
       total: number,
       n: number,
     ): Chair[] => {
       const out: Chair[] = []
-      for (let i = 0; i < n; i++) {
-        if (slot && used() < total) {
-          out.push(...oneDesk(slot, used()))
-          bump()
-        } else {
-          out.push(...placeholderDesk())
-        }
+      for (let i = 0; i < n && slot && used() < total; i++) {
+        out.push(...oneDesk(slot, used(), group))
+        bump()
       }
       return out
     }
@@ -627,14 +613,14 @@ export function buildOrchestraRows(comp: OrchestraComposition): OrchestraRowsRes
       const out: Chair[] = []
       for (let i = 0; i < n; i++) {
         if (vc && rightUsed < vcDesks) {
-          out.push(...oneDesk(vc, rightUsed))
+          out.push(...oneDesk(vc, rightUsed, 'vc'))
           rightUsed++
         } else if (cb && rightUsed < rightTotal) {
           // Double basses play standing/perched, so seat them on stools.
-          out.push(...oneDesk(cb, rightUsed - vcDesks, true))
+          out.push(...oneDesk(cb, rightUsed - vcDesks, 'cb', true))
           rightUsed++
         } else {
-          out.push(...placeholderDesk())
+          break
         }
       }
       return out
@@ -644,29 +630,11 @@ export function buildOrchestraRows(comp: OrchestraComposition): OrchestraRowsRes
     // Keep going until every active column has placed all its real desks.
     while (v1Used < v1Desks || v2Used < v2Desks || vaUsed < vaDesks || rightUsed < rightTotal) {
       const desksPerSection = row < 4 ? 1 : 2
-      // Separator placeholders between adjacent section columns scale with
-      // how far back we are. The front rows have a small natural arc, so
-      // extra padding cramps them; the back rows have a wide arc where the
-      // desks would otherwise drift apart and lose their visual grouping.
-      //   Rows 0-1: no separators (tight front).
-      //   Row 2:    1 separator chair between sections.
-      //   Rows 3+:  2 separator chairs between sections.
-      const sepCount = row < 2 ? 0 : row < 3 ? 1 : 2
-      const cols: Chair[][] = []
-      if (v1Desks > 0)    cols.push(takeFrom(v1, () => v1Used, () => { v1Used++ }, v1Desks, desksPerSection))
-      if (v2Desks > 0)    cols.push(takeFrom(v2, () => v2Used, () => { v2Used++ }, v2Desks, desksPerSection))
-      if (vaDesks > 0)    cols.push(takeFrom(va, () => vaUsed, () => { vaUsed++ }, vaDesks, desksPerSection))
-      if (rightTotal > 0) cols.push(takeRight(desksPerSection))
-
       const rowChairs: Chair[] = []
-      for (let i = 0; i < cols.length; i++) {
-        rowChairs.push(...cols[i])
-        if (i < cols.length - 1) {
-          for (let s = 0; s < sepCount; s++) {
-            rowChairs.push(makePlaceholderChair(COLORS.strings))
-          }
-        }
-      }
+      if (v1Desks > 0)    rowChairs.push(...takeFrom(v1, 'v1', () => v1Used, () => { v1Used++ }, v1Desks, desksPerSection))
+      if (v2Desks > 0)    rowChairs.push(...takeFrom(v2, 'v2', () => v2Used, () => { v2Used++ }, v2Desks, desksPerSection))
+      if (vaDesks > 0)    rowChairs.push(...takeFrom(va, 'va', () => vaUsed, () => { vaUsed++ }, vaDesks, desksPerSection))
+      if (rightTotal > 0) rowChairs.push(...takeRight(desksPerSection))
       pushRow(rowChairs, true)
       row++
     }

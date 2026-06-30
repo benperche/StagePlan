@@ -13,6 +13,12 @@ export interface Chair {
   // (sideways along the arc / line). Converted to an angle (offset / radius)
   // for arc rows. Default 0. Clamped so chairs never overlap.
   offset?: number
+  // Section key (e.g. "vln1") for grouped arc spacing: chairs sharing a group
+  // are clustered into one contiguous angular wedge within the row's arc span,
+  // instead of being spread evenly across it. Set by the orchestra generator
+  // and the "Tidy sections" action; absent on ordinary chairs, in which case
+  // arc spacing is unaffected (today's even spread).
+  group?: string
 }
 
 export interface Row {
