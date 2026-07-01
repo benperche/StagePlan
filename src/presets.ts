@@ -614,11 +614,13 @@ export function buildOrchestraRows(comp: OrchestraComposition): OrchestraRowsRes
       const out: Chair[] = []
       for (let i = 0; i < n; i++) {
         if (vc && rightUsed < vcDesks) {
-          out.push(...oneDesk(vc, rightUsed, 'vc'))
+          // Cellos and basses share the same angular lane ('right') so the
+          // wedge stays consistent as the section transitions from vc to cb.
+          out.push(...oneDesk(vc, rightUsed, 'right'))
           rightUsed++
         } else if (cb && rightUsed < rightTotal) {
           // Double basses play standing/perched, so seat them on stools.
-          out.push(...oneDesk(cb, rightUsed - vcDesks, 'cb', true))
+          out.push(...oneDesk(cb, rightUsed - vcDesks, 'right', true))
           rightUsed++
         } else {
           break
