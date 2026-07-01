@@ -1391,7 +1391,7 @@ export class Renderer {
     const bottomY = h - 24
 
     ctx.save()
-    ctx.fillStyle = '#888'
+    ctx.fillStyle = '#222'
     ctx.font = '11px sans-serif'
     ctx.textAlign = 'right'
     ctx.textBaseline = 'bottom'
@@ -1404,7 +1404,7 @@ export class Renderer {
 
   private drawCredit(ctx: CanvasRenderingContext2D, h: number) {
     ctx.save()
-    ctx.fillStyle = '#aaa'
+    ctx.fillStyle = '#222'
     ctx.font = '10px sans-serif'
     ctx.textAlign = 'left'
     ctx.textBaseline = 'bottom'
