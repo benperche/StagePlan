@@ -2992,7 +2992,8 @@ function bindEvents() {
     const lines = [describeComposition(comp)]
     if (coMode === 'simple') {
       const extras: string[] = []
-      const timp = Math.max(0, Math.min(6, Number(coTimp.value) || 0))
+      const rawTimp = Math.max(0, Math.min(6, Number(coTimp.value) || 0))
+      const timp = rawTimp === 1 ? 2 : rawTimp  // 1 timpani makes no sense; snap to 2
       if (timp > 0) extras.push(`${timp} Timpani`)
       if (coHarp.checked) extras.push('Harp')
       if (coPiano.checked) extras.push('Piano')
@@ -3035,7 +3036,8 @@ function bindEvents() {
     // they're placed relative to) exist. Folds into the same undo step as
     // the preset apply above (no extra history.push).
     if (coMode === 'simple') {
-      const timp = Math.max(0, Math.min(6, Number(coTimp.value) || 0))
+      const rawTimp = Math.max(0, Math.min(6, Number(coTimp.value) || 0))
+      const timp = rawTimp === 1 ? 2 : rawTimp  // 1 timpani makes no sense; snap to 2
       const backRadius = renderer.backRowRadius(config)
       if (timp > 0) {
         const inst = makeInstrument('timpani', config.flipped, 0, backRadius)

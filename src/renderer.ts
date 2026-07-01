@@ -547,14 +547,15 @@ export class Renderer {
     if (allGrouped && groupLayout) {
       const { order, maxCount } = groupLayout
       const GAP_UNITS = 1   // angular gap between adjacent sections, in chair-slot units
-      const rowGroupSet = new Set(chairs.map(c => c.group!))
-      const activeGroups = order.filter(g => rowGroupSet.has(g))
+      // Use GLOBAL positions for every group so each section always occupies
+      // the same angular lane across all rows. Absent groups leave a small
+      // natural gap rather than letting later sections drift into wrong positions.
       let cursor = 0
       const groupStart = new Map<string, number>()
-      activeGroups.forEach((g, gi) => {
+      order.forEach((g, gi) => {
         groupStart.set(g, cursor)
         cursor += Math.max(1, maxCount.get(g) ?? 1)
-        if (gi < activeGroups.length - 1) cursor += GAP_UNITS
+        if (gi < order.length - 1) cursor += GAP_UNITS
       })
       const totalUnits = cursor
       const anglePerUnit = totalUnits > 1 ? totalSpan / (totalUnits - 1) : 0

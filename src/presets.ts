@@ -683,14 +683,14 @@ export function buildOrchestraRows(comp: OrchestraComposition): OrchestraRowsRes
     const totalSpan = Math.PI   // assumes the default full semicircle
     let prevRadius = 0
     arcRows.forEach((row, i) => {
-      const rowGroupSet = new Set(row.chairs.map(c => c.group).filter((g): g is string => !!g))
-      const activeGroups = order.filter(g => rowGroupSet.has(g))
+      const hasGroupedChairs = row.chairs.some(c => !!c.group)
       const defaultRadius = i === 0 ? BASE_RADIUS : prevRadius + ROW_SPACING_DEFAULT
-      if (activeGroups.length === 0) { prevRadius = defaultRadius; return }
+      if (!hasGroupedChairs) { prevRadius = defaultRadius; return }
+      // Use global group total (matching renderer) so the required radius is consistent.
       let cursor = 0
-      activeGroups.forEach((g, gi) => {
+      order.forEach((g, gi) => {
         cursor += Math.max(1, maxCount.get(g) ?? 1)
-        if (gi < activeGroups.length - 1) cursor += GAP_UNITS
+        if (gi < order.length - 1) cursor += GAP_UNITS
       })
       const requiredRadius = cursor > 1 ? MIN_UNIT_PX * (cursor - 1) / totalSpan : 0
       if (requiredRadius > defaultRadius) {
