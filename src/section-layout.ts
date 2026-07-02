@@ -14,6 +14,12 @@ export const BASE_RADIUS = 130
 // is the floor — 70px gives a small breathing gap).
 export const ROW_SPACING_DEFAULT = 70
 
+// Minimum arc length a single chair-slot must occupy in a grouped wedge row —
+// set to the centre-to-centre spacing of the two chairs of a desk, so adjacent
+// chairs never crowd closer than a desk looks. Used by applyGroupedRowRadii to
+// decide when to push a cramped front row outward.
+export const MIN_SLOT_PX = 56
+
 export interface GroupLayout {
   order: string[]
   maxCount: Map<string, number>
@@ -44,4 +50,46 @@ export function computeGroupLayout(
     })
   })
   return order.length > 0 ? { order, maxCount } : null
+}
+
+// A grouped arc row spreads its chairs across the semicircle by angle, but the
+// same angular budget is far less physical space on a small-radius (front) row
+// than a big one — so a crowded front row can crush desks on top of each other.
+// This pushes the front row(s) outward (via `gapBefore`, which cascades to every
+// row behind it in computeRowRadii) until every chair-slot gets at least
+// `minSlotPx` of arc length — i.e. adjacent chairs never sit closer than a desk.
+// Clears existing gapBefore on the arc rows first, so the result is deterministic
+// and re-runnable. Mutates the rows in place.
+export function applyGroupedRowRadii(
+  arcRows: Row[],
+  rowSpacing: number,
+  minSlotPx: number,
+): void {
+  const groupLayout = computeGroupLayout(arcRows)
+  if (!groupLayout) return
+  const { order, maxCount } = groupLayout
+  const GAP_UNITS = 1          // mirrors the renderer's inter-section gap
+  const totalSpan = Math.PI    // assumes the default full semicircle
+
+  // Total chair-slots the widest possible row occupies (global section maxima),
+  // matching the renderer's global-position layout.
+  let totalUnits = 0
+  order.forEach((g, gi) => {
+    totalUnits += Math.max(1, maxCount.get(g) ?? 1)
+    if (gi < order.length - 1) totalUnits += GAP_UNITS
+  })
+  // Radius at which `totalSpan` of arc gives `minSlotPx` per slot gap.
+  const requiredRadius = totalUnits > 1 ? minSlotPx * (totalUnits - 1) / totalSpan : 0
+
+  let prevRadius = 0
+  arcRows.forEach((row, i) => {
+    delete row.gapBefore
+    const defaultRadius = i === 0 ? BASE_RADIUS : prevRadius + rowSpacing
+    if (row.chairs.some(c => !!c.group) && requiredRadius > defaultRadius) {
+      row.gapBefore = requiredRadius - defaultRadius
+      prevRadius = requiredRadius
+    } else {
+      prevRadius = defaultRadius
+    }
+  })
 }
