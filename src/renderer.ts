@@ -9,18 +9,12 @@ import {
   drawSingleChair, drawSingleStand, drawStool, drawGenericRect,
 } from './instrument-glyphs'
 import type { GlyphResult } from './instrument-glyphs'
+import { computeGroupLayout, BASE_RADIUS, ROW_SPACING_DEFAULT } from './section-layout'
 
 const CHAIR_SIZE = 30
 const CHAIR_HALF = CHAIR_SIZE / 2
 const STAND_GAP = 6
 const STAND_SIZE = 7   // half-arm of the ×
-// Default distance between adjacent arc rows. Configurable per chart via
-// ChartConfig.rowSpacing. Sized so the seat number drawn behind one row
-// doesn't clash with the shared stand drawn in front of the row behind it
-// (stand reaches ~35px forward of its chair, number ~28px behind, so 65px
-// is the floor — 70px gives a small breathing gap).
-const ROW_SPACING_DEFAULT = 70
-const BASE_RADIUS = 130
 const STRAIGHT_CHAIR_SPACING = 40
 // Centre-to-centre distance between the two chairs of a desk pair when the
 // renderer compresses them into a single arc slot. Chair size is 30, so 56
@@ -50,6 +44,7 @@ export interface RenderOptions {
 
 export class Renderer {
   private hitTargets: HitTarget[] = []
+  private standHitTargets: HitTarget[] = []
   private instrumentHits: InstrumentHit[] = []
   conductorHit: ConductorHit | null = null
   titleHit: ConductorHit | null = null
@@ -119,6 +114,7 @@ export class Renderer {
     ctx.scale(scale, scale)
 
     this.hitTargets = []
+    this.standHitTargets = []
     this.instrumentHits = []
     this.layoutHandles = []
     this.layoutRows = []
@@ -492,13 +488,23 @@ export class Renderer {
     // sits past the conductor's centre on the chair side).
     const straightLabelX = ox + (config.flipped ? 1 : -1) * (maxStraightWidth / 2 + CHAIR_HALF + 18)
 
+    // Section-wedge pre-pass: chairs carrying a `group` tag (set by the
+    // orchestra generator / "Tidy sections") are clustered into one
+    // contiguous angular wedge per section instead of being spread evenly
+    // across the row. The reserved width per group uses its GLOBAL max
+    // population across all arc rows (not each row's own count), so a
+    // section's wedge boundaries land at the same angle in every row it
+    // appears in — the fanned, depth-aligned look. Rows with no grouped
+    // chairs are completely unaffected (existing even-spread behaviour).
+    const groupLayout = computeGroupLayout(config.rows, isStraightRow)
+
     let seatNumber = 1
     config.rows.forEach((row, rowIndex) => {
       const r = radii[rowIndex]
       if (isStraightRow(rowIndex)) {
         seatNumber = this.renderStraightRow(ctx, row, rowIndex, oy + yDir * r, ox, oy, config, seatNumber, straightLabelX)
       } else {
-        seatNumber = this.renderArcRow(ctx, row, rowIndex, r, ox, oy, yDir, config, seatNumber)
+        seatNumber = this.renderArcRow(ctx, row, rowIndex, r, ox, oy, yDir, config, seatNumber, groupLayout)
       }
     })
 
@@ -515,6 +521,7 @@ export class Renderer {
     ox: number, oy: number, yDir: number,
     config: ChartConfig,
     seatNumber: number,
+    groupLayout: { order: string[]; maxCount: Map<string, number> } | null,
   ): number {
     const chairs = row.chairs
     const N = chairs.length
@@ -523,10 +530,55 @@ export class Renderer {
     // Arc span — global default (full semicircle) unless this row carries its
     // own start/end override from the Layout tab.
     const [startAngle, endAngle] = this.rowArcAngles(row, config)
-    // Every chair gets its own evenly-spread slot — toggling a shared stand
-    // on a single chair never reshuffles the rest of the row. The natural
-    // step is the angle between adjacent chair slots.
-    const naturalStep = N > 1 ? (startAngle - endAngle) / (N - 1) : 0
+    const totalSpan = startAngle - endAngle
+
+    // Each chair's natural (un-nudged) slot angle. Two modes:
+    //  - Grouped: every chair in the row carries a `group` (set by the
+    //    generator / Tidy sections) — chairs cluster into one contiguous
+    //    wedge per group. Each group's WIDTH uses its GLOBAL max population
+    //    (so the same section reserves the same width wherever it appears),
+    //    but only groups actually PRESENT in this row consume span — a
+    //    section that hasn't started yet (or already finished) doesn't leave
+    //    a dead gap where its absent neighbour would have been. A row with
+    //    fewer of a group than its global max is centred within its width.
+    //  - Default: every chair gets its own evenly-spread slot across the
+    //    row's full arc span (today's behaviour) — used whenever any chair
+    //    in the row lacks a `group`.
+    const allGrouped = groupLayout !== null && N > 0 && chairs.every(c => !!c.group)
+    const naturalAngles: number[] = new Array(N)
+    if (allGrouped && groupLayout) {
+      const { order, maxCount } = groupLayout
+      const GAP_UNITS = 1   // angular gap between adjacent sections, in chair-slot units
+      // Use GLOBAL positions for every group so each section always occupies
+      // the same angular lane across all rows. Absent groups leave a small
+      // natural gap rather than letting later sections drift into wrong positions.
+      let cursor = 0
+      const groupStart = new Map<string, number>()
+      order.forEach((g, gi) => {
+        groupStart.set(g, cursor)
+        cursor += Math.max(1, maxCount.get(g) ?? 1)
+        if (gi < order.length - 1) cursor += GAP_UNITS
+      })
+      const totalUnits = cursor
+      const anglePerUnit = totalUnits > 1 ? totalSpan / (totalUnits - 1) : 0
+      const rowCountByGroup = new Map<string, number>()
+      chairs.forEach(c => rowCountByGroup.set(c.group!, (rowCountByGroup.get(c.group!) ?? 0) + 1))
+      const usedPerGroup = new Map<string, number>()
+      for (let i = 0; i < N; i++) {
+        const g = chairs[i].group!
+        const used = usedPerGroup.get(g) ?? 0
+        usedPerGroup.set(g, used + 1)
+        const reserved = Math.max(1, maxCount.get(g) ?? 1)
+        const actual = rowCountByGroup.get(g) ?? 1
+        const pad = (reserved - actual) / 2   // centre this row's chairs within the reserved width
+        const unit = groupStart.get(g)! + pad + used
+        naturalAngles[i] = startAngle - unit * anglePerUnit
+      }
+    } else {
+      const naturalStep = N > 1 ? totalSpan / (N - 1) : 0
+      for (let i = 0; i < N; i++) naturalAngles[i] = startAngle - i * naturalStep
+    }
+
     // Per-chair sideways nudge (px tangential → angle). Positive moves the
     // chair toward the end of the row (decreasing angle). Default 0.
     const place = (angle: number, chair: Chair) => {
@@ -558,18 +610,18 @@ export class Renderer {
         (!c.enabled && !next.enabled)
       )
       if (isPair) {
-        const a0 = startAngle - i * naturalStep
-        const a1 = startAngle - (i + 1) * naturalStep
+        const a0 = naturalAngles[i]
+        const a1 = naturalAngles[i + 1]
         const midpoint = (a0 + a1) / 2
-        const halfSep = Math.min(naturalStep / 2, desiredHalfOffset)
+        const localStep = a0 - a1
+        const halfSep = Math.min(localStep / 2, desiredHalfOffset)
         const angleA = midpoint + halfSep
         const angleB = midpoint - halfSep
         positions[i]     = place(angleA, c)
         positions[i + 1] = place(angleB, chairs[i + 1]!)
         i += 2
       } else {
-        const angle = startAngle - i * naturalStep
-        positions[i] = place(angle, c)
+        positions[i] = place(naturalAngles[i], c)
         i += 1
       }
     }
@@ -578,7 +630,7 @@ export class Renderer {
       const { cx, cy } = positions[chairIndex]
       if (chair.enabled) {
         this.drawChair(ctx, chair, cx, cy, ox, oy, row.fontSize, this.isNudged(chair), this.isChairHovered(rowIndex, chairIndex))
-        if (chair.hasStand) this.drawStandX(ctx, cx, cy, ox, oy)
+        if (chair.hasStand) this.drawStandX(ctx, cx, cy, ox, oy, undefined, { rowIndex, chairIndex })
         // Standing players aren't numbered seats — no number drawn, and they
         // don't consume one (so the seated chairs stay sequential).
         if (!chair.noSeat) {
@@ -605,7 +657,7 @@ export class Renderer {
       const a = positions[chairIndex]
       const b = positions[chairIndex + 1]
       const mx = (a.cx + b.cx) / 2, my = (a.cy + b.cy) / 2
-      this.drawStandX(ctx, mx, my, ox, oy)
+      this.drawStandX(ctx, mx, my, ox, oy, undefined, { rowIndex, chairIndex })
       // Group-drag handle sits on the arc, in the gap between the desk's two
       // chairs, so it's unambiguously tied to them (and clear of the shared
       // stand ×, which is offset toward the conductor in front of this point).
@@ -660,7 +712,7 @@ export class Renderer {
 
       if (chair.enabled) {
         this.drawChair(ctx, chair, cx, rowY, cx, oy, row.fontSize, this.isNudged(chair), this.isChairHovered(rowIndex, chairIndex))
-        if (chair.hasStand) this.drawStandX(ctx, cx, rowY, cx, oy)
+        if (chair.hasStand) this.drawStandX(ctx, cx, rowY, cx, oy, undefined, { rowIndex, chairIndex })
         // Standing players aren't numbered seats (see semicircle path).
         if (!chair.noSeat) {
           if (config.showNumbers) {
@@ -686,7 +738,7 @@ export class Renderer {
         const a = positions[chairIndex]
         const b = positions[chairIndex + 1]
         const mx = (a.cx + b.cx) / 2, my = (a.cy + b.cy) / 2
-        this.drawStandX(ctx, mx, my, a.cx, oy)
+        this.drawStandX(ctx, mx, my, a.cx, oy, undefined, { rowIndex, chairIndex })
         // Group-drag handle on the row line, between the desk's two chairs.
         this.deskHandles.push({ rowIndex, chairIndex, cx: mx, cy: my })
       }
@@ -1342,7 +1394,7 @@ export class Renderer {
     const bottomY = h - 24
 
     ctx.save()
-    ctx.fillStyle = '#888'
+    ctx.fillStyle = '#222'
     ctx.font = '11px sans-serif'
     ctx.textAlign = 'right'
     ctx.textBaseline = 'bottom'
@@ -1355,7 +1407,7 @@ export class Renderer {
 
   private drawCredit(ctx: CanvasRenderingContext2D, h: number) {
     ctx.save()
-    ctx.fillStyle = '#aaa'
+    ctx.fillStyle = '#222'
     ctx.font = '10px sans-serif'
     ctx.textAlign = 'left'
     ctx.textBaseline = 'bottom'
@@ -1514,11 +1566,20 @@ export class Renderer {
    * and the conductor.  For shared stands, pass the midpoint of the two chairs
    * as (cx, cy).
    */
+  standHitTest(x: number, y: number): HitTarget | null {
+    for (const t of this.standHitTargets) {
+      const dx = x - t.x, dy = y - t.y
+      if (dx * dx + dy * dy <= t.radius * t.radius) return t
+    }
+    return null
+  }
+
   private drawStandX(
     ctx: CanvasRenderingContext2D,
     cx: number, cy: number,
     condX: number, condY: number,
     distOverride?: number,
+    hitOwner?: { rowIndex: number; chairIndex: number },
   ) {
     const dx = condX - cx
     const dy = condY - cy
@@ -1530,6 +1591,10 @@ export class Renderer {
     const dist = distOverride ?? (CHAIR_HALF + STAND_GAP + STAND_SIZE)
     const sx = cx + nx * dist
     const sy = cy + ny * dist
+
+    if (hitOwner) {
+      this.standHitTargets.push({ ...hitOwner, x: sx, y: sy, radius: STAND_SIZE * 2.5 })
+    }
 
     const angle = Math.atan2(ny, nx)
 

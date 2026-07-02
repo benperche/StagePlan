@@ -7,6 +7,7 @@ import {
 } from './presets'
 import { saveToJson, loadFromJson, encodeToHash, decodeFromHash, exportToPng } from './serializer'
 import * as library from './library'
+import { showAlert, showConfirm, showPrompt } from './dialog'
 import type { ChartConfig, InstrumentType, Chair } from './types'
 
 // --- App state ---
@@ -276,13 +277,16 @@ import {
   rowsContainer,
   colorPicker, colorPickerLabel, colorBulkPanel, resetColorsBtn,
   undoBtn, redoBtn, zoomInBtn, zoomOutBtn, zoomResetBtn,
-  resetPositionBtn, resetLayoutBtn, layoutRowList, addRowBtn, saveBtn,
+  resetPositionBtn, resetLayoutBtn, tidySectionsBtn, layoutRowList, addRowBtn, saveBtn,
   loadInput, exportPngBtn, printBtn, shareLinkBtn, shareUrlDisplay, presetSelect, applyPresetBtn, clearPresetBtn,
   libraryDrawer, libraryBackdrop, libraryOpenBtn, libraryCloseBtn,
   libraryCurrentTitle, librarySaveBtn, libraryNewChartBtn, libraryNewFolderBtn,
   librarySearch, libraryList,
   customOrchestraBtn, customOrchestraModal, customOrchestraTitle, customOrchestraNotation,
   customOrchestraPreview, customOrchestraApply, customOrchestraCancel,
+  coModeSimpleBtn, coModeAdvancedBtn, coSimplePanel, coAdvancedPanel,
+  coFl, coOb, coCl, coBsn, coHn, coTpt, coTbn, coTuba,
+  coVn1, coVn2, coVa, coVc, coCb, coTimp, coHarp, coPiano,
   toolButtons, chairLabelInput, editChairsHint, labelPanel, clearLabelsBtn, instrumentPanel,
   marqueeBox, dragOverwriteBtn,
   standBulkPanel, stoolBulkPanel, standBulkButtons, stoolBulkButtons,
@@ -292,6 +296,7 @@ import {
   inspectorCountLabel, inspectorCount, inspectorRotateLeft, inspectorRotateRight,
   inspectorDelete, inspectorMicOptions, inspectorMicStand, inspectorMicWireless,
   inspectorTimpaniOptions, inspectorTimpaniStool,
+  setupIntroHint, dismissIntroHintBtn,
 } from './dom'
 
 // --- Init ---
@@ -729,7 +734,7 @@ async function handleLibraryAction(action: string, id: string | null, folder: st
   if (action === 'rename' && id) {
     const chart = await library.loadChart(id)
     if (!chart) return
-    const next = window.prompt('Rename chart:', chart.title)
+    const next = await showPrompt('Rename chart:', chart.title, { title: 'Rename chart', okLabel: 'Rename' })
     if (next === null || !next.trim()) return
     await library.renameChart(id, next.trim())
     if (id === currentChartId) config.title = next.trim()
@@ -744,20 +749,14 @@ async function handleLibraryAction(action: string, id: string | null, folder: st
   }
   if (action === 'move' && id) {
     const folders = await library.listFolders()
-    const options = ['(unfiled)', ...folders]
-    const choice = window.prompt(
-      `Move to which folder?\n\nExisting folders:\n${options.map((f, i) => `  ${i + 1}. ${f}`).join('\n')}\n\nType the number, the folder name, or a new folder name:`)
+    const choice = await showPrompt(
+      'Pick an existing folder or type a new name. Leave blank to unfile.',
+      '',
+      { title: 'Move chart', placeholder: 'Folder name (blank = unfiled)', okLabel: 'Move', suggestions: folders },
+    )
     if (choice === null) return
-    let target: string
-    const num = Number(choice)
-    if (!isNaN(num) && num >= 1 && num <= options.length) {
-      target = num === 1 ? '' : options[num - 1]
-    } else if (choice.trim().toLowerCase() === '(unfiled)' || choice.trim() === '') {
-      target = ''
-    } else {
-      target = choice.trim()
-      if (target && !folders.includes(target)) await library.createFolder(target)
-    }
+    const target = choice.trim().toLowerCase() === '(unfiled)' ? '' : choice.trim()
+    if (target && !folders.includes(target)) await library.createFolder(target)
     await library.moveChart(id, target)
     await renderLibrary()
     return
@@ -765,7 +764,7 @@ async function handleLibraryAction(action: string, id: string | null, folder: st
   if (action === 'delete' && id) {
     const chart = await library.loadChart(id)
     if (!chart) return
-    if (!window.confirm(`Delete "${chart.title}"? This cannot be undone.`)) return
+    if (!await showConfirm(`Delete "${chart.title}"? This cannot be undone.`, { title: 'Delete chart', confirmLabel: 'Delete', danger: true })) return
     await library.deleteChart(id)
     if (currentChartId === id) currentChartId = null
     updateLibraryCurrentTitle()
@@ -773,7 +772,7 @@ async function handleLibraryAction(action: string, id: string | null, folder: st
     return
   }
   if (action === 'delete-folder' && folder !== null) {
-    if (!window.confirm(`Delete folder "${folder}"? Any charts inside will become Unfiled.`)) return
+    if (!await showConfirm(`Delete folder "${folder}"? Any charts inside will become Unfiled.`, { title: 'Delete folder', confirmLabel: 'Delete', danger: true })) return
     await library.deleteFolder(folder)
     await renderLibrary()
     return
@@ -1363,7 +1362,7 @@ function populatePresets() {
 function applyPreset(preset: Preset) {
   const built = buildPreset(preset)
   if (!built.ok) {
-    alert(built.error)
+    void showAlert(built.error, { title: "Couldn't apply preset" })
     return
   }
 
@@ -2103,7 +2102,10 @@ canvas.addEventListener('click', (e) => {
     return
   }
 
-  const hit = renderer.hitTest(x, y)
+  // Stand tool: clicking directly on a stand ×  is equivalent to clicking
+  // its owning chair — resolve the stand hit first so the × is a valid target.
+  const standHit = activeTool === 'stand' ? renderer.standHitTest(x, y) : null
+  const hit = standHit ?? renderer.hitTest(x, y)
   if (!hit) return
   // Label tool → type a free-text label right on the chair.
   if (activeTool === 'label') {
@@ -2189,8 +2191,13 @@ function bindEvents() {
       const count = Math.max(1, Math.min(30, Number(target.value)))
       const current = config.rows[rowIdx].chairs
       if (count > current.length) {
+        // New chairs inherit the row's prevailing stand state (the last
+        // existing chair's) instead of always defaulting to no stand —
+        // growing a row of stand-equipped chairs shouldn't silently add
+        // stand-less ones at the end.
+        const inheritStand = current.length > 0 ? current[current.length - 1].hasStand : true
         for (let i = current.length; i < count; i++) {
-          current.push({ id: crypto.randomUUID(), enabled: true, color: '#e8e8e8', label: '', hasStand: false, standAfter: false })
+          current.push({ id: crypto.randomUUID(), enabled: true, color: '#e8e8e8', label: '', hasStand: inheritStand, standAfter: false })
         }
       } else {
         config.rows[rowIdx].chairs = current.slice(0, count)
@@ -2453,11 +2460,11 @@ function bindEvents() {
     renderChart()
   })
 
-  clearLabelsBtn.addEventListener('click', () => {
+  clearLabelsBtn.addEventListener('click', async () => {
     const labelled = config.rows.reduce(
       (n, row) => n + row.chairs.filter(c => c.label).length, 0)
     if (labelled === 0) return
-    if (!confirm(`Clear ${labelled} chair label${labelled !== 1 ? 's' : ''}? This can be undone.`)) return
+    if (!await showConfirm(`Clear ${labelled} chair label${labelled !== 1 ? 's' : ''}? This can be undone.`, { title: 'Clear labels', confirmLabel: 'Clear' })) return
     history.push(config)
     config.rows.forEach(row => row.chairs.forEach(c => { c.label = '' }))
     renderLabelList()
@@ -2564,8 +2571,8 @@ function bindEvents() {
   })
 
   // Reset every per-row / per-chair Layout-tab tweak back to the defaults.
-  resetLayoutBtn.addEventListener('click', () => {
-    if (!window.confirm('Reset all manual row and chair position tweaks back to the default layout?')) return
+  resetLayoutBtn.addEventListener('click', async () => {
+    if (!await showConfirm('Reset all manual row and chair position tweaks back to the default layout?', { title: 'Reset layout', confirmLabel: 'Reset' })) return
     history.push(config)
     for (const row of config.rows) {
       delete row.gapBefore
@@ -2577,6 +2584,60 @@ function bindEvents() {
     }
     delete config.titleOffsetX
     delete config.titleOffsetY
+    renderChart()
+  })
+
+  // Tidy sections: infer a section grouping from existing chair labels and
+  // assign it as `chair.group`, so arc rows fan into one contiguous wedge
+  // per section (see renderArcRow's grouped placement) instead of being
+  // spread evenly across the row — without dragging a single chair.
+  //
+  // Two chairs are treated as the same section only if their labels match
+  // EXACTLY (after trimming). This app uses the label itself as the section
+  // name (e.g. every "Vln 1" chair IS the first-violin section) — there is
+  // no per-chair numbering to strip, and guessing at one risks merging
+  // genuinely different sections (e.g. "Tpt 1" / "Tpt 2"). An unlabelled
+  // chair gets its own one-wide wedge (keyed by its id) rather than no
+  // group at all, since a row needs every chair grouped for the wedge
+  // layout to apply (see renderArcRow's `allGrouped` check).
+  //
+  // Old-style hidden placeholder chairs (disabled, no label) were the only
+  // way to shape a section's density before grouped wedges existed — the
+  // wedge layout doesn't need them, so this also removes any that remain.
+  tidySectionsBtn.addEventListener('click', async () => {
+    if (config.layout !== 'semicircle') {
+      void showAlert('Tidy sections only applies to semicircle charts.', { title: 'Tidy sections' })
+      return
+    }
+    const numRows = config.rows.length
+    const isStraightRow = (i: number) =>
+      config.rows[i].isStraight ?? (i >= numRows - config.straightRows)
+    const targetRows = config.rows
+      .map((row, i) => ({ row, i }))
+      .filter(({ row, i }) => !isStraightRow(i) && row.chairs.some(c => c.label.trim()))
+
+    if (targetRows.length === 0) {
+      void showAlert('No labelled chairs found in any arc row — nothing to tidy.', { title: 'Tidy sections' })
+      return
+    }
+    let spacerCount = 0, keptCount = 0
+    for (const { row } of targetRows) {
+      for (const c of row.chairs) {
+        if (!c.enabled && !c.label.trim()) spacerCount++
+        else keptCount++
+      }
+    }
+    const msg = spacerCount > 0
+      ? `Group ${keptCount} chairs into sections by label, and remove ${spacerCount} unused placeholder chair${spacerCount !== 1 ? 's' : ''}? This can be undone.`
+      : `Group ${keptCount} chairs into sections by label? This can be undone.`
+    if (!await showConfirm(msg, { title: 'Tidy sections', confirmLabel: 'Tidy' })) return
+
+    history.push(config)
+    for (const { row } of targetRows) {
+      row.chairs = row.chairs.filter(c => c.enabled || c.label.trim())
+      for (const c of row.chairs) c.group = c.label.trim() || c.id
+    }
+    renderLabelList()   // spacer chairs may have been removed → rebuild the paste list
     renderChart()
   })
 
@@ -2682,7 +2743,7 @@ function bindEvents() {
       markSaved()        // matches the file just loaded = clean
       updateLibraryCurrentTitle()
     } catch {
-      alert('Could not load chart file.')
+      void showAlert('Could not load chart file.', { title: "Couldn't load" })
     }
     loadInput.value = ''
   })
@@ -2694,7 +2755,7 @@ function bindEvents() {
     const file = bgInput.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/')) {
-      alert('Please choose an image file.')
+      void showAlert('Please choose an image file.', { title: 'Background image' })
       bgInput.value = ''
       return
     }
@@ -2705,7 +2766,7 @@ function bindEvents() {
       updateAllInputs()
       renderChart()
     }
-    reader.onerror = () => alert('Could not read image file.')
+    reader.onerror = () => { void showAlert('Could not read image file.', { title: 'Background image' }) }
     reader.readAsDataURL(file)
     bgInput.value = ''
   })
@@ -2775,7 +2836,7 @@ function bindEvents() {
           folder = existing.folder
         }
       } else {
-        const next = window.prompt('Save chart as:', title)
+        const next = await showPrompt('Save chart as:', title, { title: 'Save chart', okLabel: 'Save' })
         if (next === null) return
         title = next.trim() || 'Untitled'
       }
@@ -2785,12 +2846,12 @@ function bindEvents() {
       updateLibraryCurrentTitle()
       await renderLibrary()
     } catch {
-      alert(LIBRARY_ERROR)
+      void showAlert(LIBRARY_ERROR, { title: 'Library error' })
     }
   })
 
-  libraryNewChartBtn.addEventListener('click', () => {
-    if (currentChartId && !window.confirm('Discard current chart and start a new blank one? Anything unsaved here will be lost — use Save first if you want to keep it.')) return
+  libraryNewChartBtn.addEventListener('click', async () => {
+    if (currentChartId && !await showConfirm('Discard current chart and start a new blank one? Anything unsaved here will be lost — use Save first if you want to keep it.', { title: 'New blank chart', confirmLabel: 'Discard & start new', danger: true })) return
     setConfig(makeDefaultConfig())
     currentChartId = null
     markSaved()        // a brand-new blank chart has nothing unsaved yet
@@ -2799,13 +2860,13 @@ function bindEvents() {
   })
 
   libraryNewFolderBtn.addEventListener('click', async () => {
-    const name = window.prompt('Folder name:')
+    const name = await showPrompt('Folder name:', '', { title: 'New folder', okLabel: 'Create' })
     if (name === null || !name.trim()) return
     try {
       await library.createFolder(name.trim())
       await renderLibrary()
     } catch {
-      alert(LIBRARY_ERROR)
+      void showAlert(LIBRARY_ERROR, { title: 'Library error' })
     }
   })
 
@@ -2821,7 +2882,7 @@ function bindEvents() {
     const action = btn.dataset['libAction'] ?? ''
     const id = btn.dataset['id'] ?? null
     const folder = btn.dataset['folder'] ?? null
-    handleLibraryAction(action, id, folder).catch(() => alert(LIBRARY_ERROR))
+    handleLibraryAction(action, id, folder).catch(() => { void showAlert(LIBRARY_ERROR, { title: 'Library error' }) })
   })
 
   shareLinkBtn.addEventListener('click', () => {
@@ -2858,6 +2919,14 @@ function bindEvents() {
     renderChart()
   })
 
+  // --- Setup intro hint (dismissable) ---
+  const HINT_KEY = 'sp_intro_dismissed'
+  if (setupIntroHint && localStorage.getItem(HINT_KEY)) setupIntroHint.style.display = 'none'
+  dismissIntroHintBtn?.addEventListener('click', () => {
+    if (setupIntroHint) setupIntroHint.style.display = 'none'
+    localStorage.setItem(HINT_KEY, '1')
+  })
+
   // --- About modal ---
   aboutBtn.addEventListener('click', () => { aboutModal.style.display = 'flex' })
   aboutCloseBtn.addEventListener('click', () => { aboutModal.style.display = 'none' })
@@ -2866,18 +2935,46 @@ function bindEvents() {
   })
 
   // --- Custom orchestra modal ---
+  // Two ways to specify the composition: "Simple" (labelled per-section count
+  // fields, no notation syntax to learn) and "Advanced" (the raw Boosey &
+  // Hawkes notation box). Simple just assembles a notation string and feeds
+  // the same parseOrchestraNotation -> applyPreset pipeline as Advanced, plus
+  // Timpani/Harp/Piano which aren't expressible in notation — those are
+  // appended as fixed instruments the same way the Edit tab's add-instrument
+  // buttons do (makeInstrument, positioned from the resulting back row).
+  let coMode: 'simple' | 'advanced' = 'simple'
+
+  const setCoMode = (mode: 'simple' | 'advanced') => {
+    coMode = mode
+    coModeSimpleBtn.classList.toggle('active', mode === 'simple')
+    coModeAdvancedBtn.classList.toggle('active', mode === 'advanced')
+    coSimplePanel.style.display = mode === 'simple' ? '' : 'none'
+    coAdvancedPanel.style.display = mode === 'advanced' ? '' : 'none'
+    refreshCustomPreview()
+  }
+
+  // Assembles a 3-block notation string (Ww - Br - Str) from the Simple
+  // fields. Percussion is intentionally omitted from notation — like the
+  // built-in Symphony/Chamber presets, timpani is a fixed instrument instead.
+  const simpleNotation = (): string => {
+    const n = (el: HTMLInputElement) => Math.max(0, Math.min(99, Number(el.value) || 0))
+    const ww = [coFl, coOb, coCl, coBsn].map(n).join('.')
+    const br = [coHn, coTpt, coTbn, coTuba].map(n).join('.')
+    const str = [coVn1, coVn2, coVa, coVc, coCb].map(n).join('.')
+    return `${ww} - ${br} - ${str}`
+  }
+
   const openCustomModal = () => {
     customOrchestraTitle.value = ''
     customOrchestraNotation.value = ''
-    customOrchestraPreview.textContent = 'Type a notation above to see a preview.'
-    customOrchestraPreview.classList.remove('error')
+    setCoMode('simple')
     customOrchestraModal.style.display = 'flex'
-    setTimeout(() => customOrchestraNotation.focus(), 0)
+    setTimeout(() => customOrchestraTitle.focus(), 0)
   }
   const closeCustomModal = () => { customOrchestraModal.style.display = 'none' }
 
   const refreshCustomPreview = () => {
-    const text = customOrchestraNotation.value.trim()
+    const text = coMode === 'simple' ? simpleNotation() : customOrchestraNotation.value.trim()
     if (!text) {
       customOrchestraPreview.textContent = 'Type a notation above to see a preview.'
       customOrchestraPreview.classList.remove('error')
@@ -2890,7 +2987,17 @@ function bindEvents() {
       customOrchestraPreview.classList.add('error')
       return
     }
-    customOrchestraPreview.textContent = describeComposition(comp)
+    const lines = [describeComposition(comp)]
+    if (coMode === 'simple') {
+      const extras: string[] = []
+      const rawTimp = Math.max(0, Math.min(6, Number(coTimp.value) || 0))
+      const timp = rawTimp === 1 ? 2 : rawTimp  // 1 timpani makes no sense; snap to 2
+      if (timp > 0) extras.push(`${timp} Timpani`)
+      if (coHarp.checked) extras.push('Harp')
+      if (coPiano.checked) extras.push('Piano')
+      if (extras.length) lines.push(`Extras: ${extras.join(', ')}`)
+    }
+    customOrchestraPreview.textContent = lines.join('\n')
     customOrchestraPreview.classList.remove('error')
   }
 
@@ -2900,9 +3007,15 @@ function bindEvents() {
   customOrchestraModal.addEventListener('click', (e) => {
     if (e.target === customOrchestraModal) closeCustomModal()
   })
+  coModeSimpleBtn.addEventListener('click', () => setCoMode('simple'))
+  coModeAdvancedBtn.addEventListener('click', () => setCoMode('advanced'))
+  for (const el of [coFl, coOb, coCl, coBsn, coHn, coTpt, coTbn, coTuba,
+    coVn1, coVn2, coVa, coVc, coCb, coTimp, coHarp, coPiano]) {
+    el.addEventListener('input', refreshCustomPreview)
+  }
   customOrchestraNotation.addEventListener('input', refreshCustomPreview)
   customOrchestraApply.addEventListener('click', () => {
-    const notation = customOrchestraNotation.value.trim()
+    const notation = coMode === 'simple' ? simpleNotation() : customOrchestraNotation.value.trim()
     if (!notation) return
     if (!parseOrchestraNotation(notation)) {
       refreshCustomPreview()
@@ -2916,6 +3029,27 @@ function bindEvents() {
       sections: [],
       notation,
     })
+    // Extras (Timpani/Harp/Piano) aren't expressible in notation — add them
+    // as fixed instruments now that the rows (and so the back-row radius
+    // they're placed relative to) exist. Folds into the same undo step as
+    // the preset apply above (no extra history.push).
+    if (coMode === 'simple') {
+      const rawTimp = Math.max(0, Math.min(6, Number(coTimp.value) || 0))
+      const timp = rawTimp === 1 ? 2 : rawTimp  // 1 timpani makes no sense; snap to 2
+      const backRadius = renderer.backRowRadius(config)
+      if (timp > 0) {
+        const inst = makeInstrument('timpani', config.flipped, 0, backRadius)
+        inst.count = timp
+        config.instruments.push(inst)
+      }
+      if (coHarp.checked) {
+        config.instruments.push(makeInstrument('harp', config.flipped, 0, backRadius))
+      }
+      if (coPiano.checked) {
+        config.instruments.push(makeInstrument('piano', config.flipped, 0, backRadius))
+      }
+      if (timp > 0 || coHarp.checked || coPiano.checked) renderChart()
+    }
     closeCustomModal()
   })
 

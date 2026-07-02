@@ -685,6 +685,31 @@ button.danger:hover { background: #fff0f0; }
   line-height: 1.4;
 }
 
+/* Friendly "new here?" pointer at the top of the Setup tab — slightly more
+   visible than a regular .hint so a first-time visitor's eye lands on it,
+   but quiet enough not to nag a returning user. */
+.setup-intro-hint {
+  font-size: 12px;
+  color: var(--text);
+  background: #f0f7ff;
+  border: 1px solid #dbeafe;
+  border-radius: 6px;
+  padding: 8px 10px;
+  position: relative;
+}
+.dismiss-hint-btn {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-muted, #94a3b8);
+  padding: 0 2px;
+  line-height: 1;
+}
+
 /* Modal overlay (custom orchestra) */
 .modal-overlay {
   position: fixed;
@@ -797,6 +822,35 @@ button.danger:hover { background: #fff0f0; }
   color: #334155;
 }
 
+/* Custom Orchestra modal: Simple-mode section grids (Woodwinds/Brass/
+   Strings/Extras), each a label + a row of small number inputs. */
+.co-grid {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.co-grid-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  width: 78px;
+  flex: none;
+}
+.co-grid label {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+.co-grid input[type="number"] { width: 42px; }
+.co-grid label.co-checkbox {
+  gap: 5px;
+  cursor: pointer;
+}
+
 .preview-box {
   background: #f8fafc;
   border: 1px solid var(--border);
@@ -824,6 +878,27 @@ button.danger:hover { background: #fff0f0; }
 }
 
 .modal-actions button { min-width: 86px; }
+
+/* Promise-based alert/confirm/prompt dialogs (src/dialog.ts) */
+.dialog-card {
+  width: min(420px, 92vw);
+  gap: 14px;
+  animation: dialogPop 0.14s ease-out;
+}
+.dialog-message {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: normal;
+}
+.dialog-input {
+  width: 100%;
+  font-size: 14px;
+}
+@keyframes dialogPop {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
 
 @keyframes fadeIn {
   from { opacity: 0; }
