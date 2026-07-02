@@ -7,6 +7,7 @@ import {
 } from './presets'
 import { saveToJson, loadFromJson, encodeToHash, decodeFromHash, exportToPng } from './serializer'
 import * as library from './library'
+import { showAlert, showConfirm, showPrompt } from './dialog'
 import type { ChartConfig, InstrumentType, Chair } from './types'
 
 // --- App state ---
@@ -733,7 +734,7 @@ async function handleLibraryAction(action: string, id: string | null, folder: st
   if (action === 'rename' && id) {
     const chart = await library.loadChart(id)
     if (!chart) return
-    const next = window.prompt('Rename chart:', chart.title)
+    const next = await showPrompt('Rename chart:', chart.title, { title: 'Rename chart', okLabel: 'Rename' })
     if (next === null || !next.trim()) return
     await library.renameChart(id, next.trim())
     if (id === currentChartId) config.title = next.trim()
@@ -748,20 +749,14 @@ async function handleLibraryAction(action: string, id: string | null, folder: st
   }
   if (action === 'move' && id) {
     const folders = await library.listFolders()
-    const options = ['(unfiled)', ...folders]
-    const choice = window.prompt(
-      `Move to which folder?\n\nExisting folders:\n${options.map((f, i) => `  ${i + 1}. ${f}`).join('\n')}\n\nType the number, the folder name, or a new folder name:`)
+    const choice = await showPrompt(
+      'Pick an existing folder or type a new name. Leave blank to unfile.',
+      '',
+      { title: 'Move chart', placeholder: 'Folder name (blank = unfiled)', okLabel: 'Move', suggestions: folders },
+    )
     if (choice === null) return
-    let target: string
-    const num = Number(choice)
-    if (!isNaN(num) && num >= 1 && num <= options.length) {
-      target = num === 1 ? '' : options[num - 1]
-    } else if (choice.trim().toLowerCase() === '(unfiled)' || choice.trim() === '') {
-      target = ''
-    } else {
-      target = choice.trim()
-      if (target && !folders.includes(target)) await library.createFolder(target)
-    }
+    const target = choice.trim().toLowerCase() === '(unfiled)' ? '' : choice.trim()
+    if (target && !folders.includes(target)) await library.createFolder(target)
     await library.moveChart(id, target)
     await renderLibrary()
     return
@@ -769,7 +764,7 @@ async function handleLibraryAction(action: string, id: string | null, folder: st
   if (action === 'delete' && id) {
     const chart = await library.loadChart(id)
     if (!chart) return
-    if (!window.confirm(`Delete "${chart.title}"? This cannot be undone.`)) return
+    if (!await showConfirm(`Delete "${chart.title}"? This cannot be undone.`, { title: 'Delete chart', confirmLabel: 'Delete', danger: true })) return
     await library.deleteChart(id)
     if (currentChartId === id) currentChartId = null
     updateLibraryCurrentTitle()
@@ -777,7 +772,7 @@ async function handleLibraryAction(action: string, id: string | null, folder: st
     return
   }
   if (action === 'delete-folder' && folder !== null) {
-    if (!window.confirm(`Delete folder "${folder}"? Any charts inside will become Unfiled.`)) return
+    if (!await showConfirm(`Delete folder "${folder}"? Any charts inside will become Unfiled.`, { title: 'Delete folder', confirmLabel: 'Delete', danger: true })) return
     await library.deleteFolder(folder)
     await renderLibrary()
     return
@@ -1367,7 +1362,7 @@ function populatePresets() {
 function applyPreset(preset: Preset) {
   const built = buildPreset(preset)
   if (!built.ok) {
-    alert(built.error)
+    void showAlert(built.error, { title: "Couldn't apply preset" })
     return
   }
 
@@ -2465,11 +2460,11 @@ function bindEvents() {
     renderChart()
   })
 
-  clearLabelsBtn.addEventListener('click', () => {
+  clearLabelsBtn.addEventListener('click', async () => {
     const labelled = config.rows.reduce(
       (n, row) => n + row.chairs.filter(c => c.label).length, 0)
     if (labelled === 0) return
-    if (!confirm(`Clear ${labelled} chair label${labelled !== 1 ? 's' : ''}? This can be undone.`)) return
+    if (!await showConfirm(`Clear ${labelled} chair label${labelled !== 1 ? 's' : ''}? This can be undone.`, { title: 'Clear labels', confirmLabel: 'Clear' })) return
     history.push(config)
     config.rows.forEach(row => row.chairs.forEach(c => { c.label = '' }))
     renderLabelList()
@@ -2576,8 +2571,8 @@ function bindEvents() {
   })
 
   // Reset every per-row / per-chair Layout-tab tweak back to the defaults.
-  resetLayoutBtn.addEventListener('click', () => {
-    if (!window.confirm('Reset all manual row and chair position tweaks back to the default layout?')) return
+  resetLayoutBtn.addEventListener('click', async () => {
+    if (!await showConfirm('Reset all manual row and chair position tweaks back to the default layout?', { title: 'Reset layout', confirmLabel: 'Reset' })) return
     history.push(config)
     for (const row of config.rows) {
       delete row.gapBefore
@@ -2609,9 +2604,9 @@ function bindEvents() {
   // Old-style hidden placeholder chairs (disabled, no label) were the only
   // way to shape a section's density before grouped wedges existed — the
   // wedge layout doesn't need them, so this also removes any that remain.
-  tidySectionsBtn.addEventListener('click', () => {
+  tidySectionsBtn.addEventListener('click', async () => {
     if (config.layout !== 'semicircle') {
-      alert('Tidy sections only applies to semicircle charts.')
+      void showAlert('Tidy sections only applies to semicircle charts.', { title: 'Tidy sections' })
       return
     }
     const numRows = config.rows.length
@@ -2622,7 +2617,7 @@ function bindEvents() {
       .filter(({ row, i }) => !isStraightRow(i) && row.chairs.some(c => c.label.trim()))
 
     if (targetRows.length === 0) {
-      alert('No labelled chairs found in any arc row — nothing to tidy.')
+      void showAlert('No labelled chairs found in any arc row — nothing to tidy.', { title: 'Tidy sections' })
       return
     }
     let spacerCount = 0, keptCount = 0
@@ -2635,7 +2630,7 @@ function bindEvents() {
     const msg = spacerCount > 0
       ? `Group ${keptCount} chairs into sections by label, and remove ${spacerCount} unused placeholder chair${spacerCount !== 1 ? 's' : ''}? This can be undone.`
       : `Group ${keptCount} chairs into sections by label? This can be undone.`
-    if (!window.confirm(msg)) return
+    if (!await showConfirm(msg, { title: 'Tidy sections', confirmLabel: 'Tidy' })) return
 
     history.push(config)
     for (const { row } of targetRows) {
@@ -2748,7 +2743,7 @@ function bindEvents() {
       markSaved()        // matches the file just loaded = clean
       updateLibraryCurrentTitle()
     } catch {
-      alert('Could not load chart file.')
+      void showAlert('Could not load chart file.', { title: "Couldn't load" })
     }
     loadInput.value = ''
   })
@@ -2760,7 +2755,7 @@ function bindEvents() {
     const file = bgInput.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/')) {
-      alert('Please choose an image file.')
+      void showAlert('Please choose an image file.', { title: 'Background image' })
       bgInput.value = ''
       return
     }
@@ -2771,7 +2766,7 @@ function bindEvents() {
       updateAllInputs()
       renderChart()
     }
-    reader.onerror = () => alert('Could not read image file.')
+    reader.onerror = () => { void showAlert('Could not read image file.', { title: 'Background image' }) }
     reader.readAsDataURL(file)
     bgInput.value = ''
   })
@@ -2841,7 +2836,7 @@ function bindEvents() {
           folder = existing.folder
         }
       } else {
-        const next = window.prompt('Save chart as:', title)
+        const next = await showPrompt('Save chart as:', title, { title: 'Save chart', okLabel: 'Save' })
         if (next === null) return
         title = next.trim() || 'Untitled'
       }
@@ -2851,12 +2846,12 @@ function bindEvents() {
       updateLibraryCurrentTitle()
       await renderLibrary()
     } catch {
-      alert(LIBRARY_ERROR)
+      void showAlert(LIBRARY_ERROR, { title: 'Library error' })
     }
   })
 
-  libraryNewChartBtn.addEventListener('click', () => {
-    if (currentChartId && !window.confirm('Discard current chart and start a new blank one? Anything unsaved here will be lost — use Save first if you want to keep it.')) return
+  libraryNewChartBtn.addEventListener('click', async () => {
+    if (currentChartId && !await showConfirm('Discard current chart and start a new blank one? Anything unsaved here will be lost — use Save first if you want to keep it.', { title: 'New blank chart', confirmLabel: 'Discard & start new', danger: true })) return
     setConfig(makeDefaultConfig())
     currentChartId = null
     markSaved()        // a brand-new blank chart has nothing unsaved yet
@@ -2865,13 +2860,13 @@ function bindEvents() {
   })
 
   libraryNewFolderBtn.addEventListener('click', async () => {
-    const name = window.prompt('Folder name:')
+    const name = await showPrompt('Folder name:', '', { title: 'New folder', okLabel: 'Create' })
     if (name === null || !name.trim()) return
     try {
       await library.createFolder(name.trim())
       await renderLibrary()
     } catch {
-      alert(LIBRARY_ERROR)
+      void showAlert(LIBRARY_ERROR, { title: 'Library error' })
     }
   })
 
@@ -2887,7 +2882,7 @@ function bindEvents() {
     const action = btn.dataset['libAction'] ?? ''
     const id = btn.dataset['id'] ?? null
     const folder = btn.dataset['folder'] ?? null
-    handleLibraryAction(action, id, folder).catch(() => alert(LIBRARY_ERROR))
+    handleLibraryAction(action, id, folder).catch(() => { void showAlert(LIBRARY_ERROR, { title: 'Library error' }) })
   })
 
   shareLinkBtn.addEventListener('click', () => {

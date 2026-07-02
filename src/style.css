@@ -879,6 +879,27 @@ button.danger:hover { background: #fff0f0; }
 
 .modal-actions button { min-width: 86px; }
 
+/* Promise-based alert/confirm/prompt dialogs (src/dialog.ts) */
+.dialog-card {
+  width: min(420px, 92vw);
+  gap: 14px;
+  animation: dialogPop 0.14s ease-out;
+}
+.dialog-message {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: normal;
+}
+.dialog-input {
+  width: 100%;
+  font-size: 14px;
+}
+@keyframes dialogPop {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
