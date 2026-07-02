@@ -44,6 +44,7 @@ export interface RenderOptions {
 
 export class Renderer {
   private hitTargets: HitTarget[] = []
+  private standHitTargets: HitTarget[] = []
   private instrumentHits: InstrumentHit[] = []
   conductorHit: ConductorHit | null = null
   titleHit: ConductorHit | null = null
@@ -113,6 +114,7 @@ export class Renderer {
     ctx.scale(scale, scale)
 
     this.hitTargets = []
+    this.standHitTargets = []
     this.instrumentHits = []
     this.layoutHandles = []
     this.layoutRows = []
@@ -628,7 +630,7 @@ export class Renderer {
       const { cx, cy } = positions[chairIndex]
       if (chair.enabled) {
         this.drawChair(ctx, chair, cx, cy, ox, oy, row.fontSize, this.isNudged(chair), this.isChairHovered(rowIndex, chairIndex))
-        if (chair.hasStand) this.drawStandX(ctx, cx, cy, ox, oy)
+        if (chair.hasStand) this.drawStandX(ctx, cx, cy, ox, oy, undefined, { rowIndex, chairIndex })
         // Standing players aren't numbered seats — no number drawn, and they
         // don't consume one (so the seated chairs stay sequential).
         if (!chair.noSeat) {
@@ -655,7 +657,7 @@ export class Renderer {
       const a = positions[chairIndex]
       const b = positions[chairIndex + 1]
       const mx = (a.cx + b.cx) / 2, my = (a.cy + b.cy) / 2
-      this.drawStandX(ctx, mx, my, ox, oy)
+      this.drawStandX(ctx, mx, my, ox, oy, undefined, { rowIndex, chairIndex })
       // Group-drag handle sits on the arc, in the gap between the desk's two
       // chairs, so it's unambiguously tied to them (and clear of the shared
       // stand ×, which is offset toward the conductor in front of this point).
@@ -710,7 +712,7 @@ export class Renderer {
 
       if (chair.enabled) {
         this.drawChair(ctx, chair, cx, rowY, cx, oy, row.fontSize, this.isNudged(chair), this.isChairHovered(rowIndex, chairIndex))
-        if (chair.hasStand) this.drawStandX(ctx, cx, rowY, cx, oy)
+        if (chair.hasStand) this.drawStandX(ctx, cx, rowY, cx, oy, undefined, { rowIndex, chairIndex })
         // Standing players aren't numbered seats (see semicircle path).
         if (!chair.noSeat) {
           if (config.showNumbers) {
@@ -736,7 +738,7 @@ export class Renderer {
         const a = positions[chairIndex]
         const b = positions[chairIndex + 1]
         const mx = (a.cx + b.cx) / 2, my = (a.cy + b.cy) / 2
-        this.drawStandX(ctx, mx, my, a.cx, oy)
+        this.drawStandX(ctx, mx, my, a.cx, oy, undefined, { rowIndex, chairIndex })
         // Group-drag handle on the row line, between the desk's two chairs.
         this.deskHandles.push({ rowIndex, chairIndex, cx: mx, cy: my })
       }
@@ -1564,11 +1566,20 @@ export class Renderer {
    * and the conductor.  For shared stands, pass the midpoint of the two chairs
    * as (cx, cy).
    */
+  standHitTest(x: number, y: number): HitTarget | null {
+    for (const t of this.standHitTargets) {
+      const dx = x - t.x, dy = y - t.y
+      if (dx * dx + dy * dy <= t.radius * t.radius) return t
+    }
+    return null
+  }
+
   private drawStandX(
     ctx: CanvasRenderingContext2D,
     cx: number, cy: number,
     condX: number, condY: number,
     distOverride?: number,
+    hitOwner?: { rowIndex: number; chairIndex: number },
   ) {
     const dx = condX - cx
     const dy = condY - cy
@@ -1580,6 +1591,10 @@ export class Renderer {
     const dist = distOverride ?? (CHAIR_HALF + STAND_GAP + STAND_SIZE)
     const sx = cx + nx * dist
     const sy = cy + ny * dist
+
+    if (hitOwner) {
+      this.standHitTargets.push({ ...hitOwner, x: sx, y: sy, radius: STAND_SIZE * 2.5 })
+    }
 
     const angle = Math.atan2(ny, nx)
 

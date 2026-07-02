@@ -2107,7 +2107,10 @@ canvas.addEventListener('click', (e) => {
     return
   }
 
-  const hit = renderer.hitTest(x, y)
+  // Stand tool: clicking directly on a stand ×  is equivalent to clicking
+  // its owning chair — resolve the stand hit first so the × is a valid target.
+  const standHit = activeTool === 'stand' ? renderer.standHitTest(x, y) : null
+  const hit = standHit ?? renderer.hitTest(x, y)
   if (!hit) return
   // Label tool → type a free-text label right on the chair.
   if (activeTool === 'label') {
