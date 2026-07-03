@@ -79,6 +79,27 @@ let stoolMode: StoolMode = 'stool'
 let lastCycledChair: { rowIndex: number; chairIndex: number; tool: ChairTool } | null = null
 const STAND_CYCLE: StandMode[] = ['solo', 'remove', 'desk']
 const STOOL_CYCLE: StoolMode[] = ['chair', 'stool', 'standing']
+
+// --- Section-label matching (used by "Tidy sections" to clump low strings) ---
+// Normalise a chair label to a bare section token: lower-case, strip spaces,
+// dots, dashes and any trailing part number ("Vc 2" / "cello-1" → "vc"/"cello").
+function normalizeSectionLabel(label: string): string {
+  return label.trim().toLowerCase().replace(/[\s._-]/g, '').replace(/\d+$/, '')
+}
+const CELLO_LABELS = new Set(['vc', 'vlc', 'vcl', 'cello', 'celli', 'violoncello', 'violoncelli'])
+const BASS_LABELS = new Set(['cb', 'db', 'kb', 'bass', 'basses', 'contrabass', 'contrabasses', 'doublebass', 'doublebasses', 'kontrabass', 'stringbass'])
+// The `group` key of the first chair whose label matches one of `labels`, or
+// null if none — used to find the group other sections should merge into.
+function findSectionGroup(
+  targetRows: { row: import('./types').Row }[],
+  labels: Set<string>,
+): string | null {
+  for (const { row } of targetRows) {
+    const hit = row.chairs.find(c => c.group && labels.has(normalizeSectionLabel(c.label)))
+    if (hit?.group) return hit.group
+  }
+  return null
+}
 let marqueeState: {
   startClientX: number; startClientY: number
   startChart: { x: number; y: number }
@@ -2637,6 +2658,19 @@ function bindEvents() {
     for (const { row } of targetRows) {
       row.chairs = row.chairs.filter(c => c.enabled || c.label.trim())
       for (const c of row.chairs) c.group = c.label.trim() || c.id
+    }
+    // Cellos and basses form one continuous low-string block in an orchestra
+    // (basses sit behind/beside the cellos), so merge a detected bass section
+    // into the cello section's group — otherwise the basses get their own
+    // separate, stranded wedge. Labels are matched loosely (case, spacing and
+    // trailing part number ignored) against the common cello/bass names.
+    const celloGroup = findSectionGroup(targetRows, CELLO_LABELS)
+    if (celloGroup) {
+      for (const { row } of targetRows) {
+        for (const c of row.chairs) {
+          if (c.group && BASS_LABELS.has(normalizeSectionLabel(c.label))) c.group = celloGroup
+        }
+      }
     }
     // Push cramped front rows outward so every chair-slot gets at least a
     // desk's width of arc — without this, tidying a dense chart crushes the
