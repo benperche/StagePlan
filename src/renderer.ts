@@ -25,6 +25,47 @@ const CONDUCTOR_EXTENT = 56
 const COND_W = 52
 const COND_H = 36
 
+// Physical (px, centre-to-centre) spacing between consecutive chairs in a
+// grouped ("donut slice") arc row. Because these are pixels, not a shared
+// angular grid, desks keep their spacing at any radius — front rows never
+// crush. DESK: the two chairs of one desk; BETWEEN: adjacent desk-units within
+// a section; SECTION_GAP: extra at a section boundary.
+const DESK_ADV = 56
+const BETWEEN_ADV = 74
+const SECTION_GAP_ADV = 40
+
+// Cumulative left-to-right pixel position of each chair in a row, using the
+// desk/between/section spacings above. Shared by the section-anchor pre-pass
+// (which measures each section's width) and the per-row placement.
+function rowPosPx(chairs: Chair[]): number[] {
+  const N = chairs.length
+  const pos = new Array<number>(N)
+  if (N === 0) return pos
+  pos[0] = 0
+  for (let i = 1; i < N; i++) {
+    const prev = chairs[i - 1], cur = chairs[i]
+    const deskPair =
+      (prev.standAfter && prev.enabled && cur.enabled) ||
+      (!prev.enabled && !cur.enabled)
+    let adv: number
+    if (deskPair) adv = DESK_ADV
+    else if (cur.group === prev.group) adv = BETWEEN_ADV
+    else adv = BETWEEN_ADV + SECTION_GAP_ADV
+    pos[i] = pos[i - 1] + adv
+  }
+  return pos
+}
+
+// Justification of a section relative to its fixed radial anchor angle.
+//  - 'left'  : outer (left) edge on the anchor line, growing inward   (leftmost section)
+//  - 'right' : outer (right) edge on the anchor line, growing inward  (rightmost section)
+//  - 'center': centred on the anchor line (its front-desk midpoint)   (middle sections)
+type SectionJustify = 'left' | 'right' | 'center'
+interface SectionAnchors {
+  theta: Map<string, number>       // anchor angle per section
+  justify: Map<string, SectionJustify>
+}
+
 export interface RenderOptions {
   scale?: number
   // When true (the Layout tab is active), arc guides are forced on and the
@@ -489,22 +530,97 @@ export class Renderer {
     const straightLabelX = ox + (config.flipped ? 1 : -1) * (maxStraightWidth / 2 + CHAIR_HALF + 18)
 
     // Section layout: chairs carrying a `group` tag (set by the orchestra
-    // generator / "Tidy sections") are clustered together per section within
-    // each row (see renderArcRow's "donut slice" placement). Rows with no
-    // grouped chairs are unaffected (existing even-spread behaviour).
+    // generator / "Tidy sections") are clustered together per section. Each
+    // section gets a fixed radial anchor angle so its desks stay in an aligned
+    // column front-to-back (see computeSectionAnchors + renderArcRow). Rows
+    // with no grouped chairs are unaffected (existing even-spread behaviour).
+    const anchors = this.computeSectionAnchors(config, radii, isStraightRow)
     let seatNumber = 1
     config.rows.forEach((row, rowIndex) => {
       const r = radii[rowIndex]
       if (isStraightRow(rowIndex)) {
         seatNumber = this.renderStraightRow(ctx, row, rowIndex, oy + yDir * r, ox, oy, config, seatNumber, straightLabelX)
       } else {
-        seatNumber = this.renderArcRow(ctx, row, rowIndex, r, ox, oy, yDir, config, seatNumber)
+        seatNumber = this.renderArcRow(ctx, row, rowIndex, r, ox, oy, yDir, config, seatNumber, anchors)
       }
     })
 
     if (this.layoutMode) {
       this.renderLayoutHandles(ctx, config, ox, oy, yDir, radii, rowSpacing, isStraightRow)
     }
+  }
+
+  // Give each section a fixed radial anchor angle so its desks line up in a
+  // column across depths. The leftmost / rightmost sections are "outer" — their
+  // outer edge sits on the anchor line and the section grows inward; every
+  // section in between is centred on its line. Anchors are spaced by each
+  // section's WIDEST angular footprint (physical width ÷ that row's radius), so
+  // sections never collide yet pack together compactly. Returns null when no
+  // arc row is fully grouped (nothing to anchor).
+  private computeSectionAnchors(
+    config: ChartConfig,
+    radii: number[],
+    isStraightRow: (rowIndex: number) => boolean,
+  ): SectionAnchors | null {
+    const order: string[] = []
+    const maxAngWidth = new Map<string, number>()
+    let frontRadius = 0
+    config.rows.forEach((row, i) => {
+      if (isStraightRow(i)) return
+      const chairs = row.chairs
+      if (chairs.length === 0 || !chairs.every(c => !!c.group)) return
+      const r = radii[i]
+      if (frontRadius === 0) frontRadius = r
+      const pos = rowPosPx(chairs)
+      // Walk the contiguous section runs, measuring each run's angular width.
+      let s = 0
+      while (s < chairs.length) {
+        const g = chairs[s].group!
+        let e = s
+        while (e + 1 < chairs.length && chairs[e + 1].group === g) e++
+        if (!maxAngWidth.has(g)) order.push(g)
+        const ang = (pos[e] - pos[s]) / r
+        maxAngWidth.set(g, Math.max(maxAngWidth.get(g) ?? 0, ang))
+        s = e + 1
+      }
+    })
+    if (order.length === 0) return null
+
+    const justify = new Map<string, SectionJustify>()
+    order.forEach((g, i) => {
+      justify.set(g, order.length === 1 ? 'center'
+        : i === 0 ? 'left'
+        : i === order.length - 1 ? 'right'
+        : 'center')
+    })
+
+    const gapAng = frontRadius > 0 ? SECTION_GAP_ADV / frontRadius : 0.15
+    let totalSpan = 0
+    order.forEach((g, i) => {
+      totalSpan += maxAngWidth.get(g) ?? 0
+      if (i < order.length - 1) totalSpan += gapAng
+    })
+    // Compress only if the whole thing would overflow the available arc.
+    const avail = config.arcRange ?? Math.PI
+    const scale = totalSpan > avail && totalSpan > 0 ? avail / totalSpan : 1
+
+    const apex = Math.PI / 2
+    const theta = new Map<string, number>()
+    let cursor = apex + (totalSpan * scale) / 2   // left edge (largest angle)
+    order.forEach((g, i) => {
+      const w = (maxAngWidth.get(g) ?? 0) * scale
+      const j = justify.get(g)!
+      if (j === 'left') {
+        theta.set(g, cursor)              // outer (left) edge on the line
+      } else if (j === 'right') {
+        theta.set(g, cursor - w)          // outer (right) edge on the line
+      } else {
+        theta.set(g, cursor - w / 2)      // centred on the line
+      }
+      cursor -= w
+      if (i < order.length - 1) cursor -= gapAng * scale
+    })
+    return { theta, justify }
   }
 
   private renderArcRow(
@@ -515,6 +631,7 @@ export class Renderer {
     ox: number, oy: number, yDir: number,
     config: ChartConfig,
     seatNumber: number,
+    anchors: SectionAnchors | null,
   ): number {
     const chairs = row.chairs
     const N = chairs.length
@@ -527,44 +644,35 @@ export class Renderer {
 
     // Each chair's natural (un-nudged) slot angle. Two modes:
     //  - Grouped ("donut slice"): every chair carries a `group` (set by the
-    //    generator / Tidy sections). This row's OWN chairs are laid out at
-    //    fixed PHYSICAL spacing — desks tight, a wider gap between sections —
-    //    then the whole row is centred within its arc span. Because the
-    //    spacing is in pixels (not a shared angular grid), a desk always has
-    //    room at any radius, so front rows can sit close to the conductor
-    //    without collapsing; sections keep real width at the front and fan
-    //    outward as rows gain players.
+    //    generator / Tidy sections). Each section is placed at fixed PHYSICAL
+    //    desk spacing, relative to its section's fixed radial anchor angle
+    //    (computeSectionAnchors) — outer sections keep their outer edge on the
+    //    line, middle sections stay centred — so desks line up in a column
+    //    front-to-back and never crush, however tight the radius.
     //  - Default: every chair gets its own evenly-spread slot across the
     //    row's full arc span (today's behaviour) — used whenever any chair
     //    in the row lacks a `group`.
-    const allGrouped = N > 0 && chairs.every(c => !!c.group)
+    const allGrouped = anchors !== null && N > 0 && chairs.every(c => !!c.group)
     const naturalAngles: number[] = new Array(N)
-    if (allGrouped) {
-      // Physical spacing (px, centre-to-centre) between consecutive chairs.
-      const DESK_ADV = 56       // the two chairs of one desk
-      const BETWEEN_ADV = 74    // adjacent desk-units within a section
-      const SECTION_ADV = 40    // extra at a section boundary
-      const posPx: number[] = new Array(N)
-      posPx[0] = 0
-      for (let i = 1; i < N; i++) {
-        const prev = chairs[i - 1], cur = chairs[i]
-        const deskPair =
-          (prev.standAfter && prev.enabled && cur.enabled) ||
-          (!prev.enabled && !cur.enabled)
-        let adv: number
-        if (deskPair) adv = DESK_ADV
-        else if (cur.group === prev.group) adv = BETWEEN_ADV
-        else adv = BETWEEN_ADV + SECTION_ADV
-        posPx[i] = posPx[i - 1] + adv
-      }
-      const W = posPx[N - 1]
-      // Centre on the row's arc midpoint; compress only if the content would
-      // overflow the available span (a very dense front row), never expand.
-      const maxW = totalSpan * r
-      const scale = W > maxW && W > 0 ? maxW / W : 1
-      const center = (startAngle + endAngle) / 2
-      for (let i = 0; i < N; i++) {
-        naturalAngles[i] = center + (W / 2 - posPx[i]) * scale / r
+    if (allGrouped && anchors) {
+      const posPx = rowPosPx(chairs)
+      // Place each contiguous section run relative to its anchor angle.
+      let s = 0
+      while (s < N) {
+        const g = chairs[s].group!
+        let e = s
+        while (e + 1 < N && chairs[e + 1].group === g) e++
+        const theta = anchors.theta.get(g) ?? (startAngle + endAngle) / 2
+        const just = anchors.justify.get(g) ?? 'center'
+        // The section's reference px position that maps onto `theta`.
+        const refPx =
+          just === 'left' ? posPx[s]
+          : just === 'right' ? posPx[e]
+          : (posPx[s] + posPx[e]) / 2
+        for (let i = s; i <= e; i++) {
+          naturalAngles[i] = theta + (refPx - posPx[i]) / r
+        }
+        s = e + 1
       }
     } else {
       const naturalStep = N > 1 ? totalSpan / (N - 1) : 0
