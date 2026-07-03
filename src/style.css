@@ -268,6 +268,39 @@ body {
 details.panel[open] > .panel-summary::before { transform: rotate(90deg); }
 .panel-summary:hover { color: var(--text); }
 
+/* "or" divider between the preset dropdown and the custom-orchestra button. */
+.or-sep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.or-sep::before, .or-sep::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* An inline button that reads as a text link (e.g. "Clear to blank rows"
+   demoted inside a hint sentence). */
+.linklike {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  width: auto;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.linklike:hover { color: var(--accent-hover); }
+
 /* Form controls */
 label {
   display: flex;
@@ -694,7 +727,7 @@ button.danger:hover { background: #fff0f0; }
   background: #f0f7ff;
   border: 1px solid #dbeafe;
   border-radius: 6px;
-  padding: 8px 10px;
+  padding: 8px 22px 8px 10px;
   position: relative;
 }
 .dismiss-hint-btn {

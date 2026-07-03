@@ -56,11 +56,25 @@
       <!-- =================  SETUP TAB  ================= -->
       <div class="tab-content active" data-tab-content="setup">
         <p class="hint setup-intro-hint" id="setup-intro-hint">
-          <strong>New here?</strong> Pick a preset or build a custom orchestra in
-          <strong>Preset Arrangements</strong> below for an instant full chart, or
-          set your rows manually in edit mode. You can edit everything after.
+          <strong>New here?</strong> Pick a <strong>Stage Preset</strong> below for an
+          instant full chart — or set up the rows yourself. You can edit everything afterwards.
           <button class="dismiss-hint-btn" id="dismiss-intro-hint" title="Dismiss">✕</button>
         </p>
+
+        <section class="panel">
+          <h2>Stage Presets</h2>
+          <div class="row-controls">
+            <select id="preset-select">
+              <option value="" disabled selected>Choose a preset…</option>
+            </select>
+            <button id="apply-preset-btn">Apply</button>
+          </div>
+          <div class="or-sep">or</div>
+          <button id="custom-orchestra-btn" class="secondary">＋ Build a custom orchestra…</button>
+          <p class="hint">Either way gives you a full chart you can edit. Prefer to start from scratch?
+            <button id="clear-preset-btn" class="linklike">↺ Clear to blank rows</button>.</p>
+        </section>
+
         <section class="panel">
           <h2>Chart</h2>
           <label>Title
@@ -84,6 +98,12 @@
             <label><input type="checkbox" id="flip" /> Flip layout</label>
             <label><input type="checkbox" id="show-conductor" checked /> Show conductor</label>
           </div>
+        </section>
+
+        <details class="panel advanced-panel">
+          <summary class="panel-summary">Advanced options</summary>
+
+          <p class="labels-subhead">Display</p>
           <div class="checkbox-row">
             <label><input type="checkbox" id="conductor-stand" checked /> Conductor stand</label>
             <label><input type="checkbox" id="show-stage-directions" /> Stage directions</label>
@@ -91,24 +111,18 @@
           <div class="checkbox-row">
             <label><input type="checkbox" id="show-credit" checked /> Show "Created with StagePlan" credit</label>
           </div>
-          <p class="hint">Drag the conductor on the chart to move the whole chart (here or in the Layout tab). Rename it by clicking it in the Edit tab.</p>
-        </section>
+          <p class="hint">Drag the conductor on the chart to move the whole chart. Rename it by clicking it in the Edit tab.</p>
 
-        <section class="panel">
-          <h2>Preset Arrangements</h2>
-          <div class="row-controls">
-            <select id="preset-select">
-              <option value="" disabled selected>Choose a preset…</option>
-            </select>
-            <button id="apply-preset-btn">Apply</button>
+          <p class="labels-subhead">Seat numbers &amp; labels</p>
+          <div class="checkbox-row">
+            <label><input type="checkbox" id="show-numbers" /> Seat numbers</label>
+            <label><input type="checkbox" id="restart-numbers" /> Restart per row</label>
           </div>
-          <button id="custom-orchestra-btn" class="secondary">+ Custom orchestra…</button>
-          <button id="clear-preset-btn" class="secondary">↺ Clear to blank rows</button>
-          <p class="hint">Applies a standard layout — you can edit it after. <strong>Clear</strong> resets to plain rows with no colours, labels or fixed instruments.</p>
-        </section>
+          <div class="checkbox-row">
+            <label><input type="checkbox" id="show-row-labels" /> Row labels</label>
+          </div>
 
-        <section class="panel">
-          <h2>Stage Background (opt.)</h2>
+          <p class="labels-subhead">Stage background</p>
           <label class="file-label">
             ⬆ Upload image
             <input type="file" id="bg-input" accept="image/*" />
@@ -125,12 +139,10 @@
             <input type="number" id="chart-scale" min="50" max="200" step="5" value="100" />
           </label>
           <p class="hint" id="bg-status">No background.</p>
-        </section>
 
-        <section class="panel">
-          <h2>Notes (appears at bottom left of chart)</h2>
-          <textarea id="notes" rows="3" placeholder="Notes for this chart…"></textarea>
-        </section>
+          <p class="labels-subhead">Notes</p>
+          <textarea id="notes" rows="3" placeholder="Notes (appear at the bottom-left of the chart)…"></textarea>
+        </details>
 
         <div class="tab-nav">
           <span></span>
@@ -190,17 +202,6 @@
           <div id="instrument-panel" style="display:none">
             <button id="show-tally-btn" class="secondary">📊 Show instrument tally</button>
             <div id="instrument-picker-list"></div>
-          </div>
-        </section>
-
-        <section class="panel">
-          <h2>Numbers &amp; labels</h2>
-          <div class="checkbox-row">
-            <label><input type="checkbox" id="show-numbers" /> Seat numbers</label>
-            <label><input type="checkbox" id="restart-numbers" /> Restart per row</label>
-          </div>
-          <div class="checkbox-row">
-            <label><input type="checkbox" id="show-row-labels" /> Row labels</label>
           </div>
         </section>
 
