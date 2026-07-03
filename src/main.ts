@@ -85,8 +85,19 @@ const STOOL_CYCLE: StoolMode[] = ['chair', 'stool', 'standing']
 function normalizeSectionLabel(label: string): string {
   return label.trim().toLowerCase().replace(/[\s._-]/g, '').replace(/\d+$/, '')
 }
+const VIOLIN_LABELS = new Set(['vln', 'vn', 'violin', 'violins', 'violini', 'violinii', 'vni', 'vnii'])
+const VIOLA_LABELS = new Set(['vla', 'va', 'viola', 'violas'])
 const CELLO_LABELS = new Set(['vc', 'vlc', 'vcl', 'cello', 'celli', 'violoncello', 'violoncelli'])
 const BASS_LABELS = new Set(['cb', 'db', 'kb', 'bass', 'basses', 'contrabass', 'contrabasses', 'doublebass', 'doublebasses', 'kontrabass', 'stringbass'])
+// A bowed-string section? The fanned-wedge layout is an orchestral string
+// arrangement, so Tidy only wedges these and gates on violins being present.
+function isViolinSection(label: string): boolean {
+  return VIOLIN_LABELS.has(normalizeSectionLabel(label))
+}
+function isStringSection(label: string): boolean {
+  const n = normalizeSectionLabel(label)
+  return VIOLIN_LABELS.has(n) || VIOLA_LABELS.has(n) || CELLO_LABELS.has(n) || BASS_LABELS.has(n)
+}
 // The `group` key of the first chair whose label matches one of `labels`, or
 // null if none — used to find the group other sections should merge into.
 function findSectionGroup(
@@ -2641,22 +2652,38 @@ function bindEvents() {
       void showAlert('No labelled chairs found in any arc row — nothing to tidy.', { title: 'Tidy sections' })
       return
     }
-    let spacerCount = 0, keptCount = 0
+    // Gate: the fanned-wedge layout is an orchestral STRING arrangement
+    // (violins/violas/cellos/basses fanning around the conductor). A concert or
+    // big band has no violins and its sections don't seat this way, so wedging
+    // them scrambles the chart. Require violins before tidying.
+    const hasViolins = targetRows.some(({ row }) =>
+      row.chairs.some(c => c.label.trim() && isViolinSection(c.label)))
+    if (!hasViolins) {
+      void showAlert(
+        'Tidy sections arranges orchestral string sections (violins, violas, cellos, basses) into fanned wedges. This chart has no violin sections, so there’s nothing for it to tidy.',
+        { title: 'Tidy sections' })
+      return
+    }
+    // Count the string chairs that will be wedged and any hidden placeholder
+    // chairs that will be removed.
+    let spacerCount = 0, groupCount = 0
     for (const { row } of targetRows) {
       for (const c of row.chairs) {
         if (!c.enabled && !c.label.trim()) spacerCount++
-        else keptCount++
+        else if (isStringSection(c.label)) groupCount++
       }
     }
     const msg = spacerCount > 0
-      ? `Group ${keptCount} chairs into sections by label, and remove ${spacerCount} unused placeholder chair${spacerCount !== 1 ? 's' : ''}? This can be undone.`
-      : `Group ${keptCount} chairs into sections by label? This can be undone.`
+      ? `Arrange ${groupCount} string chairs into fanned sections, and remove ${spacerCount} unused placeholder chair${spacerCount !== 1 ? 's' : ''}? This can be undone.`
+      : `Arrange ${groupCount} string chairs into fanned sections? This can be undone.`
     if (!await showConfirm(msg, { title: 'Tidy sections', confirmLabel: 'Tidy' })) return
 
     history.push(config)
     for (const { row } of targetRows) {
       row.chairs = row.chairs.filter(c => c.enabled || c.label.trim())
-      for (const c of row.chairs) c.group = c.label.trim() || c.id
+      // Only bowed strings get wedged; winds/brass/percussion keep the even-
+      // spread arc layout (they don't fan around the conductor).
+      for (const c of row.chairs) c.group = isStringSection(c.label) ? c.label.trim() : undefined
     }
     // Cellos and basses form one continuous low-string block in an orchestra
     // (basses sit behind/beside the cellos), so merge a detected bass section
