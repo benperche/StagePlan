@@ -66,9 +66,6 @@
           <label>Title
             <input type="text" id="title" value="Seating Chart" />
           </label>
-          <label>Title gap (px)
-            <input type="number" id="title-gap" min="0" max="200" step="10" value="0" title="Extra space between the title and the top of the chart" />
-          </label>
           <label>Layout
             <select id="layout">
               <option value="semicircle">Semicircle</option>
@@ -282,6 +279,9 @@
           </label>
           <label id="arc-range-label">Arc range (°)
             <input type="number" id="arc-range" min="60" max="180" step="5" value="180" />
+          </label>
+          <label>Title gap (px)
+            <input type="number" id="title-gap" min="0" max="200" step="10" value="0" title="Extra space between the title and the top of the chart" />
           </label>
           <div class="checkbox-row">
             <label><input type="checkbox" id="show-arc" /> Show arc guides (always on here)</label>

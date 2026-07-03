@@ -1409,7 +1409,7 @@ export class Renderer {
     const bottomY = h - 24 - creditReserve
 
     ctx.save()
-    ctx.fillStyle = '#888'
+    ctx.fillStyle = '#222'
     ctx.font = '11px sans-serif'
     ctx.textAlign = 'left'
     ctx.textBaseline = 'bottom'
