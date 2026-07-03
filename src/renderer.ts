@@ -9,7 +9,7 @@ import {
   drawSingleChair, drawSingleStand, drawStool, drawGenericRect,
 } from './instrument-glyphs'
 import type { GlyphResult } from './instrument-glyphs'
-import { computeGroupLayout, BASE_RADIUS, ROW_SPACING_DEFAULT, GAP_UNITS } from './section-layout'
+import { BASE_RADIUS, ROW_SPACING_DEFAULT } from './section-layout'
 
 const CHAIR_SIZE = 30
 const CHAIR_HALF = CHAIR_SIZE / 2
@@ -488,23 +488,17 @@ export class Renderer {
     // sits past the conductor's centre on the chair side).
     const straightLabelX = ox + (config.flipped ? 1 : -1) * (maxStraightWidth / 2 + CHAIR_HALF + 18)
 
-    // Section-wedge pre-pass: chairs carrying a `group` tag (set by the
-    // orchestra generator / "Tidy sections") are clustered into one
-    // contiguous angular wedge per section instead of being spread evenly
-    // across the row. The reserved width per group uses its GLOBAL max
-    // population across all arc rows (not each row's own count), so a
-    // section's wedge boundaries land at the same angle in every row it
-    // appears in — the fanned, depth-aligned look. Rows with no grouped
-    // chairs are completely unaffected (existing even-spread behaviour).
-    const groupLayout = computeGroupLayout(config.rows, isStraightRow)
-
+    // Section layout: chairs carrying a `group` tag (set by the orchestra
+    // generator / "Tidy sections") are clustered together per section within
+    // each row (see renderArcRow's "donut slice" placement). Rows with no
+    // grouped chairs are unaffected (existing even-spread behaviour).
     let seatNumber = 1
     config.rows.forEach((row, rowIndex) => {
       const r = radii[rowIndex]
       if (isStraightRow(rowIndex)) {
         seatNumber = this.renderStraightRow(ctx, row, rowIndex, oy + yDir * r, ox, oy, config, seatNumber, straightLabelX)
       } else {
-        seatNumber = this.renderArcRow(ctx, row, rowIndex, r, ox, oy, yDir, config, seatNumber, groupLayout)
+        seatNumber = this.renderArcRow(ctx, row, rowIndex, r, ox, oy, yDir, config, seatNumber)
       }
     })
 
@@ -521,7 +515,6 @@ export class Renderer {
     ox: number, oy: number, yDir: number,
     config: ChartConfig,
     seatNumber: number,
-    groupLayout: { order: string[]; maxCount: Map<string, number> } | null,
   ): number {
     const chairs = row.chairs
     const N = chairs.length
@@ -533,45 +526,45 @@ export class Renderer {
     const totalSpan = startAngle - endAngle
 
     // Each chair's natural (un-nudged) slot angle. Two modes:
-    //  - Grouped: every chair in the row carries a `group` (set by the
-    //    generator / Tidy sections) — chairs cluster into one contiguous
-    //    wedge per group. Each group's WIDTH uses its GLOBAL max population
-    //    (so the same section reserves the same width wherever it appears),
-    //    but only groups actually PRESENT in this row consume span — a
-    //    section that hasn't started yet (or already finished) doesn't leave
-    //    a dead gap where its absent neighbour would have been. A row with
-    //    fewer of a group than its global max is centred within its width.
+    //  - Grouped ("donut slice"): every chair carries a `group` (set by the
+    //    generator / Tidy sections). This row's OWN chairs are laid out at
+    //    fixed PHYSICAL spacing — desks tight, a wider gap between sections —
+    //    then the whole row is centred within its arc span. Because the
+    //    spacing is in pixels (not a shared angular grid), a desk always has
+    //    room at any radius, so front rows can sit close to the conductor
+    //    without collapsing; sections keep real width at the front and fan
+    //    outward as rows gain players.
     //  - Default: every chair gets its own evenly-spread slot across the
     //    row's full arc span (today's behaviour) — used whenever any chair
     //    in the row lacks a `group`.
-    const allGrouped = groupLayout !== null && N > 0 && chairs.every(c => !!c.group)
+    const allGrouped = N > 0 && chairs.every(c => !!c.group)
     const naturalAngles: number[] = new Array(N)
-    if (allGrouped && groupLayout) {
-      const { order, maxCount } = groupLayout
-      // Use GLOBAL positions for every group so each section always occupies
-      // the same angular lane across all rows. Absent groups leave a small
-      // natural gap rather than letting later sections drift into wrong positions.
-      let cursor = 0
-      const groupStart = new Map<string, number>()
-      order.forEach((g, gi) => {
-        groupStart.set(g, cursor)
-        cursor += Math.max(1, maxCount.get(g) ?? 1)
-        if (gi < order.length - 1) cursor += GAP_UNITS
-      })
-      const totalUnits = cursor
-      const anglePerUnit = totalUnits > 1 ? totalSpan / (totalUnits - 1) : 0
-      const rowCountByGroup = new Map<string, number>()
-      chairs.forEach(c => rowCountByGroup.set(c.group!, (rowCountByGroup.get(c.group!) ?? 0) + 1))
-      const usedPerGroup = new Map<string, number>()
+    if (allGrouped) {
+      // Physical spacing (px, centre-to-centre) between consecutive chairs.
+      const DESK_ADV = 56       // the two chairs of one desk
+      const BETWEEN_ADV = 74    // adjacent desk-units within a section
+      const SECTION_ADV = 40    // extra at a section boundary
+      const posPx: number[] = new Array(N)
+      posPx[0] = 0
+      for (let i = 1; i < N; i++) {
+        const prev = chairs[i - 1], cur = chairs[i]
+        const deskPair =
+          (prev.standAfter && prev.enabled && cur.enabled) ||
+          (!prev.enabled && !cur.enabled)
+        let adv: number
+        if (deskPair) adv = DESK_ADV
+        else if (cur.group === prev.group) adv = BETWEEN_ADV
+        else adv = BETWEEN_ADV + SECTION_ADV
+        posPx[i] = posPx[i - 1] + adv
+      }
+      const W = posPx[N - 1]
+      // Centre on the row's arc midpoint; compress only if the content would
+      // overflow the available span (a very dense front row), never expand.
+      const maxW = totalSpan * r
+      const scale = W > maxW && W > 0 ? maxW / W : 1
+      const center = (startAngle + endAngle) / 2
       for (let i = 0; i < N; i++) {
-        const g = chairs[i].group!
-        const used = usedPerGroup.get(g) ?? 0
-        usedPerGroup.set(g, used + 1)
-        const reserved = Math.max(1, maxCount.get(g) ?? 1)
-        const actual = rowCountByGroup.get(g) ?? 1
-        const pad = (reserved - actual) / 2   // centre this row's chairs within the reserved width
-        const unit = groupStart.get(g)! + pad + used
-        naturalAngles[i] = startAngle - unit * anglePerUnit
+        naturalAngles[i] = center + (W / 2 - posPx[i]) * scale / r
       }
     } else {
       const naturalStep = N > 1 ? totalSpan / (N - 1) : 0

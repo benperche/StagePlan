@@ -1,5 +1,4 @@
 import type { ChartConfig, Row, Chair, FixedInstrument, InstrumentType } from './types'
-import { applyGroupedRowRadii, ROW_SPACING_DEFAULT, MIN_SLOT_PX } from './section-layout'
 
 export interface PresetSection {
   name: string
@@ -666,12 +665,9 @@ export function buildOrchestraRows(comp: OrchestraComposition): OrchestraRowsRes
     pushSectionRow(comp.percussion, COLORS.percussion, 'solo')
   }
 
-  // ---- Front-row spacing fix-up for grouped (wedged) string rows ----
-  // Push cramped front rows outward so every chair-slot gets at least a desk's
-  // width of arc — otherwise the smallest-radius (front) rows crush desks
-  // together. Shared with the "Tidy sections" action. See applyGroupedRowRadii.
-  applyGroupedRowRadii(rows.slice(0, arcRowCount), ROW_SPACING_DEFAULT, MIN_SLOT_PX)
-
+  // Grouped rows keep their natural (compact) radii — the renderer spaces each
+  // row's chairs by fixed pixels ("donut slice" layout), so desks never crowd
+  // even at the front, and no radius fix-up is needed.
   return { rows, straightRows: rows.length - arcRowCount }
 }
 

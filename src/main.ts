@@ -7,7 +7,6 @@ import {
 } from './presets'
 import { saveToJson, loadFromJson, encodeToHash, decodeFromHash, exportToPng } from './serializer'
 import * as library from './library'
-import { applyGroupedRowRadii, ROW_SPACING_DEFAULT, MIN_SLOT_PX } from './section-layout'
 import { showAlert, showConfirm, showPrompt } from './dialog'
 import type { ChartConfig, InstrumentType, Chair } from './types'
 
@@ -2672,11 +2671,9 @@ function bindEvents() {
         }
       }
     }
-    // Push cramped front rows outward so every chair-slot gets at least a
-    // desk's width of arc — without this, tidying a dense chart crushes the
-    // front desks on top of each other. Runs over the arc rows in order.
-    const arcRows = config.rows.filter((_, i) => !isStraightRow(i))
-    applyGroupedRowRadii(arcRows, config.rowSpacing ?? ROW_SPACING_DEFAULT, MIN_SLOT_PX)
+    // No radius fix-up needed: the renderer spaces each grouped row's chairs
+    // by fixed pixels ("donut slice" layout), so desks stay clear at the
+    // rows' natural (compact) radii.
     renderLabelList()   // spacer chairs may have been removed → rebuild the paste list
     renderChart()
   })
