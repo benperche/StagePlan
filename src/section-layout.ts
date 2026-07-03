@@ -20,6 +20,12 @@ export const ROW_SPACING_DEFAULT = 70
 // decide when to push a cramped front row outward.
 export const MIN_SLOT_PX = 56
 
+// Angular gap between adjacent sections, in chair-slot units. Kept in one place
+// so the renderer's wedge placement and the radius fit-up stay consistent.
+// Below 1 so sections read as distinct blocks without a wide empty channel
+// between them (a full slot's gap left a big void at the apex).
+export const GAP_UNITS = 0.5
+
 export interface GroupLayout {
   order: string[]
   maxCount: Map<string, number>
@@ -68,7 +74,6 @@ export function applyGroupedRowRadii(
   const groupLayout = computeGroupLayout(arcRows)
   if (!groupLayout) return
   const { order, maxCount } = groupLayout
-  const GAP_UNITS = 1          // mirrors the renderer's inter-section gap
   const totalSpan = Math.PI    // assumes the default full semicircle
 
   // Total chair-slots the widest possible row occupies (global section maxima),

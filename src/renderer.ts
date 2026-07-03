@@ -9,7 +9,7 @@ import {
   drawSingleChair, drawSingleStand, drawStool, drawGenericRect,
 } from './instrument-glyphs'
 import type { GlyphResult } from './instrument-glyphs'
-import { computeGroupLayout, BASE_RADIUS, ROW_SPACING_DEFAULT } from './section-layout'
+import { computeGroupLayout, BASE_RADIUS, ROW_SPACING_DEFAULT, GAP_UNITS } from './section-layout'
 
 const CHAIR_SIZE = 30
 const CHAIR_HALF = CHAIR_SIZE / 2
@@ -548,7 +548,6 @@ export class Renderer {
     const naturalAngles: number[] = new Array(N)
     if (allGrouped && groupLayout) {
       const { order, maxCount } = groupLayout
-      const GAP_UNITS = 1   // angular gap between adjacent sections, in chair-slot units
       // Use GLOBAL positions for every group so each section always occupies
       // the same angular lane across all rows. Absent groups leave a small
       // natural gap rather than letting later sections drift into wrong positions.
