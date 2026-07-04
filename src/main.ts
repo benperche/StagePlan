@@ -27,7 +27,7 @@ let activeTool: ChairTool = 'toggle'
 // One-line explanation per chair tool, shown under the Edit Chairs buttons for
 // whichever tool is active (set in setChairTool).
 const TOOL_HINTS: Record<ChairTool, string> = {
-  toggle: "Click a chair to hide it — its place is kept so the row doesn't shift. Click again to bring it back.",
+  toggle: "Click a chair to remove it while holding its space — the other chairs stay put, leaving a clean gap (e.g. an empty desk or a short row). Click the gap again to bring it back.",
   stand: 'Pick a stand type below, then click a chair (or drag a box over several) to apply it.',
   stool: 'Pick a seat type below, then click a chair (or drag a box over several) to apply it.',
   color: 'Click a chair to paint it the swatch colour. Click the swatch to change the colour.',
