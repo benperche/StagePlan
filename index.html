@@ -169,7 +169,6 @@
             <button data-tool="stand" class="tool-btn">Stand</button>
             <button data-tool="stool" class="tool-btn">Stool</button>
             <button data-tool="label" class="tool-btn">Label</button>
-            <button data-tool="instrument" class="tool-btn">Instruments</button>
             <button data-tool="color" class="tool-btn">Colour</button>
           </div>
           <p class="hint" id="edit-chairs-hint">Click a chair to hide it — its place is kept so the row doesn't shift. Click again to bring it back.</p>
@@ -192,19 +191,21 @@
             <button data-stool-bulk="chairs">Chair</button>
             <button data-stool-bulk="standing">Standing</button>
           </div>
-          <!-- Label tool: free-type + bulk paste -->
+          <!-- Label tool (merged): stamp a named instrument from the picker, or
+               type / paste your own. Both just write chair.label. -->
+          <div id="instrument-panel" style="display:none">
+            <p class="hint" id="instrument-picker-status"></p>
+            <div id="instrument-picker-list"></div>
+            <button id="show-tally-btn" class="secondary">📊 Show instrument tally</button>
+          </div>
           <div id="label-panel" style="display:none">
+            <div class="or-sep">or type your own</div>
             <button id="clear-labels-btn" class="secondary">🧹 Clear all labels</button>
-            <details class="label-paste" open>
+            <details class="label-paste">
               <summary>📋 Paste labels (e.g. from a spreadsheet)</summary>
               <p class="hint">Copy a column of names and paste it straight in — one label per line · use % for a line-break within a label · Tab/Shift-Tab to move between rows.</p>
               <div id="label-list"></div>
             </details>
-          </div>
-          <!-- Instruments tool: the canonical instrument picker -->
-          <div id="instrument-panel" style="display:none">
-            <button id="show-tally-btn" class="secondary">📊 Show instrument tally</button>
-            <div id="instrument-picker-list"></div>
           </div>
         </section>
 
@@ -346,7 +347,7 @@
         <button id="zoom-reset-btn" title="Reset zoom (click to fit)">100%</button>
         <button id="zoom-in-btn" title="Zoom in">+</button>
       </div>
-      <!-- Drag-behaviour toggle: shown only for the Label / Instruments tools
+      <!-- Drag-behaviour toggle: shown only for the Label tool
            (and only on devices with a fine pointer — a marquee needs a mouse).
            When on, a marquee drag replaces labels that are already set;
            when off it fills only blank chairs. -->

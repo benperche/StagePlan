@@ -21,7 +21,7 @@ const EXPORT_W = 2100
 const EXPORT_H = Math.round(EXPORT_W / Math.SQRT2)   // 1485 — A4's √2 aspect ratio
 
 let activeColor = '#a8d8ea'
-type ChairTool = 'color' | 'toggle' | 'stand' | 'stool' | 'label' | 'instrument'
+type ChairTool = 'color' | 'toggle' | 'stand' | 'stool' | 'label'
 let activeTool: ChairTool = 'toggle'
 
 // One-line explanation per chair tool, shown under the Edit Chairs buttons for
@@ -31,8 +31,7 @@ const TOOL_HINTS: Record<ChairTool, string> = {
   stand: 'Pick a stand type below, then click a chair (or drag a box over several) to apply it.',
   stool: 'Pick a seat type below, then click a chair (or drag a box over several) to apply it.',
   color: 'Click a chair to paint it the swatch colour. Click the swatch to change the colour.',
-  label: 'Click a chair to type a name on it (Enter jumps to the next chair), or paste a list below.',
-  instrument: 'Pick an instrument below, then click chairs to stamp it on them.',
+  label: 'Pick an instrument below to stamp it — or click a chair with nothing selected to type your own (Enter jumps to the next chair). Paste a list below.',
 }
 
 // True while the Layout tab is active: the canvas shows geometry handles +
@@ -2075,8 +2074,7 @@ function openBulkLabelEditor(targets: { rowIndex: number; chairIndex: number }[]
 // a mouse, so it's shown over the canvas just for the Label / Instruments tools
 // in the Edit tab, and only where a marquee is possible (a fine pointer).
 function syncDragControls() {
-  const show = hasFinePointer && activeTab === 'edit'
-    && (activeTool === 'label' || activeTool === 'instrument')
+  const show = hasFinePointer && activeTab === 'edit' && activeTool === 'label'
   dragOverwriteBtn.style.display = show ? '' : 'none'
 }
 
@@ -2087,7 +2085,7 @@ function applyBulkTool(refs: { rowIndex: number; chairIndex: number }[], centre:
   const targets = refs.filter(r => config.rows[r.rowIndex]?.chairs[r.chairIndex]?.enabled)
   if (targets.length === 0) return
 
-  if (activeTool === 'label' || activeTool === 'instrument') {
+  if (activeTool === 'label') {
     if (selectedLabel === null) { openBulkLabelEditor(targets, chartPointToScreen(centre)); return }
     const toWrite = targets.filter(r => overwriteLabels || !config.rows[r.rowIndex].chairs[r.chairIndex].label)
     if (toWrite.length === 0) return
@@ -2140,16 +2138,16 @@ canvas.addEventListener('click', (e) => {
   const hit = standHit ?? renderer.hitTest(x, y)
   if (!hit) return
   // Label tool → type a free-text label right on the chair.
+  // Label tool: if an instrument is armed from the picker, clicking stamps it;
+  // otherwise clicking opens the free-type editor to type a name.
   if (activeTool === 'label') {
-    openChairLabelEditor(hit.rowIndex, hit.chairIndex)
-    return
-  }
-  // Instruments tool → stamp the picked instrument (no-op until one is picked).
-  if (activeTool === 'instrument') {
-    if (selectedLabel === null) return
-    history.push(config)
-    config.rows[hit.rowIndex].chairs[hit.chairIndex].label = selectedLabel
-    renderChart()
+    if (selectedLabel !== null) {
+      history.push(config)
+      config.rows[hit.rowIndex].chairs[hit.chairIndex].label = selectedLabel
+      renderChart()
+    } else {
+      openChairLabelEditor(hit.rowIndex, hit.chairIndex)
+    }
     return
   }
 
@@ -2424,14 +2422,16 @@ function bindEvents() {
   function clearLabelSelection() {
     selectedLabel = null
     instrumentPickerList.querySelectorAll('.active').forEach(el => el.classList.remove('active'))
-    instrumentPickerStatus.textContent = 'Pick an instrument or part below, then click any chair to stamp it.'
+    // Status only carries the dynamic "Selected: X" feedback; the general
+    // instruction lives in the tool hint above, so keep this empty when idle.
+    instrumentPickerStatus.textContent = ''
   }
 
-  // Single source of truth for "what does clicking a chair do". The four
-  // Edit Chairs tool buttons set toggle/stand/stool/color; picking an
-  // instrument in the Labels panel sets 'label' (no matching tool button, so
-  // they all de-highlight). Keeps the tool buttons, sub-panels and label
-  // selection in sync.
+  // Single source of truth for "what does clicking a chair do". Each Edit Chairs
+  // tool button sets one of toggle/stand/stool/label/color. The Label tool has
+  // two modes: with an instrument armed from the picker a click stamps it,
+  // otherwise a click opens the free-type editor. Keeps the tool buttons,
+  // sub-panels and label selection in sync.
   function setChairTool(tool: ChairTool) {
     activeTool = tool
     lastCycledChair = null   // a new chair always starts from the armed mode
@@ -2440,12 +2440,14 @@ function bindEvents() {
     colorBulkPanel.style.display = tool === 'color' ? '' : 'none'
     standBulkPanel.style.display = tool === 'stand' ? '' : 'none'
     stoolBulkPanel.style.display = tool === 'stool' ? '' : 'none'
+    // The Label tool shows both the instrument picker (stamp a named part) and
+    // the free-type / paste panel — two ways to put a label on a chair.
     labelPanel.style.display = tool === 'label' ? '' : 'none'
+    instrumentPanel.style.display = tool === 'label' ? '' : 'none'
     syncDragControls()
     // Rebuild the paste list on entry so it reflects any chairs hidden/shown
     // since it was last drawn (the toggle tool only re-renders the canvas).
     if (tool === 'label') renderLabelList()
-    instrumentPanel.style.display = tool === 'instrument' ? '' : 'none'
     editChairsHint.textContent = TOOL_HINTS[tool]
     // Always clear the instrument selection: switching to a non-label tool
     // leaves label mode, and switching INTO the Label tool means free-type
