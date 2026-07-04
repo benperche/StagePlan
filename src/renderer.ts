@@ -223,7 +223,10 @@ export class Renderer {
       // New (or removed) source — invalidate cache and start loading.
       this.backgroundImageSrc = src
       this.backgroundImage = null
-      if (src) {
+      // Only ever load an inline data: URL. In normal use the background is a
+      // FileReader data URL; refusing anything else stops a malicious loaded/
+      // shared chart from turning an external URL into a tracking pixel.
+      if (src && src.startsWith('data:')) {
         const img = new Image()
         img.onload = () => {
           if (this.backgroundImageSrc === src) {

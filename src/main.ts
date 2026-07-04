@@ -536,7 +536,7 @@ function updateLayoutRowList() {
 
   layoutRowList.innerHTML = config.rows.map((row, i) => {
     const g = geoms[i]
-    const label = config.showRowLabels ? `Row ${row.label}` : `Row ${i + 1}`
+    const label = config.showRowLabels ? `Row ${escapeHtml(row.label)}` : `Row ${i + 1}`
     const spread = g.isStraight
       ? `<label>Spacing<input type="number" class="lay-spread" data-row="${i}" min="20" max="200" step="1" value="${rowSpreadValue(g)}"></label>`
       : `<label>Arc°<input type="number" class="lay-spread" data-row="${i}" min="10" max="350" step="1" value="${rowSpreadValue(g)}"></label>`
@@ -947,12 +947,12 @@ function renderRowList() {
     div.dataset['rowIndex'] = String(i)
     div.innerHTML = `
       <div class="row-item-header">
-        <span class="row-item-name">Row ${row.label}</span>
+        <span class="row-item-name">Row ${escapeHtml(row.label)}</span>
         <label>Chairs
           <input type="number" min="1" max="30" value="${row.chairs.length}" data-row="${i}" class="chair-count">
         </label>
         <label>Label
-          <input type="text" maxlength="6" value="${row.label}" data-row="${i}" class="row-label-input">
+          <input type="text" maxlength="6" value="${escapeHtml(row.label)}" data-row="${i}" class="row-label-input">
         </label>
         <button data-row="${i}" class="remove-row-btn" title="Remove row">✕</button>
       </div>
@@ -1071,8 +1071,8 @@ function renderLabelList() {
     const labelsText = visible.map(c => c.label).join('\n')
     const taRows = Math.min(12, Math.max(2, visible.length))
     return `<div class="label-row">
-      <span class="label-row-name">Row ${row.label}</span>
-      <textarea class="chair-labels-ta" data-row="${i}" rows="${taRows}">${labelsText}</textarea>
+      <span class="label-row-name">Row ${escapeHtml(row.label)}</span>
+      <textarea class="chair-labels-ta" data-row="${i}" rows="${taRows}">${escapeHtml(labelsText)}</textarea>
     </div>`
   }).join('')
   labelList.scrollTop = scrollTop
