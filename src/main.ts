@@ -309,7 +309,7 @@ import {
   rowsContainer,
   colorPicker, colorPickerLabel, colorBulkPanel, resetColorsBtn,
   undoBtn, redoBtn, zoomInBtn, zoomOutBtn, zoomResetBtn,
-  resetPositionBtn, resetLayoutBtn, tidySectionsBtn, layoutRowList, addRowBtn, saveBtn,
+  resetPositionBtn, resetLayoutBtn, tidySectionsBtn, layoutRowList, addRowBtn, removeLastRowBtn, saveBtn,
   loadInput, exportPngBtn, printBtn, shareLinkBtn, shareUrlDisplay, presetSelect, applyPresetBtn, clearPresetBtn,
   libraryDrawer, libraryBackdrop, libraryOpenBtn, libraryCloseBtn,
   libraryCurrentTitle, librarySaveBtn, libraryNewChartBtn, libraryNewFolderBtn,
@@ -2377,6 +2377,17 @@ function bindEvents() {
   addRowBtn.addEventListener('click', () => {
     history.push(config)
     config.rows.push(makeRow(8, String(config.rows.length + 1)))
+    updateAllInputs()
+    renderChart()
+  })
+
+  removeLastRowBtn.addEventListener('click', () => {
+    if (config.rows.length === 0) return
+    history.push(config)
+    config.rows.pop()
+    // Keep straightRows in range if we removed a row it was counting.
+    config.straightRows = Math.min(config.straightRows, config.rows.length)
+    setHoverRow(null)         // any hover on the removed row is now stale
     updateAllInputs()
     renderChart()
   })

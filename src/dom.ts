@@ -84,6 +84,7 @@ export const coPiano = document.getElementById('co-piano') as HTMLInputElement
 // --- Row list + edit-chairs panel ---
 export const rowsContainer = document.getElementById('rows-container') as HTMLElement
 export const addRowBtn = document.getElementById('add-row-btn') as HTMLButtonElement
+export const removeLastRowBtn = document.getElementById('remove-last-row-btn') as HTMLButtonElement
 export const colorPicker = document.getElementById('color-picker') as HTMLInputElement
 export const colorPickerLabel = document.getElementById('color-picker-label') as HTMLElement
 export const colorBulkPanel = document.getElementById('color-bulk') as HTMLElement
