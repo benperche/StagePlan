@@ -381,7 +381,6 @@ export class Renderer {
   // separately (the inner transform in render), so it is NOT folded in here.
   private computeFitScale(canvasW: number, canvasH: number, config: ChartConfig): number {
     if (config.rows.length === 0 && (config.instruments?.length ?? 0) === 0) return 1
-    const chartScale = config.chartScale ?? 1
     const { halfW, back, front } = this.contentExtents(config)
     // Title sits above the back row (drawn at canvas scale), plus any extra
     // user-requested title gap so widening it never pushes the title off-canvas.
@@ -391,19 +390,16 @@ export class Renderer {
     const naturalWidth = 2 * halfW + 2 * SIDE_PAD
     const naturalHeight = (back + front) + TITLE_PAD + FAR_PAD
 
-    if (config.backgroundImage) {
-      // A background photo defines the scale context: the chart should sit at
-      // its natural size (× chartScale, via the inner transform) so it can be
-      // matched to the stage in the image — only shrink to avoid overflowing.
-      return Math.max(0.2, Math.min(1,
-        canvasW / (naturalWidth * chartScale),
-        canvasH / (naturalHeight * chartScale)))
-    }
-
-    // No background: auto-fill a target fraction of the canvas/page regardless
-    // of the layout's size (scale small charts up, big charts down so it still
-    // fits one page). chartScale then multiplies this as a manual override
-    // (100% = a clean auto-fill).
+    // Auto-fill a target fraction of the canvas/page regardless of the layout's
+    // size (scale small charts up, big charts down so it still fits one page).
+    // chartScale then multiplies this as a manual override (100% = a clean
+    // auto-fill). This is layout-first: the seating chart keeps a consistent
+    // size whether or not there's a background photo — adding a background no
+    // longer resizes the chart, it just sits behind it. To match the chart onto
+    // a particular stage in a photo, shrink it with Chart scale (Advanced) and
+    // drag the conductor. The background itself is fitted separately (see
+    // drawBackground's contain/cover/stretch), so odd photo aspect ratios never
+    // change the chart's size.
     const fill = Math.min(
       (canvasW * Renderer.FILL) / naturalWidth,
       (canvasH * Renderer.FILL) / naturalHeight)
