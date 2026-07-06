@@ -137,6 +137,12 @@ let layoutDrag: {
   moved: boolean
 } | null = null
 
+// True while handling a change from a Layout-tab per-row Dist/Arc input: the
+// ensuing renderChart should refresh those boxes IN PLACE (syncLayoutRowValues)
+// rather than rebuilding their DOM, which would yank the <input> the user is
+// still stepping (breaks Safari's number-stepper after one click).
+let layoutInputEditing = false
+
 // Active Layout-tab title drag. The title is drawn in raw canvas px (not the
 // chartScale frame), so this works in screen px and stores config.titleOffset.
 let titleDrag: {
@@ -502,7 +508,7 @@ function renderChart() {
   // only kind that changes those numbers, so it gets a lightweight in-place
   // value sync; other drags leave the boxes untouched; everything else rebuilds.
   if (layoutMode) {
-    if (layoutDrag?.moved || arcRangeDrag?.moved) syncLayoutRowValues()
+    if (layoutDrag?.moved || arcRangeDrag?.moved || layoutInputEditing) syncLayoutRowValues()
     else if (!quietDragMoved()) updateLayoutRowList()
   }
 }
@@ -1166,7 +1172,11 @@ function applyViewTransform() {
 // Zoom toward an anchor point given in client coords (defaults to the canvas
 // centre). Keeps the anchored chart point pinned under the cursor.
 function setZoom(target: number, anchorClientX?: number, anchorClientY?: number) {
-  const next = Math.max(VIEW_ZOOM_MIN, Math.min(VIEW_ZOOM_MAX, target))
+  // Snap anything within a hair of fit back to exactly 1 so the `viewZoom === 1`
+  // marquee check (and the fit == no-pan state) stays reliable despite float
+  // drift from repeated multiplicative zoom steps.
+  const raw = Math.max(VIEW_ZOOM_MIN, Math.min(VIEW_ZOOM_MAX, target))
+  const next = raw < VIEW_ZOOM_MIN + 1e-3 ? VIEW_ZOOM_MIN : raw
   if (next === viewZoom) return
   const rect = canvas.getBoundingClientRect()
   const ax = anchorClientX ?? rect.left + rect.width / 2
@@ -1560,6 +1570,10 @@ canvas.addEventListener('pointerdown', (e) => {
     config.instruments = config.instruments.filter(i => i.id !== selectedInstrumentId)
     setSelectedInstrument(null)
     renderChart()
+    // The instrument (and its ✕ handle) are gone now, so the trailing click
+    // would fall through to the chair beneath and fire the active chair tool
+    // on it. Swallow that click.
+    suppressClickAfterPan = true
     return
   }
   if (renderer.rotateHandleHitTest(x, y)) {
@@ -2603,8 +2617,12 @@ function bindEvents() {
   zoomOutBtn.addEventListener('click', () => setZoom(viewZoom / ZOOM_STEP))
   zoomResetBtn.addEventListener('click', resetZoom)
   // Wheel over the canvas zooms toward the cursor. Trackpad pinch arrives as
-  // wheel + ctrlKey, which we also treat as zoom.
+  // Zoom only on a pinch / ctrl+wheel gesture (macOS trackpad pinch arrives as
+  // wheel + ctrlKey). A plain scroll must pass through so the page can scroll —
+  // otherwise scrolling over the canvas silently zooms the view, which then
+  // turns an Edit-tab marquee drag into a pan and hides the controls below.
   canvas.addEventListener('wheel', (e) => {
+    if (!e.ctrlKey && !e.metaKey) return
     e.preventDefault()
     const factor = Math.exp(-e.deltaY * 0.0015)
     setZoom(viewZoom * factor, e.clientX, e.clientY)
@@ -2744,7 +2762,11 @@ function bindEvents() {
       row.arcStart = center + span / 2
       row.arcEnd = center - span / 2
     }
+    // Sync the boxes in place (don't rebuild) so the stepper the user just
+    // clicked survives — see layoutInputEditing.
+    layoutInputEditing = true
     renderChart()
+    layoutInputEditing = false
   })
   layoutRowList.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest('.lay-reset') as HTMLElement | null
