@@ -201,6 +201,13 @@ export class Renderer {
       ctx.translate(-ox, -oy)
     }
 
+    // Schematic stage shape sits behind the chart, inside the same transforms
+    // so it frames the ensemble at whatever scale. A photo background, if set,
+    // takes precedence over the template.
+    if (config.stageTemplate && !config.backgroundImage) {
+      this.drawStageTemplate(ctx, config, ox, oy)
+    }
+
     if (config.layout === 'semicircle') {
       this.renderSemicircle(ctx, config, w, h)
     } else {
@@ -215,6 +222,97 @@ export class Renderer {
     this.drawRowSummary(ctx, config, w, h)
     if (config.showCredit ?? true) this.drawCredit(ctx, h)
     ctx.restore()
+  }
+
+  // Light schematic stage shapes drawn behind the chart. Purely decorative —
+  // vector art (no photo), so they scale/print cleanly and carry no copyright.
+  // Sized from the chart's own extents so the stage always frames the ensemble.
+  private drawStageTemplate(ctx: CanvasRenderingContext2D, config: ChartConfig, ox: number, oy: number) {
+    const { halfW, back, front } = this.contentExtents(config)
+    const yDir = config.flipped ? 1 : -1
+    const PAD = 48
+    const STROKE = '#aab2bd'
+    const FILL = 'rgba(30, 41, 59, 0.035)'
+    const left = ox - halfW - PAD
+    const right = ox + halfW + PAD
+    const backY = oy + yDir * (back + PAD)      // behind the back row
+    const frontY = oy - yDir * (front + PAD)     // in front of the conductor
+
+    ctx.save()
+    ctx.lineJoin = 'round'
+    ctx.lineCap = 'round'
+    ctx.strokeStyle = STROKE
+    ctx.fillStyle = FILL
+
+    if (config.stageTemplate === 'flat-hall') {
+      // A plain rectangular room: stage floor + a heavier back wall line.
+      const top = Math.min(backY, frontY)
+      const bot = Math.max(backY, frontY)
+      ctx.lineWidth = 2
+      this.roundRect(ctx, left, top, right - left, bot - top, 16)
+      ctx.fill()
+      ctx.stroke()
+      ctx.lineWidth = 4
+      ctx.beginPath()
+      ctx.moveTo(left + 10, backY)
+      ctx.lineTo(right - 10, backY)
+      ctx.stroke()
+    } else if (config.stageTemplate === 'concert-shell') {
+      // A room whose back wall curves forward like an acoustic shell (straight
+      // sides + front), with a couple of inner ribs to suggest the shell depth.
+      const bulge = backY + yDir * 46   // shell apex, further back than the sides
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(left, frontY)
+      ctx.lineTo(left, backY)
+      ctx.quadraticCurveTo(ox, bulge, right, backY)
+      ctx.lineTo(right, frontY)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+      // Inner shell ribs, parallel to the back wall, stepped toward the front.
+      ctx.lineWidth = 1.5
+      for (let k = 1; k <= 2; k++) {
+        const d = -yDir * (k * 15)     // toward the front
+        ctx.beginPath()
+        ctx.moveTo(left + k * 14, backY + d)
+        ctx.quadraticCurveTo(ox, bulge + d, right - k * 14, backY + d)
+        ctx.stroke()
+      }
+    } else if (config.stageTemplate === 'apron') {
+      // Thrust/apron stage: straight sides and back, with a curved front lip
+      // bulging toward the audience.
+      const bulge = frontY + yDir * 34   // a touch further forward than frontY
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(left, backY)
+      ctx.lineTo(left, oy)
+      ctx.quadraticCurveTo(left, bulge, ox, bulge)
+      ctx.quadraticCurveTo(right, bulge, right, oy)
+      ctx.lineTo(right, backY)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+      ctx.lineWidth = 4
+      ctx.beginPath()
+      ctx.moveTo(left + 10, backY)
+      ctx.lineTo(right - 10, backY)
+      ctx.stroke()
+    }
+    ctx.restore()
+  }
+
+  // Add a rounded-rectangle sub-path (manual, for older browsers without
+  // CanvasRenderingContext2D.roundRect).
+  private roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+    const rr = Math.min(r, w / 2, h / 2)
+    ctx.beginPath()
+    ctx.moveTo(x + rr, y)
+    ctx.arcTo(x + w, y, x + w, y + h, rr)
+    ctx.arcTo(x + w, y + h, x, y + h, rr)
+    ctx.arcTo(x, y + h, x, y, rr)
+    ctx.arcTo(x, y, x + w, y, rr)
+    ctx.closePath()
   }
 
   private drawBackground(ctx: CanvasRenderingContext2D, config: ChartConfig, w: number, h: number) {

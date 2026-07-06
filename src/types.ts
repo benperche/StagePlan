@@ -150,6 +150,12 @@ export interface ChartConfig {
   // instruments, conductor) around the conductor position. Default 1.
   // Lets the user fit the chart onto a background image of any size.
   chartScale: number
+  // Optional built-in schematic stage shape drawn behind the chart (a light
+  // vector backdrop — no photo needed). Purely decorative: it does not affect
+  // row placement. A photo background, if present, takes precedence. Absent =
+  // none. (Structural risers, which DO drive row placement, are a separate
+  // future feature and deliberately not one of these.)
+  stageTemplate?: 'flat-hall' | 'concert-shell' | 'apron'
 }
 
 export interface HitTarget {

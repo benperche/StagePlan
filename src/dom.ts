@@ -129,6 +129,7 @@ export const inspectorRotateRight = document.getElementById('inspector-rotate-ri
 export const inspectorDelete = document.getElementById('inspector-delete') as HTMLButtonElement
 
 // --- Stage background panel ---
+export const stageTemplateSelect = document.getElementById('stage-template') as HTMLSelectElement
 export const bgInput = document.getElementById('bg-input') as HTMLInputElement
 export const bgClearBtn = document.getElementById('bg-clear-btn') as HTMLButtonElement
 export const bgStatus = document.getElementById('bg-status') as HTMLElement

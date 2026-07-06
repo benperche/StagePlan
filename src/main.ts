@@ -302,7 +302,7 @@ import {
   canvas, canvasArea, tabButtons, tabContents, tabNavButtons,
   titleInput, titleGapInput, layoutSelect, notesArea, showNumbersCheck, restartNumbersCheck,
   showRowLabelsCheck, conductorStandCheck, showConductorCheck, showArcCheck, showStageDirectionsCheck,
-  chartScaleInput, bgInput, bgClearBtn, bgStatus, bgFitSelect, showCreditCheck,
+  chartScaleInput, stageTemplateSelect, bgInput, bgClearBtn, bgStatus, bgFitSelect, showCreditCheck,
   flipCheck, straightRowsInput, straightRowsLabel, arcRangeInput, arcRangeLabel,
   rowSpacingInput, rowCountInput, aboutBtn, aboutModal, aboutCloseBtn,
   rowsContainer,
@@ -860,6 +860,9 @@ bindNumber(chartScaleInput,
 bindText(bgFitSelect,
   () => config.backgroundFit,
   v => { if (v === 'contain' || v === 'cover' || v === 'stretch') config.backgroundFit = v })
+bindText(stageTemplateSelect,
+  () => config.stageTemplate ?? '',
+  v => { config.stageTemplate = (v === 'flat-hall' || v === 'concert-shell' || v === 'apron') ? v : undefined })
 bindNumber(straightRowsInput,
   () => config.straightRows,
   v => {
@@ -2194,7 +2197,7 @@ function bindEvents() {
   for (const el of [titleInput, layoutSelect, notesArea, showNumbersCheck,
     restartNumbersCheck, showRowLabelsCheck, conductorStandCheck, showConductorCheck, flipCheck,
     straightRowsInput, rowCountInput, showArcCheck, arcRangeInput, rowSpacingInput,
-    showStageDirectionsCheck, chartScaleInput, bgFitSelect, showCreditCheck]) {
+    showStageDirectionsCheck, chartScaleInput, stageTemplateSelect, bgFitSelect, showCreditCheck]) {
     el.addEventListener('change', () => { readInputs(); updateAllInputs(); renderChart() })
   }
 
