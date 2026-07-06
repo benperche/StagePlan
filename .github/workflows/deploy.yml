@@ -10,9 +10,13 @@ permissions:
   pages: write
   id-token: write
 
+# One deployment at a time, but never cancel an in-progress one: cancelling a
+# deploy mid-flight can leave GitHub's Pages backend thinking a deployment is
+# still running, which makes the next run fail with "Deployment failed, try
+# again later". Let production deploys finish; newer pushes just queue behind.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
