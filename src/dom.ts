@@ -41,6 +41,7 @@ export const chartScaleInput = document.getElementById('chart-scale') as HTMLInp
 export const arcRangeInput = document.getElementById('arc-range') as HTMLInputElement
 export const arcRangeLabel = document.getElementById('arc-range-label') as HTMLElement
 export const rowSpacingInput = document.getElementById('row-spacing') as HTMLInputElement
+export const riserStepHeightInput = document.getElementById('riser-step-height') as HTMLInputElement
 export const showCreditCheck = document.getElementById('show-credit') as HTMLInputElement
 export const resetPositionBtn = document.getElementById('reset-position-btn') as HTMLButtonElement
 export const resetLayoutBtn = document.getElementById('reset-layout-btn') as HTMLButtonElement

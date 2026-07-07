@@ -318,7 +318,7 @@ import {
   showRowLabelsCheck, conductorStandCheck, showConductorCheck, showArcCheck, showStageDirectionsCheck,
   chartScaleInput, stageTemplateSelect, bgInput, bgClearBtn, bgStatus, bgFitSelect, showCreditCheck,
   flipCheck, straightRowsInput, straightRowsLabel, arcRangeInput, arcRangeLabel,
-  rowSpacingInput, rowCountInput, aboutBtn, aboutModal, aboutCloseBtn,
+  rowSpacingInput, riserStepHeightInput, rowCountInput, aboutBtn, aboutModal, aboutCloseBtn,
   rowsContainer,
   colorPicker, colorPickerLabel, colorBulkPanel, resetColorsBtn,
   undoBtn, redoBtn, zoomInBtn, zoomOutBtn, zoomResetBtn,
@@ -913,6 +913,9 @@ bindNumber(arcRangeInput,
 bindNumber(rowSpacingInput,
   () => config.rowSpacing,
   v => { config.rowSpacing = Math.max(50, Math.min(120, v || 70)) })
+bindNumber(riserStepHeightInput,
+  () => config.riserStepHeight ?? 20,
+  v => { config.riserStepHeight = Math.max(0, Math.min(100, Number.isFinite(v) ? v : 20)) })
 
 function readInputs() {
   history.push(config)
@@ -2329,7 +2332,8 @@ function bindEvents() {
   for (const el of [titleInput, layoutSelect, notesArea, showNumbersCheck,
     restartNumbersCheck, showRowLabelsCheck, conductorStandCheck, showConductorCheck, flipCheck,
     straightRowsInput, rowCountInput, showArcCheck, arcRangeInput, rowSpacingInput,
-    showStageDirectionsCheck, chartScaleInput, stageTemplateSelect, bgFitSelect, showCreditCheck]) {
+    riserStepHeightInput, showStageDirectionsCheck, chartScaleInput, stageTemplateSelect,
+    bgFitSelect, showCreditCheck]) {
     el.addEventListener('change', () => { readInputs(); updateAllInputs(); renderChart() })
   }
 
