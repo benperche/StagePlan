@@ -1331,11 +1331,22 @@ function applyLayoutDrag(e: MouseEvent) {
   renderChart()
 }
 
+// A screen-pixel move takes this many riser-pad px — under 1 so the handle
+// feels deliberate rather than twitchy (dragging the whole 0..RISER_PAD_MAX
+// range takes a comfortably long swipe, regardless of chart zoom level).
+const RISER_DRAG_DAMPING = 0.45
+
 // Applies the in-progress riser-platform resize drag: pad0 plus how much
 // further the pointer has moved from the baseline centre since the drag
 // started (a relative delta, like the 'distance' handle) — not the pointer's
 // absolute distance, which would jump the platform size on grab if the click
-// wasn't exactly on the baseline corner.
+// wasn't exactly on the baseline corner. The raw delta is in chart-space px,
+// which pointerCanvasCoords derived by DIVIDING the real screen movement by
+// viewScale — so on a zoomed-out (small viewScale) chart, the same physical
+// drag produces a much bigger chart-space delta than on a zoomed-in one.
+// Multiplying back by viewScale converts it to actual screen px moved before
+// applying the damping factor, so the handle feels the same regardless of
+// how big or zoomed-out the chart currently is.
 function applyRiserSizeDrag(e: MouseEvent) {
   if (!riserSizeDrag) return
   const cv = pointerCanvasCoords(e)
@@ -1347,8 +1358,9 @@ function applyRiserSizeDrag(e: MouseEvent) {
   }
   const { center, baseDist } = riserSizeDrag.baseline
   const dist = (px: number, py: number) => Math.hypot(px - center.x, py - center.y) - baseDist
-  const pad = Math.max(0, Math.min(RISER_PAD_MAX,
-    riserSizeDrag.pad0 + (dist(x, y) - dist(riserSizeDrag.start.x, riserSizeDrag.start.y))))
+  const rawDelta = dist(x, y) - dist(riserSizeDrag.start.x, riserSizeDrag.start.y)
+  const screenDelta = rawDelta * (renderer.viewScale || 1)
+  const pad = Math.max(0, Math.min(RISER_PAD_MAX, riserSizeDrag.pad0 + screenDelta * RISER_DRAG_DAMPING))
   const row = config.rows[riserSizeDrag.rowIndex]
   if (row) { if (pad < 0.5) delete row.riserPad; else row.riserPad = pad }
   renderChart()
