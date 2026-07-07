@@ -9,7 +9,7 @@ import {
   drawSingleChair, drawSingleStand, drawStool, drawGenericRect,
 } from './instrument-glyphs'
 import type { GlyphResult } from './instrument-glyphs'
-import { BASE_RADIUS, ROW_SPACING_DEFAULT } from './section-layout'
+import { BASE_RADIUS, ROW_SPACING_DEFAULT, RISER_STEP_DEPTH, RISER_STEP_HEIGHT_DEFAULT } from './section-layout'
 
 const CHAIR_SIZE = 30
 const CHAIR_HALF = CHAIR_SIZE / 2
@@ -208,6 +208,10 @@ export class Renderer {
       this.drawStageTemplate(ctx, config, ox, oy)
     }
 
+    // Riser platforms (structural) sit behind the rows, above any photo/template
+    // so they read as raised. Drawn before the rows so chairs sit on top.
+    this.drawRisers(ctx, config, ox, oy, rowSpacing)
+
     if (config.layout === 'semicircle') {
       this.renderSemicircle(ctx, config, w, h)
     } else {
@@ -221,6 +225,113 @@ export class Renderer {
 
     this.drawRowSummary(ctx, config, w, h)
     if (config.showCredit ?? true) this.drawCredit(ctx, h)
+    ctx.restore()
+  }
+
+  // Structural riser platforms. Consecutive rows sharing a tier (>=1) and shape
+  // become one raised platform band drawn behind those rows — a concentric
+  // annular band for arc rows, a rectangle for straight rows — nested and shaded
+  // by tier, with a heavier front-lip edge and a "Tier N (+Ncm)" label. Rows are
+  // already stepped back by computeRowRadii; this just draws the platforms.
+  private drawRisers(ctx: CanvasRenderingContext2D, config: ChartConfig, ox: number, oy: number, rowSpacing: number) {
+    const rows = config.rows
+    if (!rows.some(r => (r.riser ?? 0) > 0)) return
+    const radii = this.computeRowRadii(rows, rowSpacing)
+    const yDir = config.flipped ? 1 : -1
+    const xDir = -yDir
+    const numRows = rows.length
+    // A fully 'straight' chart draws every row straight; a 'semicircle' chart
+    // draws arc rows except the last `straightRows` (or per-row isStraight).
+    const isStraightRow = (i: number) =>
+      config.layout === 'straight' || (rows[i].isStraight ?? (i >= numRows - config.straightRows))
+
+    // Group consecutive rows sharing the same tier AND shape into one platform.
+    const runs: { s: number; e: number; level: number; straight: boolean }[] = []
+    for (let i = 0; i < numRows; i++) {
+      const level = rows[i].riser ?? 0
+      if (level < 1) continue
+      const straight = isStraightRow(i)
+      const last = runs[runs.length - 1]
+      if (last && last.e === i - 1 && last.level === level && last.straight === straight) last.e = i
+      else runs.push({ s: i, e: i, level, straight })
+    }
+    if (runs.length === 0) return
+
+    const stepCm = config.riserStepHeight ?? RISER_STEP_HEIGHT_DEFAULT
+    const STROKE = '#aab2bd'
+    const LIP = '#8a94a3'
+    ctx.save()
+    ctx.lineJoin = 'round'
+    ctx.lineCap = 'round'
+
+    // Trace an arc (chair angle convention) into the current path.
+    const arcTo = (r: number, from: number, to: number, steps = 48) => {
+      for (let k = 0; k <= steps; k++) {
+        const a = from + (to - from) * (k / steps)
+        ctx.lineTo(ox + xDir * r * Math.cos(a), oy + yDir * r * Math.sin(a))
+      }
+    }
+
+    // Back-to-front so nearer / lower platforms overlap correctly.
+    for (const run of [...runs].sort((a, b) => radii[b.e] - radii[a.e])) {
+      const L = run.level
+      const rFront = run.s === 0
+        ? Math.max(40, radii[0] - rowSpacing / 2)
+        : Math.max(radii[run.s - 1] + 6, radii[run.s] - rowSpacing / 2)
+      const rBack = radii[run.e] + CHAIR_HALF + 10
+      ctx.fillStyle = `rgba(30, 41, 59, ${Math.min(0.05 + 0.045 * L, 0.28)})`
+      let labelX = ox
+
+      if (run.straight) {
+        // Span the run's actual chair extent (respecting per-row offset + flip),
+        // so the band sits under the players rather than centred on the conductor.
+        let left = Infinity, right = -Infinity
+        for (let i = run.s; i <= run.e; i++) {
+          const N = rows[i].chairs.length
+          const sp = rows[i].straightSpacing ?? STRAIGHT_CHAIR_SPACING
+          const off = rows[i].straightOffset ?? 0
+          const half = (Math.max(0, N - 1) * sp) / 2
+          const c0 = ox + xDir * (-half + off), c1 = ox + xDir * (half + off)
+          left = Math.min(left, c0, c1); right = Math.max(right, c0, c1)
+        }
+        left -= CHAIR_HALF + 12; right += CHAIR_HALF + 12
+        labelX = (left + right) / 2
+        const yF = oy + yDir * rFront, yB = oy + yDir * rBack
+        const top = Math.min(yF, yB), bot = Math.max(yF, yB)
+        ctx.strokeStyle = STROKE; ctx.lineWidth = 2
+        this.roundRect(ctx, left, top, right - left, bot - top, 10)
+        ctx.fill(); ctx.stroke()
+        ctx.strokeStyle = LIP; ctx.lineWidth = 4
+        ctx.beginPath(); ctx.moveTo(left + 8, yF); ctx.lineTo(right - 8, yF); ctx.stroke()
+      } else {
+        let aStart = -Infinity, aEnd = Infinity
+        for (let i = run.s; i <= run.e; i++) {
+          const [s, e] = this.rowArcAngles(rows[i], config)
+          aStart = Math.max(aStart, s)
+          aEnd = Math.min(aEnd, e)
+        }
+        ctx.strokeStyle = STROKE; ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.moveTo(ox + xDir * rBack * Math.cos(aStart), oy + yDir * rBack * Math.sin(aStart))
+        arcTo(rBack, aStart, aEnd)
+        ctx.lineTo(ox + xDir * rFront * Math.cos(aEnd), oy + yDir * rFront * Math.sin(aEnd))
+        arcTo(rFront, aEnd, aStart)
+        ctx.closePath()
+        ctx.fill(); ctx.stroke()
+        ctx.strokeStyle = LIP; ctx.lineWidth = 4
+        ctx.beginPath()
+        ctx.moveTo(ox + xDir * rFront * Math.cos(aStart), oy + yDir * rFront * Math.sin(aStart))
+        arcTo(rFront, aStart, aEnd)
+        ctx.stroke()
+      }
+
+      // Tier label just behind the platform, on the chair side.
+      ctx.fillStyle = '#6b7280'
+      ctx.font = '11px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = yDir < 0 ? 'bottom' : 'top'
+      ctx.fillText(stepCm > 0 ? `Tier ${L}  +${L * stepCm}cm` : `Tier ${L}`, labelX, oy + yDir * (rBack + 6))
+    }
     ctx.restore()
   }
 
@@ -467,6 +578,9 @@ export class Renderer {
       if (dy < 0) back = Math.max(back, -dy + 46)
       else        front = Math.max(front, dy + 46)
     }
+    // Reserve a little extra behind the back row for the riser tier labels
+    // (drawn ~rBack + 14 behind it) so auto-fit doesn't clip them.
+    if (config.rows.some(r => (r.riser ?? 0) > 0)) back += 26
     return { halfW, back, front }
   }
 
@@ -520,15 +634,28 @@ export class Renderer {
     return radii.length ? radii[radii.length - 1] : BASE_RADIUS
   }
 
+  // Extra radial depth this row is pushed back for stepping UP onto a higher
+  // riser tier than the row in front. Only a level INCREASE costs depth, so
+  // consecutive same-tier rows share a step and a lower tier behind a higher one
+  // (unusual) costs nothing. Shared by computeRowRadii and renderLayoutHandles
+  // so the two `base` computations can never drift (which would make the Layout
+  // "Dist" control fight risers — see RowGeometry.base).
+  private riserExtra(rows: Row[], i: number): number {
+    if (i === 0) return 0
+    const rise = (rows[i].riser ?? 0) - (rows[i - 1].riser ?? 0)
+    return Math.max(0, rise) * RISER_STEP_DEPTH
+  }
+
   // Cumulative per-row radius from the conductor. Base step is the (already
-  // fitted) row spacing; each row adds its optional `gapBefore`. Because it's
-  // cumulative, bumping one row's gap pushes every row behind it out by the
-  // same amount — the "push rows behind" distance behaviour. With all gaps 0
-  // this is exactly BASE_RADIUS + i * rowSpacing.
+  // fitted) row spacing plus any riser step-back; each row adds its optional
+  // `gapBefore`. Because it's cumulative, bumping one row's gap (or riser tier)
+  // pushes every row behind it out by the same amount — the "push rows behind"
+  // distance behaviour. With all gaps/risers 0 this is exactly
+  // BASE_RADIUS + i * rowSpacing.
   private computeRowRadii(rows: Row[], rowSpacing: number): number[] {
     const radii: number[] = []
     for (let i = 0; i < rows.length; i++) {
-      const base = i === 0 ? BASE_RADIUS : radii[i - 1] + rowSpacing
+      const base = (i === 0 ? BASE_RADIUS : radii[i - 1] + rowSpacing) + this.riserExtra(rows, i)
       radii[i] = base + (rows[i].gapBefore ?? 0)
     }
     return radii
@@ -1000,7 +1127,9 @@ export class Renderer {
 
     config.rows.forEach((row, i) => {
       const r = radii[i]
-      const base = i === 0 ? BASE_RADIUS : radii[i - 1] + rowSpacing
+      // Must match computeRowRadii's `base` exactly (incl. riser step-back) so
+      // the Layout "Dist" edit — which does gapBefore = newR - g.base — stays correct.
+      const base = (i === 0 ? BASE_RADIUS : radii[i - 1] + rowSpacing) + this.riserExtra(config.rows, i)
       const prevR = i === 0 ? 0 : radii[i - 1]
       const N = row.chairs.length
       const straight = isStraightRow(i)

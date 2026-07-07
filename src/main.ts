@@ -531,7 +531,7 @@ function quietDragMoved(): boolean {
 
 function rowHasLayoutTweak(r: typeof config.rows[number]): boolean {
   return r.gapBefore !== undefined || r.arcStart !== undefined || r.arcEnd !== undefined ||
-    r.straightSpacing !== undefined || r.straightOffset !== undefined ||
+    r.straightSpacing !== undefined || r.straightOffset !== undefined || r.riser !== undefined ||
     r.chairs.some(c => c.offset !== undefined)
 }
 
@@ -554,10 +554,16 @@ function updateLayoutRowList() {
     const spread = g.isStraight
       ? `<label>Spacing<input type="number" class="lay-spread" data-row="${i}" min="20" max="200" step="1" value="${rowSpreadValue(g)}"></label>`
       : `<label>Arc°<input type="number" class="lay-spread" data-row="${i}" min="10" max="350" step="1" value="${rowSpreadValue(g)}"></label>`
+    const riserLevel = row.riser ?? 0
+    const riser = `<label title="Put this row on a riser tier">Tier<select class="lay-riser" data-row="${i}">`
+      + `<option value="0"${riserLevel === 0 ? ' selected' : ''}>—</option>`
+      + [1, 2, 3, 4, 5, 6].map(n => `<option value="${n}"${riserLevel === n ? ' selected' : ''}>${n}</option>`).join('')
+      + `</select></label>`
     return `<div class="layout-row-item" data-row-index="${i}">
       <span class="layout-row-name">${label}</span>
       <label>Dist<input type="number" class="lay-dist" data-row="${i}" min="40" max="2000" step="1" value="${Math.round(g.r)}"></label>
       ${spread}
+      ${riser}
       <button class="lay-reset" data-row="${i}" title="Reset this row"${rowHasLayoutTweak(row) ? '' : ' disabled'}>↺</button>
     </div>`
   }).join('')
@@ -579,9 +585,11 @@ function syncLayoutRowValues() {
     const item = items[i]
     const distInput = item.querySelector<HTMLInputElement>('.lay-dist')!
     const spreadInput = item.querySelector<HTMLInputElement>('.lay-spread')!
+    const riserSel = item.querySelector<HTMLSelectElement>('.lay-riser')!
     const resetBtn = item.querySelector<HTMLButtonElement>('.lay-reset')!
     if (document.activeElement !== distInput) distInput.value = String(Math.round(g.r))
     if (document.activeElement !== spreadInput) spreadInput.value = String(rowSpreadValue(g))
+    if (document.activeElement !== riserSel) riserSel.value = String(row.riser ?? 0)
     resetBtn.disabled = !rowHasLayoutTweak(row)
   })
 }
@@ -2852,14 +2860,17 @@ function bindEvents() {
 
   // Per-row inspector (Layout tab): edit distance / spread numerically.
   layoutRowList.addEventListener('change', (e) => {
-    const input = (e.target as HTMLElement).closest('input') as HTMLInputElement | null
+    const input = (e.target as HTMLElement).closest('input, select') as HTMLInputElement | HTMLSelectElement | null
     if (!input) return
     const i = Number(input.dataset['row'])
     const g = renderer.layoutRows[i]
     const row = config.rows[i]
     if (!g || !row) return
     history.push(config)
-    if (input.classList.contains('lay-dist')) {
+    if (input.classList.contains('lay-riser')) {
+      const lvl = Number(input.value) || 0
+      if (lvl <= 0) delete row.riser; else row.riser = lvl
+    } else if (input.classList.contains('lay-dist')) {
       const minR = i === 0 ? 60 : g.prevR + 44
       const newR = Math.max(minR, Number(input.value) || g.r)
       row.gapBefore = newR - g.base
@@ -2886,7 +2897,7 @@ function bindEvents() {
     if (!row) return
     history.push(config)
     delete row.gapBefore; delete row.arcStart; delete row.arcEnd
-    delete row.straightSpacing; delete row.straightOffset
+    delete row.straightSpacing; delete row.straightOffset; delete row.riser
     for (const chair of row.chairs) delete chair.offset
     renderChart()
   })
