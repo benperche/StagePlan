@@ -21,6 +21,8 @@ export const RISER_STEP_DEPTH = 34
 // Fallback physical height per riser step (cm) for the "+Ncm" tier labels when
 // ChartConfig.riserStepHeight is unset.
 export const RISER_STEP_HEIGHT_DEFAULT = 20
+// Clamp for Row.riserPad, the user-draggable "make this platform bigger" handle.
+export const RISER_PAD_MAX = 200
 
 // Minimum arc length a single chair-slot must occupy in a grouped wedge row —
 // set to the centre-to-centre spacing of the two chairs of a desk, so adjacent

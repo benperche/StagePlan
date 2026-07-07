@@ -631,7 +631,23 @@ button.secondary { border-style: dashed; }
   font-weight: 600;
   color: var(--text-muted);
   min-width: 46px;
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 2px 4px;
+  margin: -2px -4px;
 }
+.row-item-name:hover {
+  background: #f1f5f9;
+  color: var(--text);
+}
+
+/* The rename input replaces the clickable name span while editing (see the
+   'editing' class toggled by the row-item-name click handler in main.ts). */
+.row-item-header .row-label-input {
+  display: none;
+}
+.row-item-header.editing .row-item-name { display: none; }
+.row-item-header.editing .row-label-input { display: inline-block; }
 
 .row-item label {
   flex-direction: row;
@@ -642,6 +658,7 @@ button.secondary { border-style: dashed; }
 
 .row-item input[type="number"] { width: 52px; }
 .row-item input[type="text"]   { width: 44px; }
+.row-item select { font-size: 12px; padding: 2px; }
 
 .remove-row-btn {
   margin-left: auto;

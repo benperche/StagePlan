@@ -10,6 +10,7 @@ import * as library from './library'
 import { showAlert, showConfirm, showPrompt } from './dialog'
 import { showContextMenu, closeContextMenu, type MenuItem } from './context-menu'
 import type { ChartConfig, InstrumentType, Chair } from './types'
+import { RISER_PAD_MAX } from './section-layout'
 
 // --- App state ---
 let config: ChartConfig = makeDefaultConfig()
@@ -140,6 +141,18 @@ let layoutDrag: {
   rowIndex: number
   kind: 'distance' | 'span-start' | 'span-end'
   geom0: import('./types').RowGeometry
+  start: { x: number; y: number }
+  preDragConfig: ChartConfig
+  moved: boolean
+} | null = null
+
+// Active drag of a riser platform's resize handle (Layout tab). `baseline` is
+// the handle's pad=0 reference geometry (renderer.riserHandleBaseline),
+// captured at grab time — riserPad is then just (pointer distance from the
+// baseline centre) minus baseDist, clamped to [0, RISER_PAD_MAX].
+let riserSizeDrag: {
+  rowIndex: number
+  baseline: { center: { x: number; y: number }; baseDist: number }
   start: { x: number; y: number }
   preDragConfig: ChartConfig
   moved: boolean
@@ -532,7 +545,7 @@ function quietDragMoved(): boolean {
 function rowHasLayoutTweak(r: typeof config.rows[number]): boolean {
   return r.gapBefore !== undefined || r.arcStart !== undefined || r.arcEnd !== undefined ||
     r.straightSpacing !== undefined || r.straightOffset !== undefined || r.riser !== undefined ||
-    r.chairs.some(c => c.offset !== undefined)
+    r.riserPad !== undefined || r.chairs.some(c => c.offset !== undefined)
 }
 
 // The per-row spread value as shown in its box (arc degrees / straight spacing).
@@ -554,16 +567,10 @@ function updateLayoutRowList() {
     const spread = g.isStraight
       ? `<label>Spacing<input type="number" class="lay-spread" data-row="${i}" min="20" max="200" step="1" value="${rowSpreadValue(g)}"></label>`
       : `<label>Arc°<input type="number" class="lay-spread" data-row="${i}" min="10" max="350" step="1" value="${rowSpreadValue(g)}"></label>`
-    const riserLevel = row.riser ?? 0
-    const riser = `<label title="Put this row on a riser tier">Tier<select class="lay-riser" data-row="${i}">`
-      + `<option value="0"${riserLevel === 0 ? ' selected' : ''}>—</option>`
-      + [1, 2, 3, 4, 5, 6].map(n => `<option value="${n}"${riserLevel === n ? ' selected' : ''}>${n}</option>`).join('')
-      + `</select></label>`
     return `<div class="layout-row-item" data-row-index="${i}">
       <span class="layout-row-name">${label}</span>
       <label>Dist<input type="number" class="lay-dist" data-row="${i}" min="40" max="2000" step="1" value="${Math.round(g.r)}"></label>
       ${spread}
-      ${riser}
       <button class="lay-reset" data-row="${i}" title="Reset this row"${rowHasLayoutTweak(row) ? '' : ' disabled'}>↺</button>
     </div>`
   }).join('')
@@ -585,11 +592,9 @@ function syncLayoutRowValues() {
     const item = items[i]
     const distInput = item.querySelector<HTMLInputElement>('.lay-dist')!
     const spreadInput = item.querySelector<HTMLInputElement>('.lay-spread')!
-    const riserSel = item.querySelector<HTMLSelectElement>('.lay-riser')!
     const resetBtn = item.querySelector<HTMLButtonElement>('.lay-reset')!
     if (document.activeElement !== distInput) distInput.value = String(Math.round(g.r))
     if (document.activeElement !== spreadInput) spreadInput.value = String(rowSpreadValue(g))
-    if (document.activeElement !== riserSel) riserSel.value = String(row.riser ?? 0)
     resetBtn.disabled = !rowHasLayoutTweak(row)
   })
 }
@@ -970,17 +975,25 @@ function renderRowList() {
   config.rows.forEach((row, i) => {
     const isStraight = straightFlags[i]
 
+    const riserLevel = row.riser ?? 0
+    const riserOptions = [1, 2, 3, 4, 5, 6].map(n =>
+      `<option value="${n}"${riserLevel === n ? ' selected' : ''}>${n}</option>`).join('')
+
     const div = document.createElement('div')
     div.className = 'row-item'
     div.dataset['rowIndex'] = String(i)
     div.innerHTML = `
       <div class="row-item-header">
-        <span class="row-item-name">Row ${escapeHtml(row.label)}</span>
+        <span class="row-item-name" data-row="${i}" title="Click to rename">Row ${escapeHtml(row.label)}</span>
+        <input type="text" maxlength="6" value="${escapeHtml(row.label)}" data-row="${i}" class="row-label-input">
         <label>Chairs
           <input type="number" min="1" max="30" value="${row.chairs.length}" data-row="${i}" class="chair-count">
         </label>
-        <label>Label
-          <input type="text" maxlength="6" value="${escapeHtml(row.label)}" data-row="${i}" class="row-label-input">
+        <label title="Put this row on a riser platform">Riser
+          <select class="row-riser" data-row="${i}">
+            <option value="0"${riserLevel === 0 ? ' selected' : ''}>—</option>
+            ${riserOptions}
+          </select>
         </label>
         <button data-row="${i}" class="remove-row-btn" title="Remove row">✕</button>
       </div>
@@ -1040,7 +1053,7 @@ function setHoverChair(hit: { rowIndex: number; chairIndex: number } | null) {
 
 // True while any canvas drag is in progress, so hover detection stays quiet.
 function anyDragActive(): boolean {
-  return !!(titleDrag || arcRangeDrag || layoutDrag || deskDrag || chairDrag
+  return !!(titleDrag || arcRangeDrag || layoutDrag || riserSizeDrag || deskDrag || chairDrag
     || marqueeState || panState || conductorDragState || rotateState || dragState)
 }
 
@@ -1311,6 +1324,26 @@ function applyLayoutDrag(e: MouseEvent) {
     row.arcStart = start
     row.arcEnd = end
   }
+  renderChart()
+}
+
+// Applies the in-progress riser-platform resize drag: the new riserPad is
+// just how much further the pointer is from the handle's baseline centre
+// than the platform's un-padded corner was, floored at 0 (never shrinks the
+// platform below its automatic size).
+function applyRiserSizeDrag(e: MouseEvent) {
+  if (!riserSizeDrag) return
+  const cv = pointerCanvasCoords(e)
+  const { x, y } = canvasToChart(cv.x, cv.y)
+  if (!riserSizeDrag.moved) {
+    if (Math.hypot(x - riserSizeDrag.start.x, y - riserSizeDrag.start.y) < DRAG_THRESHOLD) return
+    history.push(riserSizeDrag.preDragConfig)
+    riserSizeDrag.moved = true
+  }
+  const { center, baseDist } = riserSizeDrag.baseline
+  const pad = Math.max(0, Math.min(RISER_PAD_MAX, Math.hypot(x - center.x, y - center.y) - baseDist))
+  const row = config.rows[riserSizeDrag.rowIndex]
+  if (row) { if (pad < 0.5) delete row.riserPad; else row.riserPad = pad }
   renderChart()
 }
 
@@ -1681,6 +1714,16 @@ canvas.addEventListener('pointerdown', (e) => {
         arcRangeDrag = { startX: x, startY: y, preDragConfig: cloneConfig(config), moved: false }
         return
       }
+      if (handle.kind === 'riser-size') {
+        const baseline = renderer.riserHandleBaseline(handle.rowIndex)
+        if (baseline) {
+          riserSizeDrag = {
+            rowIndex: handle.rowIndex, baseline,
+            start: { x, y }, preDragConfig: cloneConfig(config), moved: false,
+          }
+          return
+        }
+      }
       if (handle.kind === 'desk' && handle.chairIndex !== undefined) {
         const g = renderer.layoutRows[handle.rowIndex]
         const i = handle.chairIndex
@@ -1805,6 +1848,11 @@ window.addEventListener('pointermove', (e) => {
   // Layout-tab handle drag (distance / span).
   if (layoutDrag) {
     applyLayoutDrag(e)
+    return
+  }
+  // Layout-tab riser-platform resize drag.
+  if (riserSizeDrag) {
+    applyRiserSizeDrag(e)
     return
   }
   // Layout-tab desk-group drag (slides a two-chair desk along the row).
@@ -1960,12 +2008,13 @@ window.addEventListener('pointerup', (e) => {
     }
   }
   const finishedLayoutDrag = layoutDrag?.moved || chairDrag?.moved || deskDrag?.moved
-    || conductorDragState?.moved || arcRangeDrag?.moved
+    || conductorDragState?.moved || arcRangeDrag?.moved || riserSizeDrag?.moved
   dragState = null
   rotateState = null
   conductorDragState = null
   panState = null
   layoutDrag = null
+  riserSizeDrag = null
   chairDrag = null
   deskDrag = null
   titleDrag = null
@@ -2011,6 +2060,15 @@ canvas.addEventListener('dblclick', (e) => {
         history.push(config)
         if (a) delete a.offset
         if (b) delete b.offset
+        renderChart()
+      }
+      return
+    }
+    // Riser resize handle → snap the platform back to its automatic size.
+    if (handle.kind === 'riser-size') {
+      if (row.riserPad !== undefined) {
+        history.push(config)
+        delete row.riserPad
         renderChart()
       }
       return
@@ -2379,6 +2437,10 @@ function bindEvents() {
       // "straight rows from back" default in the Setup tab.
       config.rows[rowIdx].isStraight = target.checked
       renderRowList()
+    } else if (target.classList.contains('row-riser')) {
+      const lvl = Number(target.value) || 0
+      if (lvl <= 0) delete config.rows[rowIdx].riser
+      else config.rows[rowIdx].riser = lvl
     }
     renderLabelList()   // chair count / row label changed → rebuild the paste list
     renderChart()
@@ -2395,7 +2457,44 @@ function bindEvents() {
       config.straightRows = Math.min(config.straightRows, config.rows.length)
       updateAllInputs()
       renderChart()
+    } else if (target.classList.contains('row-item-name')) {
+      // Click the row name to rename it in place, freeing the header from an
+      // always-visible Label input (there's now a Riser control there too).
+      const header = target.closest('.row-item-header')
+      const input = header?.querySelector<HTMLInputElement>('.row-label-input')
+      if (header && input) {
+        header.classList.add('editing')
+        input.focus()
+        input.select()
+      }
     }
+  })
+
+  // Row list: commit/cancel the inline rename on Enter/Escape. Collapse the
+  // 'editing' class directly here rather than leaning on the blur/focusout
+  // that follows — blur doesn't reliably fire synchronously in every
+  // environment, and Enter with an unchanged value never fires 'change' (the
+  // handler that would otherwise trigger a rebuild), so this must not depend
+  // on either. The plain-blur-to-elsewhere case (no key) still collapses via
+  // the focusout listener below.
+  rowsContainer.addEventListener('keydown', (e) => {
+    const target = e.target as HTMLElement
+    if (!target.classList.contains('row-label-input')) return
+    if (e.key === 'Enter') {
+      target.blur()
+      target.closest('.row-item-header')?.classList.remove('editing')
+    } else if (e.key === 'Escape') {
+      const rowIdx = Number(target.dataset['row'])
+      const row = config.rows[rowIdx]
+      if (row) (target as HTMLInputElement).value = row.label
+      target.blur()
+      target.closest('.row-item-header')?.classList.remove('editing')
+    }
+  })
+  rowsContainer.addEventListener('focusout', (e) => {
+    const target = e.target as HTMLElement
+    if (!target.classList.contains('row-label-input')) return
+    target.closest('.row-item-header')?.classList.remove('editing')
   })
 
   // Paste-a-list label editor (Labels panel) — live update on every keystroke.
@@ -2871,10 +2970,7 @@ function bindEvents() {
     const row = config.rows[i]
     if (!g || !row) return
     history.push(config)
-    if (input.classList.contains('lay-riser')) {
-      const lvl = Number(input.value) || 0
-      if (lvl <= 0) delete row.riser; else row.riser = lvl
-    } else if (input.classList.contains('lay-dist')) {
+    if (input.classList.contains('lay-dist')) {
       const minR = i === 0 ? 60 : g.prevR + 44
       const newR = Math.max(minR, Number(input.value) || g.r)
       row.gapBefore = newR - g.base
@@ -2901,7 +2997,7 @@ function bindEvents() {
     if (!row) return
     history.push(config)
     delete row.gapBefore; delete row.arcStart; delete row.arcEnd
-    delete row.straightSpacing; delete row.straightOffset; delete row.riser
+    delete row.straightSpacing; delete row.straightOffset; delete row.riser; delete row.riserPad
     for (const chair of row.chairs) delete chair.offset
     renderChart()
   })

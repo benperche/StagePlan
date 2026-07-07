@@ -9,7 +9,7 @@ import {
   drawSingleChair, drawSingleStand, drawStool, drawGenericRect,
 } from './instrument-glyphs'
 import type { GlyphResult } from './instrument-glyphs'
-import { BASE_RADIUS, ROW_SPACING_DEFAULT, RISER_STEP_DEPTH, RISER_STEP_HEIGHT_DEFAULT } from './section-layout'
+import { BASE_RADIUS, ROW_SPACING_DEFAULT, RISER_STEP_DEPTH, RISER_STEP_HEIGHT_DEFAULT, RISER_PAD_MAX } from './section-layout'
 
 const CHAIR_SIZE = 30
 const CHAIR_HALF = CHAIR_SIZE / 2
@@ -131,6 +131,10 @@ export class Renderer {
   // while rendering the rows. Drives the Layout-tab "drag the whole desk" dot,
   // drawn behind each desk's midpoint in renderLayoutHandles.
   private deskHandles: Array<{ rowIndex: number; chairIndex: number; cx: number; cy: number }> = []
+  // Populated in drawRisers when in layout mode: baseline (pad=0) geometry
+  // for each riser-size handle, keyed by its owning row (a run's last row).
+  // main.ts reads this to convert a pointer position into a new riserPad.
+  private riserHandleBaselines: Map<number, { center: { x: number; y: number }; baseDist: number }> = new Map()
 
   render(canvas: HTMLCanvasElement, config: ChartConfig, opts: RenderOptions = {}): void {
     // The backing store is dpr-bigger than the CSS box (see resizeCanvas), so
@@ -160,6 +164,7 @@ export class Renderer {
     this.layoutHandles = []
     this.layoutRows = []
     this.deskHandles = []
+    this.riserHandleBaselines = new Map()
     this.conductorHit = null
     this.rotateHandleHit = null
     this.deleteHandleHit = null
@@ -260,6 +265,12 @@ export class Renderer {
     const stepCm = config.riserStepHeight ?? RISER_STEP_HEIGHT_DEFAULT
     const STROKE = '#aab2bd'
     const LIP = '#8a94a3'
+    // Platforms read clearly bigger than the rows sitting on them: generous
+    // margins beyond the chairs on every side, on top of which the per-run
+    // `riserPad` (Layout-tab resize handle) grows the band further.
+    const SIDE_PAD = CHAIR_HALF + 28
+    const BACK_PAD = CHAIR_HALF + 26
+    const FRONT_MARGIN = rowSpacing * 0.62
     ctx.save()
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'
@@ -275,26 +286,38 @@ export class Renderer {
     // Back-to-front so nearer / lower platforms overlap correctly.
     for (const run of [...runs].sort((a, b) => radii[b.e] - radii[a.e])) {
       const L = run.level
-      const rFront = run.s === 0
-        ? Math.max(40, radii[0] - rowSpacing / 2)
-        : Math.max(radii[run.s - 1] + 6, radii[run.s] - rowSpacing / 2)
-      const rBack = radii[run.e] + CHAIR_HALF + 10
+      const prevFloor = run.s === 0 ? 20 : radii[run.s - 1] + 6
+      const rFront0 = run.s === 0
+        ? Math.max(40, radii[0] - FRONT_MARGIN)
+        : Math.max(prevFloor, radii[run.s] - FRONT_MARGIN)
+      const rBack0 = radii[run.e] + BACK_PAD
+      // riserPad lives on the run's owning row (its last row); other rows in
+      // the run leave it unset, so max() picks it up regardless of which row
+      // is "last" after an edit.
+      const pad = Math.min(RISER_PAD_MAX, Math.max(0, ...rows.slice(run.s, run.e + 1).map(r => r.riserPad ?? 0)))
+      const rFront = Math.max(prevFloor, rFront0 - pad)
+      const rBack = rBack0 + pad
       ctx.fillStyle = `rgba(30, 41, 59, ${Math.min(0.05 + 0.045 * L, 0.28)})`
       let labelX = ox
+      let handleCenter: { x: number; y: number }
+      let handleBaseDist: number
+      let handleCorner: { x: number; y: number }   // baseline (pad=0) corner — the drag-math reference
+      let handleCurrent: { x: number; y: number }  // current (padded) corner — where the marker is drawn
 
       if (run.straight) {
         // Span the run's actual chair extent (respecting per-row offset + flip),
         // so the band sits under the players rather than centred on the conductor.
-        let left = Infinity, right = -Infinity
+        let left0 = Infinity, right0 = -Infinity
         for (let i = run.s; i <= run.e; i++) {
           const N = rows[i].chairs.length
           const sp = rows[i].straightSpacing ?? STRAIGHT_CHAIR_SPACING
           const off = rows[i].straightOffset ?? 0
           const half = (Math.max(0, N - 1) * sp) / 2
           const c0 = ox + xDir * (-half + off), c1 = ox + xDir * (half + off)
-          left = Math.min(left, c0, c1); right = Math.max(right, c0, c1)
+          left0 = Math.min(left0, c0, c1); right0 = Math.max(right0, c0, c1)
         }
-        left -= CHAIR_HALF + 12; right += CHAIR_HALF + 12
+        left0 -= SIDE_PAD; right0 += SIDE_PAD
+        const left = left0 - pad, right = right0 + pad
         labelX = (left + right) / 2
         const yF = oy + yDir * rFront, yB = oy + yDir * rBack
         const top = Math.min(yF, yB), bot = Math.max(yF, yB)
@@ -303,13 +326,23 @@ export class Renderer {
         ctx.fill(); ctx.stroke()
         ctx.strokeStyle = LIP; ctx.lineWidth = 4
         ctx.beginPath(); ctx.moveTo(left + 8, yF); ctx.lineTo(right - 8, yF); ctx.stroke()
+
+        const yB0 = oy + yDir * rBack0
+        handleCenter = { x: (left0 + right0) / 2, y: oy + yDir * ((rFront0 + rBack0) / 2) }
+        handleCorner = { x: right0, y: yB0 }
+        handleBaseDist = Math.hypot(handleCorner.x - handleCenter.x, handleCorner.y - handleCenter.y)
+        handleCurrent = { x: right, y: yB }
       } else {
-        let aStart = -Infinity, aEnd = Infinity
+        let aStart0 = -Infinity, aEnd0 = Infinity
         for (let i = run.s; i <= run.e; i++) {
           const [s, e] = this.rowArcAngles(rows[i], config)
-          aStart = Math.max(aStart, s)
-          aEnd = Math.min(aEnd, e)
+          aStart0 = Math.max(aStart0, s)
+          aEnd0 = Math.min(aEnd0, e)
         }
+        const da0 = 22 / rBack0
+        aStart0 += da0; aEnd0 -= da0
+        const da = pad / rBack0
+        const aStart = aStart0 + da, aEnd = aEnd0 - da
         ctx.strokeStyle = STROKE; ctx.lineWidth = 2
         ctx.beginPath()
         ctx.moveTo(ox + xDir * rBack * Math.cos(aStart), oy + yDir * rBack * Math.sin(aStart))
@@ -323,6 +356,11 @@ export class Renderer {
         ctx.moveTo(ox + xDir * rFront * Math.cos(aStart), oy + yDir * rFront * Math.sin(aStart))
         arcTo(rFront, aStart, aEnd)
         ctx.stroke()
+
+        handleCenter = { x: ox, y: oy }
+        handleCorner = { x: ox + xDir * rBack0 * Math.cos(aEnd0), y: oy + yDir * rBack0 * Math.sin(aEnd0) }
+        handleBaseDist = rBack0
+        handleCurrent = { x: ox + xDir * rBack * Math.cos(aEnd), y: oy + yDir * rBack * Math.sin(aEnd) }
       }
 
       // Tier label just behind the platform, on the chair side.
@@ -331,6 +369,12 @@ export class Renderer {
       ctx.textAlign = 'center'
       ctx.textBaseline = yDir < 0 ? 'bottom' : 'top'
       ctx.fillText(stepCm > 0 ? `Tier ${L}  +${L * stepCm}cm` : `Tier ${L}`, labelX, oy + yDir * (rBack + 6))
+
+      if (this.layoutMode) {
+        this.riserHandleBaselines.set(run.e, { center: handleCenter, baseDist: handleBaseDist })
+        this.drawRiserSizeHandle(ctx, handleCurrent.x, handleCurrent.y)
+        this.layoutHandles.push({ rowIndex: run.e, kind: 'riser-size', cx: handleCurrent.x, cy: handleCurrent.y, radius: 11 })
+      }
     }
     ctx.restore()
   }
@@ -578,9 +622,14 @@ export class Renderer {
       if (dy < 0) back = Math.max(back, -dy + 46)
       else        front = Math.max(front, dy + 46)
     }
-    // Reserve a little extra behind the back row for the riser tier labels
-    // (drawn ~rBack + 14 behind it) so auto-fit doesn't clip them.
-    if (config.rows.some(r => (r.riser ?? 0) > 0)) back += 26
+    // Reserve extra behind the back row (platform depth + tier label) and
+    // sideways (platform width) so auto-fit doesn't clip a riser platform —
+    // including however far the user has dragged a platform's resize handle.
+    if (config.rows.some(r => (r.riser ?? 0) > 0)) {
+      const maxPad = Math.max(0, ...config.rows.map(r => r.riserPad ?? 0))
+      back += 40 + maxPad
+      halfW += 40 + maxPad
+    }
     return { halfW, back, front }
   }
 
@@ -1242,6 +1291,21 @@ export class Renderer {
     ctx.restore()
   }
 
+  // Riser-platform resize handle: a small slate square (distinct from the blue
+  // row dots and the teal desk dots) at the platform's outer corner. Dragging
+  // it away from the platform's centre grows Row.riserPad; toward it shrinks.
+  private drawRiserSizeHandle(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
+    const s = 6
+    ctx.save()
+    ctx.fillStyle = '#475569'
+    ctx.strokeStyle = '#fff'
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.rect(cx - s, cy - s, s * 2, s * 2)
+    ctx.fill(); ctx.stroke()
+    ctx.restore()
+  }
+
   private drawLayoutDot(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
     ctx.save()
     ctx.beginPath(); ctx.arc(cx, cy, 5.5, 0, Math.PI * 2)
@@ -1261,6 +1325,13 @@ export class Renderer {
       if (Math.hypot(x - h.cx, y - h.cy) <= r) return h
     }
     return null
+  }
+
+  // Baseline (pad=0) geometry for a 'riser-size' handle, keyed by its owning
+  // row. main.ts uses this to turn the current pointer position into a new
+  // Row.riserPad without the renderer needing to know about pointer events.
+  riserHandleBaseline(rowIndex: number): { center: { x: number; y: number }; baseDist: number } | undefined {
+    return this.riserHandleBaselines.get(rowIndex)
   }
 
   // The drawn centre of a specific chair (for clamping a per-chair nudge

@@ -53,6 +53,11 @@ export interface Row {
   // row following its shape — a concentric curved band for an arc row, a
   // rectangle for a straight row.
   riser?: number
+  // Extra px enlarging this row's riser platform beyond its automatic size
+  // (front/back depth and sideways/angular width), draggable via the Layout-tab
+  // resize handle. Only meaningful on the last row of a same-tier run — see
+  // Renderer.drawRisers, which takes the max across a run's rows. Unset = 0.
+  riserPad?: number
 }
 
 export interface ConductorConfig {
@@ -209,7 +214,7 @@ export interface RotateHandleHit {
 export interface LayoutHandleHit {
   // -1 for the chart-wide default arc-range handles (kind 'arc-range-*').
   rowIndex: number
-  kind: 'distance' | 'span-start' | 'span-end' | 'arc-range-start' | 'arc-range-end' | 'desk'
+  kind: 'distance' | 'span-start' | 'span-end' | 'arc-range-start' | 'arc-range-end' | 'desk' | 'riser-size'
   cx: number
   cy: number
   radius: number
