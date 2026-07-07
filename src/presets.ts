@@ -81,11 +81,15 @@ export const PRESETS: Preset[] = [
     // Every player gets their own music stand.
     // Rows are shifted right (straightOffset) and spread a little so the
     // rhythm section (piano / drums / amps) sits clear on the left.
+    // The lead players (Alto 1 / Tbn 1 / Tpt 1) are lined up in one vertical
+    // column — "playing over the head", how most big-band directors want it.
+    // Alto 1 is the centre of the 5 saxes, so the sax row's offset is set so
+    // that centre lands on the brass leads' column (Tbn 1 / Tpt 1, index 1 of 4).
     customRows: [
       {
         label: 'A',
         straightSpacing: 58.75,
-        straightOffset: 100.5,
+        straightOffset: 64.5,
         chairs: [
           { label: 'Tnr 1',  color: COLORS.woodwind, hasStand: true },
           { label: 'Alto 2', color: COLORS.woodwind, hasStand: true },
