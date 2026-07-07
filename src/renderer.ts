@@ -236,8 +236,10 @@ export class Renderer {
   // Structural riser platforms. Consecutive rows sharing a tier (>=1) and shape
   // become one raised platform band drawn behind those rows — a concentric
   // annular band for arc rows, a rectangle for straight rows — nested and shaded
-  // by tier, with a heavier front-lip edge and a "Tier N (+Ncm)" label. Rows are
-  // already stepped back by computeRowRadii; this just draws the platforms.
+  // by tier, with a heavier front-lip edge. (The "Tier N +Ncm" text lives in
+  // the bottom-corner row summary instead of on the diagram — see
+  // drawRowSummary — since it tended to land under chairs on a busy chart.)
+  // Rows are already stepped back by computeRowRadii; this just draws the platforms.
   private drawRisers(ctx: CanvasRenderingContext2D, config: ChartConfig, ox: number, oy: number, rowSpacing: number) {
     const rows = config.rows
     if (!rows.some(r => (r.riser ?? 0) > 0)) return
@@ -262,7 +264,6 @@ export class Renderer {
     }
     if (runs.length === 0) return
 
-    const stepCm = config.riserStepHeight ?? RISER_STEP_HEIGHT_DEFAULT
     const STROKE = '#aab2bd'
     const LIP = '#8a94a3'
     // Platforms read clearly bigger than the rows sitting on them: generous
@@ -298,7 +299,6 @@ export class Renderer {
       const rFront = Math.max(prevFloor, rFront0 - pad)
       const rBack = rBack0 + pad
       ctx.fillStyle = `rgba(30, 41, 59, ${Math.min(0.05 + 0.045 * L, 0.28)})`
-      let labelX = ox
       let handleCenter: { x: number; y: number }
       let handleBaseDist: number
       let handleCorner: { x: number; y: number }   // baseline (pad=0) corner — the drag-math reference
@@ -318,7 +318,6 @@ export class Renderer {
         }
         left0 -= SIDE_PAD; right0 += SIDE_PAD
         const left = left0 - pad, right = right0 + pad
-        labelX = (left + right) / 2
         const yF = oy + yDir * rFront, yB = oy + yDir * rBack
         const top = Math.min(yF, yB), bot = Math.max(yF, yB)
         ctx.strokeStyle = STROKE; ctx.lineWidth = 2
@@ -362,13 +361,6 @@ export class Renderer {
         handleBaseDist = rBack0
         handleCurrent = { x: ox + xDir * rBack * Math.cos(aEnd), y: oy + yDir * rBack * Math.sin(aEnd) }
       }
-
-      // Tier label just behind the platform, on the chair side.
-      ctx.fillStyle = '#6b7280'
-      ctx.font = '11px sans-serif'
-      ctx.textAlign = 'center'
-      ctx.textBaseline = yDir < 0 ? 'bottom' : 'top'
-      ctx.fillText(stepCm > 0 ? `Tier ${L}  +${L * stepCm}cm` : `Tier ${L}`, labelX, oy + yDir * (rBack + 6))
 
       if (this.layoutMode) {
         this.riserHandleBaselines.set(run.e, { center: handleCenter, baseDist: handleBaseDist })
@@ -622,9 +614,9 @@ export class Renderer {
       if (dy < 0) back = Math.max(back, -dy + 46)
       else        front = Math.max(front, dy + 46)
     }
-    // Reserve extra behind the back row (platform depth + tier label) and
-    // sideways (platform width) so auto-fit doesn't clip a riser platform —
-    // including however far the user has dragged a platform's resize handle.
+    // Reserve extra behind the back row and sideways so auto-fit doesn't clip
+    // a riser platform's bigger-than-the-chairs margins — including however
+    // far the user has dragged a platform's resize handle.
     if (config.rows.some(r => (r.riser ?? 0) > 0)) {
       const maxPad = Math.max(0, ...config.rows.map(r => r.riserPad ?? 0))
       back += 40 + maxPad
@@ -1785,6 +1777,15 @@ export class Renderer {
       lines.push(`Total: ${parts.join(' · ')}`)
     }
     if (totalStands > 0) lines.push('× = music stand')
+    // Riser tier heights used to be drawn on the diagram itself, next to each
+    // platform — but on a busy chart that text often landed under a chair.
+    // One summary line down here reads cleanly regardless of layout.
+    const tiers = Array.from(new Set(config.rows.map(r => r.riser ?? 0).filter(l => l > 0))).sort((a, b) => a - b)
+    if (tiers.length > 0) {
+      const stepCm = config.riserStepHeight ?? RISER_STEP_HEIGHT_DEFAULT
+      const desc = tiers.map(l => stepCm > 0 ? `Tier ${l} +${l * stepCm}cm` : `Tier ${l}`).join(', ')
+      lines.push(`Risers: ${desc}`)
+    }
 
     const lineHeight = 15
     const x = w - 12

@@ -613,6 +613,15 @@ button.secondary { border-style: dashed; }
   margin: 0;
   cursor: pointer;
 }
+.row-riser-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text);
+  margin-left: auto;
+}
+.row-riser-toggle select { font-size: 12px; padding: 2px; }
 
 /* Warning banner at the top of the rows list */
 .row-warning {

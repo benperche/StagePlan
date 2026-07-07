@@ -148,11 +148,15 @@ let layoutDrag: {
 
 // Active drag of a riser platform's resize handle (Layout tab). `baseline` is
 // the handle's pad=0 reference geometry (renderer.riserHandleBaseline),
-// captured at grab time — riserPad is then just (pointer distance from the
-// baseline centre) minus baseDist, clamped to [0, RISER_PAD_MAX].
+// captured at grab time. pad0 is the row's riserPad when the drag started;
+// the new pad is pad0 plus however much further the pointer is from the
+// baseline centre than it was at grab time — a *relative* delta (matching
+// the 'distance' handle) rather than an absolute distance, so an imprecise
+// initial click doesn't jump the platform size before any drag happens.
 let riserSizeDrag: {
   rowIndex: number
   baseline: { center: { x: number; y: number }; baseDist: number }
+  pad0: number
   start: { x: number; y: number }
   preDragConfig: ChartConfig
   moved: boolean
@@ -989,16 +993,16 @@ function renderRowList() {
         <label>Chairs
           <input type="number" min="1" max="30" value="${row.chairs.length}" data-row="${i}" class="chair-count">
         </label>
-        <label title="Put this row on a riser platform">Riser
+        <button data-row="${i}" class="remove-row-btn" title="Remove row">✕</button>
+      </div>
+      <div class="row-item-meta">
+        <label class="row-straight-toggle"><input type="checkbox" data-row="${i}" class="row-straight-check" ${isStraight ? 'checked' : ''}> Straight row</label>
+        <label class="row-riser-toggle" title="Put this row on a riser platform">Riser
           <select class="row-riser" data-row="${i}">
             <option value="0"${riserLevel === 0 ? ' selected' : ''}>—</option>
             ${riserOptions}
           </select>
         </label>
-        <button data-row="${i}" class="remove-row-btn" title="Remove row">✕</button>
-      </div>
-      <div class="row-item-meta">
-        <label class="row-straight-toggle"><input type="checkbox" data-row="${i}" class="row-straight-check" ${isStraight ? 'checked' : ''}> Straight row</label>
       </div>
     `
     rowsContainer.appendChild(div)
@@ -1327,10 +1331,11 @@ function applyLayoutDrag(e: MouseEvent) {
   renderChart()
 }
 
-// Applies the in-progress riser-platform resize drag: the new riserPad is
-// just how much further the pointer is from the handle's baseline centre
-// than the platform's un-padded corner was, floored at 0 (never shrinks the
-// platform below its automatic size).
+// Applies the in-progress riser-platform resize drag: pad0 plus how much
+// further the pointer has moved from the baseline centre since the drag
+// started (a relative delta, like the 'distance' handle) — not the pointer's
+// absolute distance, which would jump the platform size on grab if the click
+// wasn't exactly on the baseline corner.
 function applyRiserSizeDrag(e: MouseEvent) {
   if (!riserSizeDrag) return
   const cv = pointerCanvasCoords(e)
@@ -1341,7 +1346,9 @@ function applyRiserSizeDrag(e: MouseEvent) {
     riserSizeDrag.moved = true
   }
   const { center, baseDist } = riserSizeDrag.baseline
-  const pad = Math.max(0, Math.min(RISER_PAD_MAX, Math.hypot(x - center.x, y - center.y) - baseDist))
+  const dist = (px: number, py: number) => Math.hypot(px - center.x, py - center.y) - baseDist
+  const pad = Math.max(0, Math.min(RISER_PAD_MAX,
+    riserSizeDrag.pad0 + (dist(x, y) - dist(riserSizeDrag.start.x, riserSizeDrag.start.y))))
   const row = config.rows[riserSizeDrag.rowIndex]
   if (row) { if (pad < 0.5) delete row.riserPad; else row.riserPad = pad }
   renderChart()
@@ -1719,6 +1726,7 @@ canvas.addEventListener('pointerdown', (e) => {
         if (baseline) {
           riserSizeDrag = {
             rowIndex: handle.rowIndex, baseline,
+            pad0: config.rows[handle.rowIndex]?.riserPad ?? 0,
             start: { x, y }, preDragConfig: cloneConfig(config), moved: false,
           }
           return
