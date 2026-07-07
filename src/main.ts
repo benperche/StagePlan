@@ -2120,6 +2120,7 @@ function openChairContextMenu(clientX: number, clientY: number, x: number, y: nu
     const rowChairs = config.rows[hit.rowIndex].chairs
     const chair = rowChairs[hit.chairIndex]
     const seat = chairStoolMode(chair)
+    const stand = chairStandMode(rowChairs, hit.chairIndex)
     const items: MenuItem[] = [
       { kind: 'action', label: chair.enabled ? 'Hide chair' : 'Show chair', onClick: () => mut(() => { chair.enabled = !chair.enabled }) },
       { kind: 'action', label: 'Edit label…', onClick: () => openChairLabelEditor(hit.rowIndex, hit.chairIndex) },
@@ -2127,6 +2128,13 @@ function openChairContextMenu(clientX: number, clientY: number, x: number, y: nu
         { label: 'Chair',    active: seat === 'chair',    onClick: () => mut(() => applyStoolToChair(chair, 'chair')) },
         { label: 'Stool',    active: seat === 'stool',    onClick: () => mut(() => applyStoolToChair(chair, 'stool')) },
         { label: 'Standing', active: seat === 'standing', onClick: () => mut(() => applyStoolToChair(chair, 'standing')) },
+      ] },
+      // Lets you add a stand to a chair that has none — there's no × to right-
+      // click in that case. Desk = shared between this chair and the next.
+      { kind: 'segment', label: 'Stand', options: [
+        { label: 'None', active: stand === 'remove', onClick: () => mut(() => applyStandToChair(rowChairs, hit.chairIndex, 'remove')) },
+        { label: 'Solo', active: stand === 'solo',   onClick: () => mut(() => applyStandToChair(rowChairs, hit.chairIndex, 'solo')) },
+        { label: 'Desk', active: stand === 'desk',   onClick: () => mut(() => applyStandToChair(rowChairs, hit.chairIndex, 'desk')) },
       ] },
       { kind: 'swatches', label: 'Colour', colors: CHAIR_SWATCHES, current: chair.color,
         onPick: (c) => mut(() => { chair.color = c }),
