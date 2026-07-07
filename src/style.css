@@ -301,6 +301,81 @@ details.panel[open] > .panel-summary::before { transform: rotate(90deg); }
 }
 .linklike:hover { color: var(--accent-hover); }
 
+/* Right-click / long-press context menu on a chair or stand (context-menu.ts) */
+.context-menu {
+  position: fixed;
+  z-index: 300;
+  min-width: 180px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.22);
+  padding: 5px;
+  font-size: 13px;
+  user-select: none;
+  animation: dialogPop 0.1s ease-out;
+}
+.context-menu-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  padding: 4px 8px 5px;
+}
+.context-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  padding: 7px 8px;
+  font: inherit;
+  color: var(--text);
+  cursor: pointer;
+}
+.context-menu-item:hover { background: #eef2f7; }
+.context-menu-item.danger { color: #c00; }
+.context-menu-item.danger:hover { background: #fff0f0; }
+.context-menu-sep { height: 1px; background: var(--border); margin: 4px 2px; }
+.context-menu-seg-row { padding: 5px 8px 6px; }
+.context-menu-seg-label,
+.context-menu-swatches ~ .context-menu-seg-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.context-menu-seg { display: flex; gap: 4px; }
+.context-menu-seg button {
+  flex: 1;
+  padding: 5px 4px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+}
+.context-menu-seg button.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.context-menu-swatches { display: flex; gap: 5px; flex-wrap: wrap; }
+.context-menu-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1;
+}
+.context-menu-swatch.active { outline: 2px solid var(--accent); outline-offset: 1px; }
+.context-menu-swatch-custom { background: #fff; }
+
 /* Form controls */
 label {
   display: flex;

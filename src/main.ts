@@ -8,6 +8,7 @@ import {
 import { saveToJson, loadFromJson, encodeToHash, decodeFromHash, exportToPng } from './serializer'
 import * as library from './library'
 import { showAlert, showConfirm, showPrompt } from './dialog'
+import { showContextMenu, closeContextMenu, type MenuItem } from './context-menu'
 import type { ChartConfig, InstrumentType, Chair } from './types'
 
 // --- App state ---
@@ -60,6 +61,13 @@ const VIEW_ZOOM_MIN = 1      // 1 = fit (the canvas already fills the area)
 const VIEW_ZOOM_MAX = 6
 let panState: { startX: number; startY: number; panX0: number; panY0: number; moved: boolean } | null = null
 let suppressClickAfterPan = false
+// Touch long-press → the chair/stand context menu (touch has no right-click).
+let longPressTimer: number | null = null
+let longPressStart: { x: number; y: number } | null = null
+function cancelLongPress() {
+  if (longPressTimer !== null) { clearTimeout(longPressTimer); longPressTimer = null }
+  longPressStart = null
+}
 
 // Edit-tab marquee bulk-select. Active while dragging a box over chairs at 100%
 // view-zoom; on release the active tool is applied to every chair inside it.
@@ -1553,6 +1561,22 @@ canvas.addEventListener('pointerdown', (e) => {
   const cv = pointerCanvasCoords(e)
   const { x, y } = canvasToChart(cv.x, cv.y)
 
+  // Touch long-press opens the chair/stand context menu (no right-click on
+  // touch). If it fires we swallow the tap that would otherwise apply a tool.
+  if (e.pointerType === 'touch' && activeTab === 'edit') {
+    longPressStart = { x: e.clientX, y: e.clientY }
+    const chartX = x, chartY = y, clientX = e.clientX, clientY = e.clientY
+    longPressTimer = window.setTimeout(() => {
+      longPressTimer = null
+      if (openChairContextMenu(clientX, clientY, chartX, chartY)) {
+        suppressClickAfterPan = true
+        marqueeState = null
+        marqueeBox.style.display = 'none'
+        dragState = null
+      }
+    }, 500)
+  }
+
   // Export tab: the canvas is view-only — no chair / instrument / conductor
   // editing. Panning the zoomed view is still allowed.
   if (activeTab === 'export') {
@@ -1730,6 +1754,10 @@ canvas.addEventListener('pointerdown', (e) => {
 
 window.addEventListener('pointermove', (e) => {
   if (!e.isPrimary) return
+  // Any real movement cancels a pending long-press (it's a drag, not a press).
+  if (longPressTimer !== null && longPressStart) {
+    if (Math.hypot(e.clientX - longPressStart.x, e.clientY - longPressStart.y) > 10) cancelLongPress()
+  }
   // Layout-tab title drag (raw canvas px → config.titleOffset).
   if (titleDrag) {
     const cv = pointerCanvasCoords(e)
@@ -1893,6 +1921,7 @@ window.addEventListener('pointermove', (e) => {
 
 window.addEventListener('pointerup', (e) => {
   if (!e.isPrimary) return
+  cancelLongPress()   // a lift before 500ms is a tap, not a long-press
   if (panState?.moved) suppressClickAfterPan = true
   // Edit-tab marquee release: apply the active tool to every chair in the box.
   // A box that never moved is just a click — let the click handler do its thing.
@@ -2046,6 +2075,69 @@ function applyStandToChair(rowChairs: Chair[], i: number, mode: StandMode) {
   else chair.hasStand = true   // no neighbour to desk with → solo
 }
 
+// --- Right-click / long-press context menu on a chair or stand ---------------
+const CHAIR_SWATCHES = ['#a8d8ea', '#b6e2a1', '#f6d365', '#f4a261', '#e5a1c4', '#cfcfcf', '#ffffff']
+
+// Pop a native colour picker for one chair (the menu's "custom colour").
+function openChairColorPicker(rowIndex: number, chairIndex: number) {
+  const chair = config.rows[rowIndex]?.chairs[chairIndex]
+  if (!chair) return
+  const input = document.createElement('input')
+  input.type = 'color'
+  input.value = /^#[0-9a-fA-F]{6}$/.test(chair.color) ? chair.color : '#a8d8ea'
+  input.style.cssText = 'position:fixed;left:-9999px;top:0'
+  document.body.appendChild(input)
+  input.addEventListener('change', () => {
+    history.push(config)
+    chair.color = input.value
+    renderChart()
+    input.remove()
+  })
+  input.addEventListener('blur', () => setTimeout(() => input.remove(), 0))
+  input.click()
+}
+
+// Build + show the context menu for whatever is under (x,y) in chart coords.
+// A stand × takes priority over its chair. Returns false if nothing was hit.
+function openChairContextMenu(clientX: number, clientY: number, x: number, y: number): boolean {
+  const mut = (fn: () => void) => { history.push(config); fn(); renderChart() }
+
+  const standHit = renderer.standHitTest(x, y)
+  if (standHit) {
+    const rowChairs = config.rows[standHit.rowIndex].chairs
+    const isDesk = chairStandMode(rowChairs, standHit.chairIndex) === 'desk'
+    showContextMenu(clientX, clientY, 'Music stand', [
+      isDesk
+        ? { kind: 'action', label: 'Give its own stand', onClick: () => mut(() => applyStandToChair(rowChairs, standHit.chairIndex, 'solo')) }
+        : { kind: 'action', label: 'Share between chairs', onClick: () => mut(() => applyStandToChair(rowChairs, standHit.chairIndex, 'desk')) },
+      { kind: 'action', label: 'Remove stand', danger: true, onClick: () => mut(() => applyStandToChair(rowChairs, standHit.chairIndex, 'remove')) },
+    ])
+    return true
+  }
+
+  const hit = renderer.hitTest(x, y)
+  if (hit) {
+    const rowChairs = config.rows[hit.rowIndex].chairs
+    const chair = rowChairs[hit.chairIndex]
+    const seat = chairStoolMode(chair)
+    const items: MenuItem[] = [
+      { kind: 'action', label: chair.enabled ? 'Hide chair' : 'Show chair', onClick: () => mut(() => { chair.enabled = !chair.enabled }) },
+      { kind: 'action', label: 'Edit label…', onClick: () => openChairLabelEditor(hit.rowIndex, hit.chairIndex) },
+      { kind: 'segment', label: 'Seat', options: [
+        { label: 'Chair',    active: seat === 'chair',    onClick: () => mut(() => applyStoolToChair(chair, 'chair')) },
+        { label: 'Stool',    active: seat === 'stool',    onClick: () => mut(() => applyStoolToChair(chair, 'stool')) },
+        { label: 'Standing', active: seat === 'standing', onClick: () => mut(() => applyStoolToChair(chair, 'standing')) },
+      ] },
+      { kind: 'swatches', label: 'Colour', colors: CHAIR_SWATCHES, current: chair.color,
+        onPick: (c) => mut(() => { chair.color = c }),
+        onCustom: () => openChairColorPicker(hit.rowIndex, hit.chairIndex) },
+    ]
+    showContextMenu(clientX, clientY, 'Chair', items)
+    return true
+  }
+  return false
+}
+
 // Marquee Stand: 'desk' pairs *consecutive adjacent* selected chairs within each
 // row into shared desks (leftover → solo); solo/remove go per-chair.
 function applyStandModeToTargets(targets: { rowIndex: number; chairIndex: number }[]) {
@@ -2127,6 +2219,16 @@ function applyBulkTool(refs: { rowIndex: number; chairIndex: number }[], centre:
   lastCycledChair = null
   renderChart()
 }
+
+// Right-click a chair or stand → a small menu of its actions (an alternative to
+// picking a tool). Only in the Edit tab, where chair editing lives.
+canvas.addEventListener('contextmenu', (e) => {
+  if (activeTab !== 'edit') return          // let the browser's own menu show elsewhere
+  e.preventDefault()
+  const cv = pointerCanvasCoords(e)
+  const { x, y } = canvasToChart(cv.x, cv.y)
+  openChairContextMenu(e.clientX, e.clientY, x, y)
+})
 
 canvas.addEventListener('click', (e) => {
   // A drag-pan just ended — swallow the click so it doesn't toggle a chair.
@@ -2414,6 +2516,7 @@ function bindEvents() {
     activeTab = tab
     setHoverRow(null)         // drop any row-hover highlight when changing tabs
     closeChairLabelEditor()   // don't leave the inline editor floating after a tab change
+    closeContextMenu()        // and don't leave a context menu floating either
     // Export is view-only — drop any instrument selection so its (now
     // non-interactive) handles don't linger on the chart.
     if (tab === 'export' && selectedInstrumentId) { setSelectedInstrument(null); renderChart() }
