@@ -14,6 +14,14 @@ export const BASE_RADIUS = 130
 // is the floor — 70px gives a small breathing gap).
 export const ROW_SPACING_DEFAULT = 70
 
+// Extra radial depth (px) a row is pushed back for each riser tier it steps UP
+// onto (see Row.riser). Fixed rather than user-configurable — the Layout-tab
+// "Dist" handle already lets any individual row be fine-tuned on top.
+export const RISER_STEP_DEPTH = 34
+// Fallback physical height per riser step (cm) for the "+Ncm" tier labels when
+// ChartConfig.riserStepHeight is unset.
+export const RISER_STEP_HEIGHT_DEFAULT = 20
+
 // Minimum arc length a single chair-slot must occupy in a grouped wedge row —
 // set to the centre-to-centre spacing of the two chairs of a desk, so adjacent
 // chairs never crowd closer than a desk looks. Used by applyGroupedRowRadii to

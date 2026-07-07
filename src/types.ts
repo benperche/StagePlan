@@ -47,6 +47,12 @@ export interface Row {
   // whole row's centre from the conductor's x. Unset → 40px / centred.
   straightSpacing?: number
   straightOffset?: number
+  // Riser tier this row sits on (1, 2, 3…). Unset = floor level. Higher tiers
+  // are automatically stepped back (extra radial depth per level rise) so the
+  // platform reads as raised, and drawRisers renders a platform band behind the
+  // row following its shape — a concentric curved band for an arc row, a
+  // rectangle for a straight row.
+  riser?: number
 }
 
 export interface ConductorConfig {
@@ -153,9 +159,12 @@ export interface ChartConfig {
   // Optional built-in schematic stage shape drawn behind the chart (a light
   // vector backdrop — no photo needed). Purely decorative: it does not affect
   // row placement. A photo background, if present, takes precedence. Absent =
-  // none. (Structural risers, which DO drive row placement, are a separate
-  // future feature and deliberately not one of these.)
+  // none. (Structural risers — Row.riser — are the separate feature that DOES
+  // drive row placement.)
   stageTemplate?: 'flat-hall' | 'concert-shell' | 'apron'
+  // Physical height per riser step in cm — used only for the "+Ncm" tier
+  // labels drawn by drawRisers. Unset → RISER_STEP_HEIGHT_DEFAULT.
+  riserStepHeight?: number
 }
 
 export interface HitTarget {
