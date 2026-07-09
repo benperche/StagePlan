@@ -9,7 +9,7 @@ import {
   drawSingleChair, drawSingleStand, drawStool, drawGenericRect,
 } from './instrument-glyphs'
 import type { GlyphResult } from './instrument-glyphs'
-import { BASE_RADIUS, ROW_SPACING_DEFAULT, RISER_STEP_DEPTH, RISER_STEP_HEIGHT_DEFAULT, RISER_PAD_MAX } from './section-layout'
+import { BASE_RADIUS, ROW_SPACING_DEFAULT, RISER_STEP_HEIGHT_DEFAULT, RISER_PAD_MAX, rowBaseRadius, computeRowRadii as computeRowRadiiPure } from './section-layout'
 
 const CHAIR_SIZE = 30
 const CHAIR_HALF = CHAIR_SIZE / 2
@@ -690,31 +690,11 @@ export class Renderer {
     return radii.length ? radii[radii.length - 1] : BASE_RADIUS
   }
 
-  // Extra radial depth this row is pushed back for stepping UP onto a higher
-  // riser tier than the row in front. Only a level INCREASE costs depth, so
-  // consecutive same-tier rows share a step and a lower tier behind a higher one
-  // (unusual) costs nothing. Shared by computeRowRadii and renderLayoutHandles
-  // so the two `base` computations can never drift (which would make the Layout
-  // "Dist" control fight risers — see RowGeometry.base).
-  private riserExtra(rows: Row[], i: number): number {
-    if (i === 0) return 0
-    const rise = (rows[i].riser ?? 0) - (rows[i - 1].riser ?? 0)
-    return Math.max(0, rise) * RISER_STEP_DEPTH
-  }
-
-  // Cumulative per-row radius from the conductor. Base step is the (already
-  // fitted) row spacing plus any riser step-back; each row adds its optional
-  // `gapBefore`. Because it's cumulative, bumping one row's gap (or riser tier)
-  // pushes every row behind it out by the same amount — the "push rows behind"
-  // distance behaviour. With all gaps/risers 0 this is exactly
-  // BASE_RADIUS + i * rowSpacing.
+  // Cumulative per-row radius from the conductor. Thin delegate to the pure
+  // implementation in section-layout.ts (shared with renderLayoutHandles and
+  // the orchestra generator) so the formula lives in exactly one place.
   private computeRowRadii(rows: Row[], rowSpacing: number): number[] {
-    const radii: number[] = []
-    for (let i = 0; i < rows.length; i++) {
-      const base = (i === 0 ? BASE_RADIUS : radii[i - 1] + rowSpacing) + this.riserExtra(rows, i)
-      radii[i] = base + (rows[i].gapBefore ?? 0)
-    }
-    return radii
+    return computeRowRadiiPure(rows, rowSpacing)
   }
 
   // A row's arc span as [startAngle, endAngle] in canvas radians. Per-row
@@ -1183,9 +1163,10 @@ export class Renderer {
 
     config.rows.forEach((row, i) => {
       const r = radii[i]
-      // Must match computeRowRadii's `base` exactly (incl. riser step-back) so
-      // the Layout "Dist" edit — which does gapBefore = newR - g.base — stays correct.
-      const base = (i === 0 ? BASE_RADIUS : radii[i - 1] + rowSpacing) + this.riserExtra(config.rows, i)
+      // Base formula lives in one place, section-layout.ts's rowBaseRadius,
+      // shared with computeRowRadii so this can never drift (drift would
+      // corrupt the Layout "Dist" edit, which does gapBefore = newR - g.base).
+      const base = rowBaseRadius(config.rows, i, radii, rowSpacing)
       const prevR = i === 0 ? 0 : radii[i - 1]
       const N = row.chairs.length
       const straight = isStraightRow(i)

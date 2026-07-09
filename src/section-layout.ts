@@ -36,6 +36,45 @@ export const MIN_SLOT_PX = 56
 // between them (a full slot's gap left a big void at the apex).
 export const GAP_UNITS = 0.5
 
+// Extra radial depth a row is pushed back for stepping UP onto a higher riser
+// tier than the row in front. Only a level INCREASE costs depth, so
+// consecutive same-tier rows share a step and a lower tier behind a higher one
+// (unusual) costs nothing. Shared by rowBaseRadius (in turn by
+// computeRowRadii and the renderer's renderLayoutHandles) so the `base`
+// computation can never drift (which would make the Layout "Dist" control
+// fight risers).
+export function riserExtraDepth(rows: Row[], i: number): number {
+  if (i === 0) return 0
+  const rise = (rows[i].riser ?? 0) - (rows[i - 1].riser ?? 0)
+  return Math.max(0, rise) * RISER_STEP_DEPTH
+}
+
+// Base radial distance for row `i` before its own `gapBefore` is applied:
+// the previous row's radius plus the (already fitted) row spacing, plus any
+// riser step-back. `radii` holds the already-computed radii for rows
+// 0..i-1. The single source of truth for this formula — the renderer's
+// computeRowRadii and renderLayoutHandles both call this so their `base`
+// computations can never drift (drift would corrupt the Layout "Dist"
+// control's gapBefore = newR - base calculation).
+export function rowBaseRadius(rows: Row[], i: number, radii: number[], rowSpacing: number): number {
+  return (i === 0 ? BASE_RADIUS : radii[i - 1] + rowSpacing) + riserExtraDepth(rows, i)
+}
+
+// Cumulative per-row radius from the conductor. Base step is the (already
+// fitted) row spacing plus any riser step-back; each row adds its optional
+// `gapBefore`. Because it's cumulative, bumping one row's gap (or riser tier)
+// pushes every row behind it out by the same amount — the "push rows behind"
+// distance behaviour. With all gaps/risers 0 this is exactly
+// BASE_RADIUS + i * rowSpacing.
+export function computeRowRadii(rows: Row[], rowSpacing: number): number[] {
+  const radii: number[] = []
+  for (let i = 0; i < rows.length; i++) {
+    const base = rowBaseRadius(rows, i, radii, rowSpacing)
+    radii[i] = base + (rows[i].gapBefore ?? 0)
+  }
+  return radii
+}
+
 export interface GroupLayout {
   order: string[]
   maxCount: Map<string, number>
