@@ -78,7 +78,13 @@ chart for on-screen inspection. This is a pure **CSS transform** on the
 always render the full chart at full resolution (print CSS forces
 `transform: none`). State lives in `viewZoom/viewPanX/viewPanY` in `main.ts`.
 
-- Buttons step by 1.25×; mouse wheel zooms toward the cursor; clamp `[1, 6]`.
+- Buttons step by 1.25×; ctrl/cmd + wheel (= trackpad pinch) zooms toward the
+  cursor; clamp `[1, 6]`.
+- **Touch pinch**: the canvas has `touch-action: none`, so two simultaneous
+  touch pointers are tracked in `touchPoints`/`pinchState` (main.ts, after the
+  pointerup handler) — the view scales about the finger midpoint via the same
+  `setZoom` maths and follows the midpoint as a two-finger pan while zoomed.
+  The second finger landing aborts any in-progress single-finger gesture.
 - Pan by dragging empty space while zoomed (`panState`); a non-moving press
   still falls through to the chair `click` handler, and a moved pan sets
   `suppressClickAfterPan` so it doesn't toggle a chair.
@@ -241,6 +247,18 @@ picker) and tab switch; shown on Edit *and* Setup (armed tools apply to chair
 clicks there too), hidden on Layout/Export and in print. This is the answer to
 "what will my next click do" without glancing at the sidebar.
 
+**Hover preview** (`HoverPreview` in renderer.ts, `currentHoverPreview()` in
+main.ts): with a tool armed in the Edit tab, the single chair under the
+pointer (`renderer.hoverChair`) draws the click's outcome as a ghost — Hide
+dims it toward white with a dashed outline, Colour washes the armed swatch on
+at half strength, an armed Label ghosts its text in at 50% alpha in place of
+the current label. Only tools with one deterministic outcome preview
+(stand/stool cycle on repeat clicks; free-type Label opens an editor).
+`main.ts` sets `renderer.hoverPreview` before every render; tool/payload
+changes call `rerenderCanvasOnly()` so a chair already under the pointer
+previews the *new* tool (the `setHoverChair` same-chair short-circuit would
+otherwise leave a stale ghost).
+
 The five tools (`ChairTool`) and their sub-panels:
 
 - **Hide** (`toggle`) — toggles `chair.enabled`, then `repackLabelsAfterToggle`
@@ -359,7 +377,10 @@ into concrete `{ ok: true, rows, straightRows, instruments }` (or
 `{ ok: false, error }` if orchestra notation is malformed). It's a pure
 function — no `config` mutation, no DOM. `applyPreset(preset)` in `main.ts`
 is then a thin wrapper that calls `buildPreset`, pushes the result into
-`config`, and re-renders.
+`config`, re-renders, and shows a transient toast ("X applied — press Cmd+Z
+to undo") via `showToast()` — a lazily-created `#canvas-toast` div near the
+bottom of the canvas, non-blocking, auto-hides after ~3s. Reuse `showToast`
+for any other silent-but-big action that deserves an undo reminder.
 
 ## Fixed instruments
 
@@ -379,6 +400,7 @@ is then a thin wrapper that calls `buildPreset`, pushes the result into
   the old "in front of the conductor" fallback. Positions are stored polar, so
   the renderer's flip mirroring keeps them behind the band when flipped.
 - Drag/rotate handled by `DragState` / `RotateState` in main.ts. Selected instrument shows a green MS-Office-style rotate handle.
+- Keyboard on the selected instrument: **Delete/Backspace** removes it; **arrow keys nudge it** 2px (Shift = 10px). The nudge converts the screen-space delta into the stored polar frame (mirror-scaled when flipped) and pushes history once per burst (`lastArrowNudge`: same instrument, <1s apart = one undo step), mirroring the one-push-per-drag rule.
 - A fixed instrument can carry its own music stand (`hasStand`). With the **Stand** chair-tool active (Edit/Setup, not Layout), pressing an instrument always arms a drag (`DragState.toggleStandOnClick`); a press that never crosses `DRAG_THRESHOLD` toggles the stand on `pointerup`, while an actual drag just repositions it. So instruments stay draggable in stand mode instead of every press toggling the stand.
 
 ## Persistence

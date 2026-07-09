@@ -1195,6 +1195,32 @@ button.danger:hover { background: #fff0f0; }
 }
 #tool-pill-close:hover { background: rgba(37, 99, 235, 0.1); }
 
+/* Transient toast: a short-lived non-interactive notice near the bottom of
+   the canvas (e.g. "Preset applied — Cmd+Z to undo"). Created lazily by
+   showToast() in main.ts; .visible fades it in, removal fades it out. */
+#canvas-toast {
+  position: absolute;
+  bottom: 56px;    /* above the zoom row's print-safe zone / row summary */
+  left: 50%;
+  transform: translateX(-50%) translateY(6px);
+  z-index: 11;
+  max-width: min(85%, 420px);
+  padding: 8px 16px;
+  font-size: 13px;
+  text-align: center;
+  color: #fff;
+  background: rgba(30, 41, 59, 0.92);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+#canvas-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 /* A marquee needs a mouse — hide the "drag a box" hint where there's no fine pointer. */
 body:not(.marquee-capable) .marquee-hint { display: none; }
 
@@ -1534,6 +1560,7 @@ body:not(.marquee-capable) .marquee-hint { display: none; }
   .canvas-zoom-controls,
   .canvas-drag-controls,
   #tool-pill,
+  #canvas-toast,
   #tally-overlay,
   #library-drawer,
   .drawer-backdrop,

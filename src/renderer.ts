@@ -66,6 +66,16 @@ interface SectionAnchors {
   justify: Map<string, SectionJustify>
 }
 
+// What an armed Edit-tab tool would do to the hovered chair — drawn as a
+// ghost on that chair so the click's effect is visible before committing.
+// Only the tools with a single deterministic outcome preview (Hide dims,
+// Colour washes, an armed Label ghosts in); stand/stool cycle on repeat
+// clicks so a preview would often be wrong.
+export type HoverPreview =
+  | { kind: 'hide' }
+  | { kind: 'color'; color: string }
+  | { kind: 'label'; text: string }
+
 export interface RenderOptions {
   scale?: number
   // When true (the Layout tab is active), arc guides are forced on and the
@@ -106,6 +116,11 @@ export class Renderer {
   // Drawn as a translucent wash on each chair; never affects export/print.
   hoverRowIndex: number | null = null
   hoverChair: { rowIndex: number; chairIndex: number } | null = null
+  // Armed-tool hover preview: when set, the single hovered chair (hoverChair)
+  // is drawn showing what a click would do — colour washed on, the chair
+  // dimmed for Hide, the armed label ghosted in. Set by main.ts before each
+  // render (null when no previewable tool is armed / not in the Edit tab).
+  hoverPreview: HoverPreview | null = null
   rotateHandleHit: RotateHandleHit | null = null
   // Same-shape hit-test target for the red ✕ delete button drawn next to
   // the selected instrument.
@@ -994,7 +1009,7 @@ export class Renderer {
     chairs.forEach((chair, chairIndex) => {
       const { cx, cy } = positions[chairIndex]
       if (chair.enabled) {
-        this.drawChair(ctx, chair, cx, cy, ox, oy, row.fontSize, this.isNudged(chair), this.isChairHovered(rowIndex, chairIndex))
+        this.drawChair(ctx, chair, cx, cy, ox, oy, row.fontSize, this.isNudged(chair), this.isChairHovered(rowIndex, chairIndex), this.previewFor(rowIndex, chairIndex))
         if (chair.hasStand) this.drawStandX(ctx, cx, cy, ox, oy, undefined, { rowIndex, chairIndex })
         // Standing players aren't numbered seats — no number drawn, and they
         // don't consume one (so the seated chairs stay sequential).
@@ -1076,7 +1091,7 @@ export class Renderer {
       positions.push({ cx, cy: rowY })
 
       if (chair.enabled) {
-        this.drawChair(ctx, chair, cx, rowY, cx, oy, row.fontSize, this.isNudged(chair), this.isChairHovered(rowIndex, chairIndex))
+        this.drawChair(ctx, chair, cx, rowY, cx, oy, row.fontSize, this.isNudged(chair), this.isChairHovered(rowIndex, chairIndex), this.previewFor(rowIndex, chairIndex))
         if (chair.hasStand) this.drawStandX(ctx, cx, rowY, cx, oy, undefined, { rowIndex, chairIndex })
         // Standing players aren't numbered seats (see semicircle path).
         if (!chair.noSeat) {
@@ -1334,6 +1349,14 @@ export class Renderer {
     if (this.hoverRowIndex === rowIndex) return true
     const c = this.hoverChair
     return c !== null && c.rowIndex === rowIndex && c.chairIndex === chairIndex
+  }
+
+  // The armed-tool preview for this chair, or null. Only the single chair
+  // under the pointer previews (hoverChair, not the sidebar's row hover).
+  private previewFor(rowIndex: number, chairIndex: number): HoverPreview | null {
+    const c = this.hoverChair
+    if (!this.hoverPreview || !c || c.rowIndex !== rowIndex || c.chairIndex !== chairIndex) return null
+    return this.hoverPreview
   }
 
   chairCenter(rowIndex: number, chairIndex: number): { x: number; y: number } | null {
@@ -1831,6 +1854,7 @@ export class Renderer {
     fontSize: number,
     highlight = false,
     rowHover = false,
+    preview: HoverPreview | null = null,
   ) {
     const faceAngle = Math.atan2(condY - cy, condX - cx)
 
@@ -1905,6 +1929,38 @@ export class Renderer {
       }
     }
 
+    // Armed-tool hover preview, in the rotated frame so it hugs the seat:
+    // Colour = the armed colour washed on at half strength; Hide = the chair
+    // dimmed toward white with a dashed outline (it's about to disappear).
+    // The Label preview is text, drawn upright with the label further down.
+    if (preview?.kind === 'color') {
+      ctx.fillStyle = preview.color
+      ctx.globalAlpha = 0.55
+      if (chair.isStool) {
+        ctx.beginPath()
+        ctx.arc(0, 0, CHAIR_HALF - 2, 0, Math.PI * 2)
+        ctx.fill()
+      } else {
+        ctx.fillRect(-CHAIR_HALF, -CHAIR_HALF, CHAIR_SIZE, CHAIR_SIZE)
+      }
+      ctx.globalAlpha = 1
+    } else if (preview?.kind === 'hide' && chair.enabled) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.62)'
+      ctx.strokeStyle = '#999'
+      ctx.lineWidth = 1.5
+      ctx.setLineDash([3, 3])
+      if (chair.isStool) {
+        ctx.beginPath()
+        ctx.arc(0, 0, CHAIR_HALF - 2, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.stroke()
+      } else {
+        ctx.fillRect(-CHAIR_HALF, -CHAIR_HALF, CHAIR_SIZE, CHAIR_SIZE)
+        ctx.strokeRect(-CHAIR_HALF, -CHAIR_HALF, CHAIR_SIZE, CHAIR_SIZE)
+      }
+      ctx.setLineDash([])
+    }
+
     // Layout tab: a nudged chair gets a blue outline so it's obvious which
     // ones have been moved off their default slot.
     if (highlight && !chair.noSeat) {
@@ -1921,20 +1977,35 @@ export class Renderer {
 
     ctx.restore()
 
-    // Label drawn upright, supports % as a line-break within the label
-    if (chair.label) {
-      const fs = Math.max(8, fontSize - 2)
-      const lh = fs + 3
-      const lines = chair.label.split('%')
-      const totalH = lines.length * lh
+    // Label drawn upright, supports % as a line-break within the label.
+    // Long labels (e.g. "Tenor S 1") shrink-to-fit: measure the widest line
+    // and step the font size down (floored at 7px) instead of letting
+    // fillText's maxWidth horizontally squish the glyphs into a smear.
+    // maxWidth stays on the draw as a last resort for extreme labels.
+    // A hovered chair with an armed Label previews that label as a ghost in
+    // place of its current text (stamping overwrites, so this IS the outcome).
+    const previewLabel = preview?.kind === 'label' ? preview.text : null
+    const labelText = previewLabel ?? chair.label
+    if (labelText) {
+      const lines = labelText.split('%')
+      const maxW = CHAIR_SIZE + 4
+      let fs = Math.max(8, fontSize - 2)
       ctx.save()
-      ctx.fillStyle = '#222'
       ctx.font = `bold ${fs}px sans-serif`
+      const widest = Math.max(...lines.map(l => ctx.measureText(l).width))
+      if (widest > maxW) {
+        fs = Math.max(7, Math.floor(fs * maxW / widest))
+        ctx.font = `bold ${fs}px sans-serif`
+      }
+      const lh = fs + 3
+      const totalH = lines.length * lh
+      ctx.fillStyle = '#222'
+      if (previewLabel !== null) ctx.globalAlpha = 0.5
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       lines.forEach((line, i) => {
         const ly = cy - totalH / 2 + i * lh + lh / 2
-        ctx.fillText(line, cx, ly, CHAIR_SIZE - 4)
+        ctx.fillText(line, cx, ly, maxW)
       })
       ctx.restore()
     }

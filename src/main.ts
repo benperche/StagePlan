@@ -1,6 +1,6 @@
 import './style.css'
 import { makeDefaultConfig, makeRow, makeInstrument, History, cloneConfig, DEFAULT_CHAIR_COLOR } from './state'
-import { Renderer } from './renderer'
+import { Renderer, type HoverPreview } from './renderer'
 import {
   PRESETS, buildPreset, parseOrchestraNotation, describeComposition,
   type Preset,
@@ -290,6 +290,10 @@ const abbrevInstrument = (name: string): string => INSTRUMENT_ABBREV[name] ?? na
 // Currently selected fixed instrument (for drag/inspector/delete)
 let selectedInstrumentId: string | null = null
 
+// Last arrow-key nudge of a selected instrument: one history push per burst
+// of keypresses (same instrument, <1s apart), not one per press.
+let lastArrowNudge: { id: string; time: number } | null = null
+
 // Every drag tracks a pre-drag config snapshot (pushed to history only if
 // the pointer actually moves, so click-to-select doesn't pollute undo) and
 // a `moved` flag set when the threshold is crossed.
@@ -528,6 +532,7 @@ function isLibraryOpen() {
 // --- Render ---
 
 function renderChart() {
+  renderer.hoverPreview = currentHoverPreview()
   resizeCanvas()
   // Hidden seats show their ghost outline while editing, but not in the Export
   // tab preview — that mirrors the PNG/print output, which omits them entirely.
@@ -1038,7 +1043,20 @@ function highlightRowControl(i: number | null) {
   }
 }
 
+// The armed-tool hover preview for the current mode, or null. Only tools with
+// one deterministic click outcome preview: Hide (chair dims), Colour (armed
+// swatch washes on), Label with an armed instrument (label ghosts in).
+// Free-type Label opens an editor and stand/stool cycle, so they don't.
+function currentHoverPreview(): HoverPreview | null {
+  if (layoutMode || activeTab !== 'edit') return null
+  if (activeTool === 'toggle') return { kind: 'hide' }
+  if (activeTool === 'color') return { kind: 'color', color: activeColor }
+  if (activeTool === 'label' && selectedLabel !== null) return { kind: 'label', text: selectedLabel }
+  return null
+}
+
 function rerenderCanvasOnly() {
+  renderer.hoverPreview = currentHoverPreview()
   renderer.render(canvas, config, { layoutMode, dpr: renderDpr, showGhosts: activeTab !== 'export' })
 }
 
@@ -1499,6 +1517,33 @@ function applyPreset(preset: Preset) {
   setSelectedInstrument(null)
   updateAllInputs()
   renderChart()
+  // Replacing the whole chart is a big, silent jump — remind that it's one
+  // undo away (non-blocking; a confirm dialog here would punish the common
+  // "just browsing presets" case).
+  showToast(`${preset.name} applied — press ${modKeyLabel()}+Z to undo`)
+}
+
+// --- Transient toast (non-blocking, bottom-centre of the canvas) ---
+
+const modKeyLabel = () =>
+  /Mac|iPhone|iPad/.test(navigator.platform ?? '') ? 'Cmd' : 'Ctrl'
+
+let toastEl: HTMLElement | null = null
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+
+// Shows a short-lived, non-interactive notice over the canvas. Re-calling
+// while one is visible replaces the text and restarts the clock. Built lazily
+// so charts that never toast pay nothing.
+function showToast(message: string) {
+  if (!toastEl) {
+    toastEl = document.createElement('div')
+    toastEl.id = 'canvas-toast'
+    canvasArea.appendChild(toastEl)
+  }
+  toastEl.textContent = message
+  toastEl.classList.add('visible')
+  if (toastTimer) clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => toastEl?.classList.remove('visible'), 3200)
 }
 
 // --- Inline chair-label editor (Label tool: click a chair, type its name) ---
@@ -2052,6 +2097,63 @@ window.addEventListener('pointerup', (e) => {
   // The per-row boxes are skipped mid-drag; refresh them now the drag is done.
   if (finishedLayoutDrag && layoutMode) updateLayoutRowList()
 })
+
+// --- Two-finger touch pinch zoom (tablets / phones) ---
+// The canvas has touch-action: none, so the browser hands us raw touch
+// pointers instead of gesturing itself. Two simultaneous touches zoom the
+// view about their midpoint — the same maths as ctrl+wheel — and follow the
+// midpoint as a two-finger pan while zoomed in. The moment the second finger
+// lands, whatever single-finger gesture was in progress is abandoned.
+const touchPoints = new Map<number, { x: number; y: number }>()
+let pinchState: { startDist: number; zoom0: number; lastMid: { x: number; y: number } } | null = null
+
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.pointerType !== 'touch') return
+  touchPoints.set(e.pointerId, { x: e.clientX, y: e.clientY })
+  if (touchPoints.size === 2) {
+    const [a, b] = [...touchPoints.values()]
+    pinchState = {
+      startDist: Math.hypot(a.x - b.x, a.y - b.y),
+      zoom0: viewZoom,
+      lastMid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+    }
+    // This gesture is a pinch — abandon anything the first finger started.
+    cancelLongPress()
+    dragState = null; rotateState = null; conductorDragState = null
+    panState = null; layoutDrag = null; riserSizeDrag = null
+    chairDrag = null; deskDrag = null; titleDrag = null; arcRangeDrag = null
+    marqueeState = null
+    marqueeBox.style.display = 'none'
+    suppressClickAfterPan = true
+  }
+})
+window.addEventListener('pointermove', (e) => {
+  if (e.pointerType !== 'touch' || !touchPoints.has(e.pointerId)) return
+  touchPoints.set(e.pointerId, { x: e.clientX, y: e.clientY })
+  if (!pinchState || touchPoints.size < 2) return
+  const [a, b] = [...touchPoints.values()]
+  const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+  // Follow the midpoint (two-finger pan) — only while actually zoomed in, so
+  // the "no pan at fit" invariant (viewZoom === 1 ⇒ pan 0,0) holds.
+  if (viewZoom > 1) {
+    viewPanX += mid.x - pinchState.lastMid.x
+    viewPanY += mid.y - pinchState.lastMid.y
+    applyViewTransform()
+  }
+  pinchState.lastMid = mid
+  // …and scale about it.
+  const dist = Math.hypot(a.x - b.x, a.y - b.y)
+  if (pinchState.startDist > 0) {
+    setZoom(pinchState.zoom0 * (dist / pinchState.startDist), mid.x, mid.y)
+  }
+})
+const endTouchPoint = (e: PointerEvent) => {
+  if (e.pointerType !== 'touch') return
+  touchPoints.delete(e.pointerId)
+  if (touchPoints.size < 2) pinchState = null
+}
+window.addEventListener('pointerup', endTouchPoint)
+window.addEventListener('pointercancel', endTouchPoint)
 
 // Click handler runs after mouseup. Skip if the click landed on an instrument
 // or its rotate handle (already handled in mousedown) so chair/conductor logic
@@ -2762,6 +2864,9 @@ function bindEvents() {
     clearLabelSelection()
     closeChairLabelEditor()
     updateToolPill()
+    // The hover preview depends on the armed tool; refresh the canvas so a
+    // chair already under the pointer previews the NEW tool, not the old one.
+    rerenderCanvasOnly()
   }
 
   // Tool selection. Clicking the already-armed tool's button puts it down
@@ -2864,6 +2969,7 @@ function bindEvents() {
             b.classList.add('active')
             instrumentPickerStatus.textContent = `Selected: "${label}". Click any chair to stamp it.`
             updateToolPill()
+            rerenderCanvasOnly()   // refresh any live hover preview with the new label
           })
           return b
         }
@@ -2900,6 +3006,7 @@ function bindEvents() {
   colorPicker.addEventListener('input', () => {
     activeColor = colorPicker.value
     updateToolPill()
+    rerenderCanvasOnly()   // refresh any live hover preview with the new colour
   })
 
   // Undo / redo
@@ -3125,6 +3232,38 @@ function bindEvents() {
       history.push(config)
       config.instruments = config.instruments.filter(i => i.id !== selectedInstrumentId)
       setSelectedInstrument(null)
+      renderChart()
+    }
+
+    // Arrow keys nudge the selected instrument (2px; Shift = 10px) — the
+    // fine-placement companion to dragging. Same input guard as Delete.
+    const ARROW_DELTAS: Record<string, [number, number]> = {
+      ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
+    }
+    if (ARROW_DELTAS[e.key] && selectedInstrumentId) {
+      const t = e.target as HTMLElement
+      if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return
+      const inst = config.instruments.find(i => i.id === selectedInstrumentId)
+      if (!inst) return
+      e.preventDefault()
+      // One undo step per nudge burst, not per keypress: push history only
+      // when starting on a different instrument or after a pause, so tapping
+      // an arrow 15 times undoes in one go (mirrors the one-push-per-drag rule).
+      const now = Date.now()
+      if (lastArrowNudge?.id !== inst.id || now - (lastArrowNudge?.time ?? 0) > 1000) {
+        history.push(config)
+      }
+      lastArrowNudge = { id: inst.id, time: now }
+      const step = e.shiftKey ? 10 : 2
+      const [ax, ay] = ARROW_DELTAS[e.key]
+      // Stored position is polar around the conductor, mirrored when the chart
+      // is flipped (cx = ox + mirror·d·cos a) — so a screen-space nudge maps to
+      // a mirror-scaled delta in the stored frame.
+      const mirror = config.flipped ? -1 : 1
+      const dx = inst.distance * Math.cos(inst.angle) + mirror * ax * step
+      const dy = inst.distance * Math.sin(inst.angle) + mirror * ay * step
+      inst.angle = Math.atan2(dy, dx)
+      inst.distance = Math.hypot(dx, dy)
       renderChart()
     }
   })
