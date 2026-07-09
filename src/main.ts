@@ -24,7 +24,13 @@ const EXPORT_H = Math.round(EXPORT_W / Math.SQRT2)   // 1485 — A4's √2 aspec
 
 let activeColor = '#a8d8ea'
 type ChairTool = 'color' | 'toggle' | 'stand' | 'stool' | 'label'
-let activeTool: ChairTool = 'toggle'
+// The armed Edit Chairs tool, or null = no tool armed ("select mode"), the
+// default: clicking a chair opens its context menu instead of mutating it.
+// A tool arms via its Edit-tab button and disarms via a second click on the
+// same button, the canvas pill's ✕, or Escape. While a tool is armed the
+// #tool-pill over the canvas names it (see updateToolPill), so what the next
+// click will do is always visible.
+let activeTool: ChairTool | null = null
 
 // One-line explanation per chair tool, shown under the Edit Chairs buttons for
 // whichever tool is active (set in setChairTool).
@@ -35,6 +41,8 @@ const TOOL_HINTS: Record<ChairTool, string> = {
   color: 'Click a chair to paint it the swatch colour. Click the swatch to change the colour.',
   label: 'Pick an instrument below to stamp it — or click a chair with nothing selected to type your own (Enter jumps to the next chair). Paste a list below.',
 }
+// Shown when no tool is armed. Must match the default text in index.html.
+const NEUTRAL_HINT = 'No tool picked — click any chair on the chart to open its menu. Or pick a tool above to apply one change to lots of chairs quickly (click it again to put it down).'
 
 // True while the Layout tab is active: the canvas shows geometry handles +
 // arc guides and the chair-editing tools / instrument drags are suspended.
@@ -350,7 +358,7 @@ import {
   coFl, coOb, coCl, coBsn, coHn, coTpt, coTbn, coTuba,
   coVn1, coVn2, coVa, coVc, coCb, coTimp, coHarp, coPiano,
   toolButtons, chairLabelInput, editChairsHint, labelPanel, clearLabelsBtn, instrumentPanel,
-  marqueeBox, dragOverwriteBtn,
+  marqueeBox, dragOverwriteBtn, toolPill, toolPillText, toolPillClose,
   standBulkPanel, stoolBulkPanel, standBulkButtons, stoolBulkButtons,
   instrumentPickerList, labelList, instrumentPickerStatus,
   showTallyBtn, tallyOverlay, tallyBody, tallyTotal, tallyMinimizeBtn, tallyCloseBtn,
@@ -1815,11 +1823,12 @@ canvas.addEventListener('pointerdown', (e) => {
     setSelectedInstrument(null)
     renderChart()
   }
-  // Edit tab at 100% zoom: a mouse/pen drag is a marquee bulk-select (touch
-  // drags never marquee — a finger needs to pan/scroll, not draw a box). When
-  // zoomed in, keep the existing drag-to-pan behaviour instead (no transform to
-  // fight at 100%, so the screen-space overlay box maps 1:1 to the canvas).
-  if (activeTab === 'edit' && viewZoom === 1 && e.pointerType !== 'touch') {
+  // Edit tab at 100% zoom with a tool armed: a mouse/pen drag is a marquee
+  // bulk-select (touch drags never marquee — a finger needs to pan/scroll,
+  // not draw a box; and with no tool armed there's nothing to bulk-apply).
+  // When zoomed in, keep the existing drag-to-pan behaviour instead (no
+  // transform to fight at 100%, so the screen-space box maps 1:1 to the canvas).
+  if (activeTab === 'edit' && viewZoom === 1 && e.pointerType !== 'touch' && activeTool !== null) {
     marqueeState = { startClientX: e.clientX, startClientY: e.clientY, startChart: { x, y }, moved: false }
   } else if (viewZoom > 1) {
     panState = { startX: e.clientX, startY: e.clientY, panX0: viewPanX, panY0: viewPanY, moved: false }
@@ -2284,10 +2293,40 @@ function syncDragControls() {
   dragOverwriteBtn.style.display = show ? '' : 'none'
 }
 
+// The armed-tool pill floating over the canvas: names the armed tool and its
+// payload (armed instrument label, stand/seat mode, colour swatch) so the
+// next click's effect is always visible without glancing at the sidebar.
+// Hidden when no tool is armed or on the view-only / geometry tabs. Shown on
+// Setup as well as Edit because armed tools apply to chair clicks there too.
+// Re-run whenever the tool or its payload changes, and on tab switches.
+function updateToolPill() {
+  const show = activeTool !== null && (activeTab === 'edit' || activeTab === 'setup')
+  toolPill.style.display = show ? '' : 'none'
+  if (!show || activeTool === null) return
+  let html = ''
+  if (activeTool === 'toggle') {
+    html = '<b>Hide</b> — click a chair to hide / show it'
+  } else if (activeTool === 'stand') {
+    const m = { solo: 'Solo', desk: 'In desks', remove: 'Remove' }[standMode]
+    html = `<b>Music Stand: ${m}</b> — click or drag a box over chairs`
+  } else if (activeTool === 'stool') {
+    const m = { chair: 'Chair', stool: 'Stool', standing: 'Standing' }[stoolMode]
+    html = `<b>Chair Type: ${m}</b> — click or drag a box over chairs`
+  } else if (activeTool === 'color') {
+    html = `<b>Colour</b> <span class="tool-pill-swatch" style="background:${escapeHtml(activeColor)}"></span> — click or drag a box over chairs`
+  } else if (activeTool === 'label') {
+    html = selectedLabel !== null
+      ? `<b>Label: “${escapeHtml(selectedLabel)}”</b> — click chairs to stamp it`
+      : '<b>Label</b> — click a chair to type its name'
+  }
+  toolPillText.innerHTML = html
+}
+
 // Apply the active chair tool to every enabled chair caught by a marquee drag,
 // in a single undo step. `centre` is the box centre (chart coords), used only to
 // place the free-type bulk-label input.
 function applyBulkTool(refs: { rowIndex: number; chairIndex: number }[], centre: { x: number; y: number }) {
+  if (activeTool === null) return   // select mode: nothing to bulk-apply
   const targets = refs.filter(r => config.rows[r.rowIndex]?.chairs[r.chairIndex]?.enabled)
   if (targets.length === 0) return
 
@@ -2345,6 +2384,13 @@ canvas.addEventListener('click', (e) => {
   // a click is the tail of a move, so renaming there would be surprising.)
   if (renderer.conductorHitTest(x, y)) {
     if (activeTab === 'edit') openConductorLabelEditor()
+    return
+  }
+
+  // No tool armed (select mode, the default): clicking a chair or stand opens
+  // the same menu as a right-click — noun-first editing, no mode to remember.
+  if (activeTool === null) {
+    if (activeTab === 'edit') openChairContextMenu(e.clientX, e.clientY, x, y)
     return
   }
 
@@ -2672,6 +2718,7 @@ function bindEvents() {
       renderChart()
     }
     syncDragControls()   // canvas drag-behaviour control is Edit-tab only
+    updateToolPill()     // pill shows only where armed tools apply (Edit/Setup)
   }
   tabButtons.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset['tab'])))
   tabNavButtons.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset['tabNav'])))
@@ -2687,11 +2734,12 @@ function bindEvents() {
   }
 
   // Single source of truth for "what does clicking a chair do". Each Edit Chairs
-  // tool button sets one of toggle/stand/stool/label/color. The Label tool has
-  // two modes: with an instrument armed from the picker a click stamps it,
+  // tool button arms one of toggle/stand/stool/label/color; null puts the tool
+  // down (select mode — a chair click opens its context menu). The Label tool
+  // has two modes: with an instrument armed from the picker a click stamps it,
   // otherwise a click opens the free-type editor. Keeps the tool buttons,
-  // sub-panels and label selection in sync.
-  function setChairTool(tool: ChairTool) {
+  // sub-panels, label selection and the canvas tool pill in sync.
+  function setChairTool(tool: ChairTool | null) {
     activeTool = tool
     lastCycledChair = null   // a new chair always starts from the armed mode
     toolButtons.forEach(b => b.classList.toggle('active', b.dataset['tool'] === tool))
@@ -2707,18 +2755,25 @@ function bindEvents() {
     // Rebuild the paste list on entry so it reflects any chairs hidden/shown
     // since it was last drawn (the toggle tool only re-renders the canvas).
     if (tool === 'label') renderLabelList()
-    editChairsHint.textContent = TOOL_HINTS[tool]
+    editChairsHint.textContent = tool ? TOOL_HINTS[tool] : NEUTRAL_HINT
     // Always clear the instrument selection: switching to a non-label tool
     // leaves label mode, and switching INTO the Label tool means free-type
     // (the picker re-sets selectedLabel itself, after this call).
     clearLabelSelection()
     closeChairLabelEditor()
+    updateToolPill()
   }
 
-  // Tool selection
+  // Tool selection. Clicking the already-armed tool's button puts it down
+  // again (back to select mode), so every way into a mode is also a way out.
   toolButtons.forEach(btn => {
-    btn.addEventListener('click', () => setChairTool(btn.dataset['tool'] as ChairTool))
+    btn.addEventListener('click', () => {
+      const tool = btn.dataset['tool'] as ChairTool
+      setChairTool(tool === activeTool ? null : tool)
+    })
   })
+  // The pill's ✕ — same as Escape.
+  toolPillClose.addEventListener('click', () => setChairTool(null))
 
   // Inline chair-label editor key handling.
   chairLabelInput.addEventListener('keydown', (e) => {
@@ -2739,6 +2794,7 @@ function bindEvents() {
     btn.addEventListener('click', () => {
       standMode = STAND_MODE_MAP[btn.dataset['standBulk'] ?? 'per-chair'] ?? 'solo'
       standBulkButtons.forEach(b => b.classList.toggle('active', b === btn))
+      updateToolPill()
     })
   })
 
@@ -2748,6 +2804,7 @@ function bindEvents() {
     btn.addEventListener('click', () => {
       stoolMode = STOOL_MODE_MAP[btn.dataset['stoolBulk'] ?? 'chairs'] ?? 'chair'
       stoolBulkButtons.forEach(b => b.classList.toggle('active', b === btn))
+      updateToolPill()
     })
   })
 
@@ -2806,6 +2863,7 @@ function bindEvents() {
             instrumentPickerList.querySelectorAll('.active').forEach(el => el.classList.remove('active'))
             b.classList.add('active')
             instrumentPickerStatus.textContent = `Selected: "${label}". Click any chair to stamp it.`
+            updateToolPill()
           })
           return b
         }
@@ -2841,6 +2899,7 @@ function bindEvents() {
 
   colorPicker.addEventListener('input', () => {
     activeColor = colorPicker.value
+    updateToolPill()
   })
 
   // Undo / redo
@@ -3037,6 +3096,11 @@ function bindEvents() {
       }
       if (isLibraryOpen()) {
         closeLibrary()
+        return
+      }
+      // No overlay open: put down the armed chair tool (matches the pill's ✕).
+      if (activeTool !== null) {
+        setChairTool(null)
         return
       }
     }

@@ -1140,6 +1140,61 @@ button.danger:hover { background: #fff0f0; }
   border-color: var(--accent);
 }
 
+/* Armed-tool pill: floats at the top of the canvas (beside the undo cluster,
+   clear of the centred chart title) whenever an Edit Chairs tool is armed, so
+   the next click's effect is always visible. Accent-tinted so it reads as
+   "a mode is on", matching the active tool button. */
+#tool-pill {
+  position: absolute;
+  top: 13px;
+  left: 220px;   /* right of the undo/redo (left 12) + zoom (left 84) clusters */
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(70%, 480px);
+  height: 30px;
+  padding: 0 4px 0 12px;
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--accent);
+  border-radius: 15px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+#tool-pill-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#tool-pill-text b { font-weight: 600; }
+/* Colour tool: a small round swatch of the armed colour inside the pill. */
+.tool-pill-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  vertical-align: -2px;
+}
+#tool-pill-close {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--accent);
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+#tool-pill-close:hover { background: rgba(37, 99, 235, 0.1); }
+
 /* A marquee needs a mouse — hide the "drag a box" hint where there's no fine pointer. */
 body:not(.marquee-capable) .marquee-hint { display: none; }
 
@@ -1461,6 +1516,15 @@ body:not(.marquee-capable) .marquee-hint { display: none; }
 
   /* Slightly tighter header so the chart preview gets more height. */
   #sidebar h1 { font-size: 16px; }
+
+  /* No room right of the zoom cluster on a phone — drop the armed-tool pill
+     to a second row, and push the drag toggle (same spot) below it. */
+  #tool-pill {
+    top: 52px;
+    left: 12px;
+    max-width: calc(100% - 24px);
+  }
+  .canvas-drag-controls { top: 90px; }
 }
 
 @media print {
@@ -1469,6 +1533,7 @@ body:not(.marquee-capable) .marquee-hint { display: none; }
   .canvas-overlay-controls,
   .canvas-zoom-controls,
   .canvas-drag-controls,
+  #tool-pill,
   #tally-overlay,
   #library-drawer,
   .drawer-backdrop,

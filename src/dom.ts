@@ -8,6 +8,9 @@
 export const canvas = document.getElementById('chart-canvas') as HTMLCanvasElement
 export const canvasArea = document.getElementById('canvas-area') as HTMLElement
 export const marqueeBox = document.getElementById('marquee-box') as HTMLElement
+export const toolPill = document.getElementById('tool-pill') as HTMLElement
+export const toolPillText = document.getElementById('tool-pill-text') as HTMLElement
+export const toolPillClose = document.getElementById('tool-pill-close') as HTMLButtonElement
 
 // --- Tab bar ---
 export const tabButtons = document.querySelectorAll<HTMLButtonElement>('[data-tab]')

@@ -222,8 +222,26 @@ Drawn only in layout mode; recorded in `layoutHandles` (hit-tested by
 The **Edit chairs** panel is the one workspace for "what a chair click does".
 `setChairTool(tool)` is the single source of truth: it sets `activeTool`,
 toggles the tool-button highlights, shows exactly one contextual sub-panel,
-clears any armed instrument selection, and closes the inline label editor. The
-six tools (`ChairTool`) and their sub-panels:
+clears any armed instrument selection, closes the inline label editor, and
+refreshes the canvas tool pill (below).
+
+**`activeTool` is nullable — null (the default) is "select mode"**: no tool
+armed, and clicking a chair/stand opens the same context menu as a right-click
+(`openChairContextMenu`), so single-chair edits are noun-first and need no mode
+at all. A tool arms via its button and **disarms** via a second click on the
+same button, Escape, or the pill's ✕ — every way into a mode is a way out.
+Marquee drags don't start in select mode (nothing to bulk-apply).
+
+**The tool pill** (`#tool-pill`, `updateToolPill()`): while a tool is armed, a
+pill floats at the top of the canvas (right of the undo + zoom clusters;
+second row ≤640px) naming the tool and its payload — armed instrument label,
+stand/seat mode, colour swatch — plus a ✕ to put it down. Re-rendered on tool
+change, payload change (sub-panel mode buttons, colour input, instrument
+picker) and tab switch; shown on Edit *and* Setup (armed tools apply to chair
+clicks there too), hidden on Layout/Export and in print. This is the answer to
+"what will my next click do" without glancing at the sidebar.
+
+The five tools (`ChairTool`) and their sub-panels:
 
 - **Hide** (`toggle`) — toggles `chair.enabled`, then `repackLabelsAfterToggle`
   re-flows the row's labels so none strand on the hidden seat: the toggled chair
@@ -262,7 +280,8 @@ six tools (`ChairTool`) and their sub-panels:
   abbreviated forms so preset/abbreviated labels classify into their section
   instead of "Other".
 
-A one-line `#edit-chairs-hint` (`TOOL_HINTS[tool]`) explains the active tool.
+A one-line `#edit-chairs-hint` (`TOOL_HINTS[tool]`, or `NEUTRAL_HINT` in
+select mode) explains the active tool.
 The seat-number / restart-per-row / row-label *display* toggles live in a
 separate slim **Numbers & labels** panel (they're chart-display options, not
 chair-click actions).

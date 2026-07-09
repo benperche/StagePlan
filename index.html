@@ -174,13 +174,13 @@
           <h2>Edit chairs</h2>
           <p class="hint">Pick what a chair click does, then click chairs on the chart.<span class="marquee-hint"> Or <strong>drag a box</strong> over several to apply it to them all at once.</span></p>
           <div class="tool-group">
-            <button data-tool="toggle" class="tool-btn active">Hide</button>
+            <button data-tool="toggle" class="tool-btn">Hide</button>
             <button data-tool="stand" class="tool-btn">Music Stand</button>
             <button data-tool="stool" class="tool-btn">Chair Type</button>
             <button data-tool="label" class="tool-btn">Label</button>
             <button data-tool="color" class="tool-btn">Colour</button>
           </div>
-          <p class="hint" id="edit-chairs-hint">Click a chair to hide it — its place is kept so the row doesn't shift. Click again to bring it back.</p>
+          <p class="hint" id="edit-chairs-hint">No tool picked — click any chair on the chart to open its menu. Or pick a tool above to apply one change to lots of chairs quickly (click it again to put it down).</p>
 
           <label id="color-picker-label" style="display:none">Colour
             <input type="color" id="color-picker" value="#a8d8ea" />
@@ -343,6 +343,14 @@
       <div class="canvas-overlay-controls">
         <button id="undo-btn" disabled title="Undo (Cmd/Ctrl + Z)">↩</button>
         <button id="redo-btn" disabled title="Redo (Cmd/Ctrl + Shift + Z)">↪</button>
+      </div>
+      <!-- Armed-tool pill: floats at the top-centre of the canvas whenever an
+           Edit Chairs tool is armed, so it's always visible what the next
+           chair click will do. The ✕ (or Esc) puts the tool down again,
+           returning to select mode where clicking a chair opens its menu. -->
+      <div id="tool-pill" style="display:none">
+        <span id="tool-pill-text"></span>
+        <button id="tool-pill-close" title="Put down the tool (Esc)">✕</button>
       </div>
       <canvas id="chart-canvas"></canvas>
       <!-- Marquee selection box: drawn over the canvas while dragging in the
