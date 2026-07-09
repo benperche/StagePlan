@@ -258,10 +258,10 @@ const INSTRUMENT_ABBREV: Record<string, string> = {
   'Bass Clarinet': 'B Cl', 'Contrabass Clarinet': 'CB Cl',
   Bassoon: 'Bsn', Contrabassoon: 'Cbsn',
   // Saxophones
-  'Soprano Sax': 'SS', 'Alto Sax': 'AS', 'Tenor Sax': 'TS', 'Bari Sax': 'BS',
-  'Bass Sax': 'B Sax',
+  'Soprano Sax': 'Sop S', 'Alto Sax': 'Alto S', 'Tenor Sax': 'Tenor S', 'Bari Sax': 'Bari S',
+  'Bass Sax': 'Bass S',
   // Brass
-  Horn: 'Hn', Trumpet: 'Tpt', Cornet: 'Cnt', Flugelhorn: 'Flug',
+  Horn: 'Hn', Trumpet: 'Tpt', Cornet: 'Crt', Flugelhorn: 'Flug',
   Trombone: 'Tbn', 'Bass Trombone': 'B Tbn', Baritone: 'Bar', Euphonium: 'Euph',
   // Strings
   Violin: 'Vn', Viola: 'Va', Cello: 'Vc', 'Double Bass': 'Cb',
