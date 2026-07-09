@@ -32,26 +32,46 @@ function buildExercisedConfig(): ChartConfig {
   return config
 }
 
+// Row/chair/instrument ids are stripped from share links (pure runtime
+// identity, incompressible UUID noise) and regenerated on decode — so
+// round-trip comparisons must ignore them.
+function stripIds(config: ChartConfig): unknown {
+  return {
+    ...config,
+    rows: config.rows.map(({ id: _id, chairs, ...row }) => ({
+      ...row,
+      chairs: chairs.map(({ id: _cid, ...chair }) => chair),
+    })),
+    instruments: (config.instruments ?? []).map(({ id: _iid, ...inst }) => inst),
+  }
+}
+
+// The pre-compression v1 encoding, as produced by every already-shared link.
+function legacyEncode(config: ChartConfig): string {
+  const { backgroundImage: _bg, ...rest } = config
+  return '#' + btoa(encodeURIComponent(JSON.stringify(rest)))
+}
+
 describe('encodeToHash / decodeFromHash round-trip', () => {
-  it('round-trips a config exercising optional fields, except the background image', () => {
+  it('round-trips a config exercising optional fields, except the background image', async () => {
     const config = buildExercisedConfig()
-    const { hash, strippedBackground } = encodeToHash(config)
+    const { hash, strippedBackground } = await encodeToHash(config)
     expect(strippedBackground).toBe(true)
 
-    const decoded = decodeFromHash(hash)
+    const decoded = await decodeFromHash(hash)
     expect(decoded).not.toBeNull()
 
     // backgroundImage is intentionally stripped.
     expect(decoded!.backgroundImage).toBeUndefined()
 
-    const { backgroundImage, ...expected } = config
-    expect(decoded).toEqual(expected)
+    const { backgroundImage: _bg, ...expected } = config
+    expect(stripIds(decoded!)).toEqual(stripIds(expected as ChartConfig))
   })
 
-  it('deep-compares row/chair optional fields exactly', () => {
+  it('deep-compares row/chair optional fields exactly', async () => {
     const config = buildExercisedConfig()
-    const { hash } = encodeToHash(config)
-    const decoded = decodeFromHash(hash)!
+    const { hash } = await encodeToHash(config)
+    const decoded = (await decodeFromHash(hash))!
 
     expect(decoded.rows[0].riser).toBe(2)
     expect(decoded.rows[0].riserPad).toBe(35)
@@ -68,24 +88,65 @@ describe('encodeToHash / decodeFromHash round-trip', () => {
     expect(decoded.instruments[0].count).toBe(4)
   })
 
-  it('accepts a hash with or without the leading #', () => {
-    const config = makeDefaultConfig()
-    const { hash } = encodeToHash(config)
-    expect(hash.startsWith('#')).toBe(true)
-    const withoutHash = hash.slice(1)
+  it('regenerates fresh, unique ids for rows, chairs and instruments', async () => {
+    const config = buildExercisedConfig()
+    const { hash } = await encodeToHash(config)
+    const decoded = (await decodeFromHash(hash))!
 
-    const decodedWith = decodeFromHash(hash)
-    const decodedWithout = decodeFromHash(withoutHash)
-    expect(decodedWith).toEqual(decodedWithout)
-    expect(decodedWith).toEqual(config)
+    const ids: string[] = []
+    for (const row of decoded.rows) {
+      ids.push(row.id)
+      for (const chair of row.chairs) ids.push(chair.id)
+    }
+    for (const inst of decoded.instruments) ids.push(inst.id)
+
+    expect(ids.every(id => typeof id === 'string' && id.length > 0)).toBe(true)
+    expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it('returns null for garbage input instead of throwing', () => {
-    expect(decodeFromHash('#not-valid-base64!!!')).toBeNull()
-    expect(decodeFromHash('')).toBeNull()
-    expect(decodeFromHash(btoa(encodeURIComponent('not json')))).toBeNull()
+  it('accepts a hash with or without the leading #', async () => {
+    const config = makeDefaultConfig()
+    const { hash } = await encodeToHash(config)
+    expect(hash.startsWith('#2.')).toBe(true)
+    const withoutHash = hash.slice(1)
+
+    const decodedWith = await decodeFromHash(hash)
+    const decodedWithout = await decodeFromHash(withoutHash)
+    expect(stripIds(decodedWith!)).toEqual(stripIds(decodedWithout!))
+    expect(stripIds(decodedWith!)).toEqual(stripIds(config))
+  })
+
+  it('still decodes legacy v1 links (btoa + encodeURIComponent, ids included)', async () => {
+    const config = buildExercisedConfig()
+    const decoded = await decodeFromHash(legacyEncode(config))
+    expect(decoded).not.toBeNull()
+    // Legacy links carried the ids, so this round-trip is exact (minus bg).
+    const { backgroundImage: _bg, ...expected } = config
+    expect(decoded).toEqual(expected)
+  })
+
+  it('is drastically shorter than the legacy encoding', async () => {
+    const config = buildExercisedConfig()
+    const { hash } = await encodeToHash(config)
+    const legacy = legacyEncode(config)
+    // The whole point of v2: deflate + base64url + no ids. Even this small
+    // config should compress to well under a third of the legacy length.
+    expect(hash.length).toBeLessThan(legacy.length / 3)
+  })
+
+  it('base64url output needs no percent-escaping in a URL', async () => {
+    const { hash } = await encodeToHash(buildExercisedConfig())
+    const body = hash.slice(1)
+    expect(encodeURIComponent(body)).toBe(body)
+  })
+
+  it('returns null for garbage input instead of throwing', async () => {
+    expect(await decodeFromHash('#not-valid-base64!!!')).toBeNull()
+    expect(await decodeFromHash('')).toBeNull()
+    expect(await decodeFromHash('#2.not-deflate-data')).toBeNull()
+    expect(await decodeFromHash(btoa(encodeURIComponent('not json')))).toBeNull()
     // Valid JSON, but not a StagePlan chart (no `rows` array) — migrate()
     // throws "Not a StagePlan chart", which decodeFromHash swallows to null.
-    expect(decodeFromHash(btoa(encodeURIComponent(JSON.stringify({ foo: 'bar' }))))).toBeNull()
+    expect(await decodeFromHash(btoa(encodeURIComponent(JSON.stringify({ foo: 'bar' }))))).toBeNull()
   })
 })

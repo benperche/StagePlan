@@ -375,10 +375,11 @@ import {
 
 // --- Init ---
 
-function init() {
+async function init() {
   if (location.hash) {
-    // An explicit shared-chart link wins over anything else.
-    const loaded = decodeFromHash(location.hash)
+    // An explicit shared-chart link wins over anything else. (Async because
+    // the current hash format inflates via DecompressionStream.)
+    const loaded = await decodeFromHash(location.hash)
     if (loaded) config = loaded
   } else {
     // Otherwise pick up where the last session left off (autosave safety net).
@@ -3432,8 +3433,8 @@ function bindEvents() {
     handleLibraryAction(action, id, folder).catch(() => { void showAlert(LIBRARY_ERROR, { title: 'Library error' }) })
   })
 
-  shareLinkBtn.addEventListener('click', () => {
-    const { hash, strippedBackground } = encodeToHash(config)
+  shareLinkBtn.addEventListener('click', async () => {
+    const { hash, strippedBackground } = await encodeToHash(config)
     const url = location.origin + location.pathname + hash
     navigator.clipboard.writeText(url).catch(() => {})
     shareUrlDisplay.textContent = strippedBackground
@@ -3628,4 +3629,4 @@ function bindEvents() {
   new ResizeObserver(() => renderChart()).observe(canvas.parentElement!)
 }
 
-init()
+void init()
