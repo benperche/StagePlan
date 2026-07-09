@@ -479,6 +479,29 @@ button.secondary { border-style: dashed; }
   border-color: var(--accent);
 }
 
+/* Layout-tab drag-handle legend: a small chip + caption per handle type,
+   glyphs mirror the shapes/colors the canvas actually draws (see
+   drawLayoutDiamond/drawLayoutDot/drawDeskDot/drawRiserSizeHandle and the
+   arc-range handle in renderer.ts). */
+.layout-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 2px 0 4px;
+}
+.layout-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.layout-legend-glyph {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
 /* Layout-tab per-row inspector boxes */
 #layout-row-list {
   display: flex;
