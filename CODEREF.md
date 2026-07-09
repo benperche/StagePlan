@@ -7,6 +7,10 @@ Internal notes for working on the codebase. Not user-facing.
 - **Vite + TypeScript**, no framework — vanilla DOM + a single canvas.
 - **HTML5 Canvas** for all chart rendering. No SVG, no drawing library.
 - Hosted on **GitHub Pages**. Build: `npm run build`; preview: `npm run dev`.
+- **Vitest** unit-test suite (`npm test`) covers the pure modules —
+  `tests/section-layout.test.ts`, `tests/presets.test.ts`,
+  `tests/serializer.test.ts`. No DOM/renderer tests (the renderer needs a real
+  `<canvas>`); `main.ts` is untested glue.
 - Single-page: `index.html` + `src/*.ts` + `src/style.css`.
 - **Layout**: desktop is a flex row — fixed-width `#sidebar` + flexible
   `#canvas-area`. Below **640px** (`@media` in `style.css`) it stacks into a
@@ -23,6 +27,7 @@ Internal notes for working on the codebase. Not user-facing.
 | `src/types.ts` | Pure data shapes — `Chair`, `Row`, `ChartConfig`, `FixedInstrument`, hit-test types. The schema. No logic. |
 | `src/state.ts` | Factory functions (`makeChair`, `makeRow`, `makeDefaultConfig`, `makeInstrument`), `cloneConfig`, and the `History` class for undo/redo. Anything that *creates* a domain object. |
 | `src/renderer.ts` | The `Renderer` class. Takes a `ChartConfig`, draws it to a `<canvas>`, exposes hit-test methods. Holds the cached background `Image`. **Zero awareness of DOM/sidebar.** |
+| `src/section-layout.ts` | Pure row-radius/group-layout math shared by the renderer and the orchestra generator: `computeRowRadii`/`rowBaseRadius`/`riserExtraDepth` (cumulative per-row radius from the conductor, incl. `gapBefore` and riser step-back — the single source of truth so the renderer's draw pass and its Layout-tab drag handles can never drift), plus `computeGroupLayout`/`applyGroupedRowRadii` (grouped-wedge spacing for string sections). No DOM/canvas awareness. |
 | `src/instrument-glyphs.ts` | Pure draw functions for each fixed-instrument glyph (drum kit, piano, amp, timpani, mallet, generic rectangle). Each draws at (0, 0) in the current canvas frame and returns its `{ hw, hh, labelInside }` bounding box. No class — just stateless functions. |
 | `src/presets.ts` | The preset library, the Boosey & Hawkes notation parser (`parseOrchestraNotation`, `describeComposition`), and the orchestra-row builder (`buildOrchestraRows`). Self-contained: input shorthand → `Row[]`. |
 | `src/serializer.ts` | Persistence — JSON save/load, URL-hash encode/decode, PNG export. The hash encoder strips `backgroundImage` (too big for a URL) and reports back. |
