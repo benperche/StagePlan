@@ -277,12 +277,46 @@
       <div class="tab-content" data-tab-content="layout">
         <section class="panel">
           <h2>Layout</h2>
-          <p class="hint">Fine-tune chair positions directly on the chart.<br>
-            Drag the <strong>apex dot</strong> of a row to move it in/out, the
-            <strong>end dots</strong> to widen or narrow it (Shift-drag one end
-            for an uneven spread).<br>
-            Drag a <strong>chair</strong> sideways to nudge it along its row, or the <strong>teal dot</strong> between a desk's two chairs to slide them together. Drag the <strong>title</strong> to reposition it.<br>
-            Double-click any handle (or the title) to reset it — or use the per-row boxes below.</p>
+          <p class="hint">Fine-tune chair positions directly on the chart. Drag a handle to move it — double-click to reset.</p>
+          <div class="layout-legend">
+            <div class="layout-legend-row">
+              <svg class="layout-legend-glyph" viewBox="0 0 14 14" aria-hidden="true">
+                <circle cx="7" cy="7" r="6.5" fill="var(--bg)" stroke="var(--border)"/>
+                <path d="M7 2 L11 7 L7 12 L3 7 Z" fill="#2563eb" stroke="#fff" stroke-width="1.5"/>
+              </svg>
+              <span>Row distance — drag in or out</span>
+            </div>
+            <div class="layout-legend-row">
+              <svg class="layout-legend-glyph" viewBox="0 0 14 14" aria-hidden="true">
+                <circle cx="7" cy="7" r="6.5" fill="var(--bg)" stroke="var(--border)"/>
+                <circle cx="7" cy="7" r="4" fill="#2563eb" stroke="#fff" stroke-width="1.5"/>
+              </svg>
+              <span>Row ends — widen or narrow (Shift = one end only)</span>
+            </div>
+            <div class="layout-legend-row">
+              <svg class="layout-legend-glyph" viewBox="0 0 14 14" aria-hidden="true">
+                <circle cx="7" cy="7" r="6.5" fill="var(--bg)" stroke="var(--border)"/>
+                <circle cx="7" cy="7" r="4.5" fill="#0d9488" stroke="#fff" stroke-width="1.5"/>
+                <circle cx="7" cy="7" r="1.2" fill="#fff"/>
+              </svg>
+              <span>Desk pair — slide both chairs along the row</span>
+            </div>
+            <div class="layout-legend-row">
+              <svg class="layout-legend-glyph" viewBox="0 0 14 14" aria-hidden="true">
+                <circle cx="7" cy="7" r="6.5" fill="var(--bg)" stroke="var(--border)"/>
+                <circle cx="7" cy="7" r="4" fill="#7c3aed" stroke="#fff" stroke-width="1.5"/>
+              </svg>
+              <span>Default arc width — moves every untouched row</span>
+            </div>
+            <div class="layout-legend-row">
+              <svg class="layout-legend-glyph" viewBox="0 0 14 14" aria-hidden="true">
+                <circle cx="7" cy="7" r="6.5" fill="var(--bg)" stroke="var(--border)"/>
+                <rect x="3.5" y="3.5" width="7" height="7" fill="#475569" stroke="#fff" stroke-width="1.5"/>
+              </svg>
+              <span>Riser platform — drag to enlarge</span>
+            </div>
+          </div>
+          <p class="hint">Drag a chair sideways to nudge it, or drag the title to move it. Double-click any handle to reset it — or use the per-row boxes below.</p>
           <div class="row-controls">
             <button id="tidy-sections-btn" class="secondary">🪄 Tidy string sections</button>
           </div>
