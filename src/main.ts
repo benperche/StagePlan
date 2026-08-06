@@ -183,8 +183,16 @@ let titleDrag: {
   preDragConfig: ChartConfig; moved: boolean
 } | null = null
 
-// Active drag of a chart-wide default arc-range handle (sets config.arcRange).
-let arcRangeDrag: { startX: number; startY: number; preDragConfig: ChartConfig; moved: boolean } | null = null
+// Active drag of a chart-wide default arc handle. Plain drag sets the arc's
+// WIDTH (config.arcRange); Shift/Cmd rotates the whole default arc
+// (config.arcCenter) — the chart-wide analogue of Shift-dragging one row's
+// end. `startAngle`/`center0` are captured at grab time so the rotate is a
+// relative delta rather than snapping the centre onto the pointer.
+let arcRangeDrag: {
+  startX: number; startY: number
+  startAngle: number; center0: number
+  preDragConfig: ChartConfig; moved: boolean
+} | null = null
 
 // Active Layout-tab per-chair nudge. naturalAngle (arc) / base (straight) are
 // the chair's position with its current offset backed out, so the new offset
@@ -1275,6 +1283,10 @@ function canvasToChart(x: number, y: number): { x: number; y: number } {
 
 const LAYOUT_MIN_SPACING = 34   // px floor so straight-row chairs never overlap
 
+// Wrap an angle difference into (-π, π]. Arc ends sit near the atan2 ±π seam,
+// where a raw subtraction can jump by 2π and send a drag flying.
+const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a))
+
 // Which span-drag behaviour a modifier selects. Plain drag is the common case
 // (widen/narrow about the centre); Shift slides the WHOLE row sideways — the
 // thing testers reached for first and couldn't find; Cmd/Ctrl is the niche
@@ -1405,7 +1417,10 @@ function handleTipHtml(handle: import('./types').LayoutHandleHit): string {
       return 'Drag to slide this desk pair · double-click resets'
     case 'arc-range-start':
     case 'arc-range-end':
-      return 'Drag to set the default arc width — moves every row you haven’t adjusted'
+      // Symmetric handles, so there's no "one end" case — Shift and Cmd both
+      // rotate. Naming only Shift keeps the tip short; Cmd works too.
+      return `Drag to set the default arc width · <b>Shift</b>-drag to rotate the whole arc `
+        + '· moves every row you haven’t adjusted · double-click resets'
     case 'riser-size':
       return 'Drag to enlarge this riser platform · double-click resets'
     default:
@@ -1863,7 +1878,13 @@ canvas.addEventListener('pointerdown', (e) => {
     const handle = renderer.layoutHandleHitTest(x, y)
     if (handle) {
       if (handle.kind === 'arc-range-start' || handle.kind === 'arc-range-end') {
-        arcRangeDrag = { startX: x, startY: y, preDragConfig: cloneConfig(config), moved: false }
+        const { ox, oy, yDir } = renderer.conductorOrigin
+        arcRangeDrag = {
+          startX: x, startY: y,
+          startAngle: Math.atan2((y - oy) / yDir, (x - ox) / -yDir),
+          center0: config.arcCenter ?? Math.PI / 2,
+          preDragConfig: cloneConfig(config), moved: false,
+        }
         return
       }
       if (handle.kind === 'riser-size') {
@@ -1981,7 +2002,8 @@ window.addEventListener('pointermove', (e) => {
     renderChart()
     return
   }
-  // Default arc-range drag — sets config.arcRange (moves all non-edited rows).
+  // Default arc drag — width (plain) or rotation (Shift/Cmd). Either moves
+  // every row that hasn't had its own arc edited.
   if (arcRangeDrag) {
     const cv = pointerCanvasCoords(e)
     const { x, y } = canvasToChart(cv.x, cv.y)
@@ -1993,9 +2015,16 @@ window.addEventListener('pointermove', (e) => {
     const { ox, oy, yDir } = renderer.conductorOrigin
     const xDir = -yDir
     const a = Math.atan2((y - oy) / yDir, (x - ox) / xDir)
-    const range = Math.max(Math.PI / 3, Math.min(Math.PI, 2 * Math.abs(a - Math.PI / 2)))
-    config.arcRange = range
-    arcRangeInput.value = String(Math.round((range * 180) / Math.PI))
+    // The arc-range handles are symmetric, so there's no "one end only" case
+    // to distinguish — Shift and Cmd both mean "rotate the whole arc".
+    if (e.shiftKey || e.metaKey || e.ctrlKey) {
+      config.arcCenter = arcRangeDrag.center0 + wrapAngle(a - arcRangeDrag.startAngle)
+    } else {
+      const center = config.arcCenter ?? Math.PI / 2
+      const range = Math.max(Math.PI / 3, Math.min(Math.PI, 2 * Math.abs(wrapAngle(a - center))))
+      config.arcRange = range
+      arcRangeInput.value = String(Math.round((range * 180) / Math.PI))
+    }
     renderChart()
     return
   }
@@ -2253,11 +2282,13 @@ canvas.addEventListener('dblclick', (e) => {
   const { x, y } = canvasToChart(cv.x, cv.y)
   const handle = renderer.layoutHandleHitTest(x, y)
   if (handle) {
-    // Default arc-range handles → reset the default back to a full 180°.
+    // Default arc handles → reset both width and rotation (a full 180°
+    // centred on the apex), so one double-click undoes either gesture.
     if (handle.kind === 'arc-range-start' || handle.kind === 'arc-range-end') {
-      if ((config.arcRange ?? Math.PI) !== Math.PI) {
+      if ((config.arcRange ?? Math.PI) !== Math.PI || config.arcCenter !== undefined) {
         history.push(config)
         config.arcRange = Math.PI
+        delete config.arcCenter
         arcRangeInput.value = '180'
         renderChart()
       }
@@ -3541,6 +3572,7 @@ function bindEvents() {
     config.layout = 'semicircle'
     config.straightRows = 0
     config.arcRange = def.arcRange
+    delete config.arcCenter
     config.rowSpacing = def.rowSpacing
     config.flipped = false
     setSelectedInstrument(null)

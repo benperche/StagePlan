@@ -213,7 +213,15 @@ Drawn only in layout mode; recorded in `layoutHandles` (hit-tested by
 
 - **distance** (blue diamond, per row) → `row.gapBefore`; **span-start/end**
   (blue dots) → `row.arcStart/arcEnd` (arc) or `straightSpacing/straightOffset`
-  (straight); **arc-range-start/end** (purple, chart-wide) → `config.arcRange`.
+  (straight); **arc-range-start/end** (purple, chart-wide) → `config.arcRange`
+  (width) or, with **Shift/Cmd**, `config.arcCenter` (rotate the whole default
+  fan). The purple pair is symmetric so there's no "one end" case — Shift and
+  Cmd are interchangeable there. `arcCenter` defaults to π/2 (the apex) and is
+  the fallback centre in `rowArcAngles`, so rotating it moves every row that
+  hasn't had its own `arcStart/arcEnd` set. Double-clicking either purple
+  handle resets **both** width and rotation. (The Layout tab's "Reset all
+  layout tweaks" button deliberately leaves it alone — like `arcRange`, it's a
+  chart-wide default, not a per-row tweak.)
 - **Span-drag modifiers** (`SpanMode` / `spanModeFor`): plain = symmetric
   widen/narrow about the centre; **Shift** = slide the *whole row* sideways
   (straight: `straightOffset` follows the pointer, spacing untouched — arc:

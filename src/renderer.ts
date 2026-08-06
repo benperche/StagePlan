@@ -699,11 +699,12 @@ export class Renderer {
 
   // A row's arc span as [startAngle, endAngle] in canvas radians. Per-row
   // arcStart/arcEnd win; otherwise derived symmetrically from the global
-  // arcRange around the apex (π/2).
+  // arcRange around config.arcCenter (default the apex, π/2).
   private rowArcAngles(row: Row, config: ChartConfig): [number, number] {
     const range = config.arcRange ?? Math.PI
-    const start = row.arcStart ?? (Math.PI / 2 + range / 2)
-    const end = row.arcEnd ?? (Math.PI / 2 - range / 2)
+    const center = config.arcCenter ?? Math.PI / 2
+    const start = row.arcStart ?? (center + range / 2)
+    const end = row.arcEnd ?? (center - range / 2)
     return [start, end]
   }
 
@@ -1216,15 +1217,17 @@ export class Renderer {
     })
 
     // Chart-wide DEFAULT arc-range handles: two radial lines from the conductor
-    // at the default arc's ends. Dragging them sets config.arcRange, which moves
-    // every row that hasn't had its own arc edited. (Semicircle only.)
+    // at the default arc's ends. Dragging them sets config.arcRange (width) or,
+    // with Shift/Cmd, config.arcCenter (rotation) — either way moving every row
+    // that hasn't had its own arc edited. (Semicircle only.)
     if (config.layout === 'semicircle') {
       const range = config.arcRange ?? Math.PI
+      const center = config.arcCenter ?? Math.PI / 2
       const maxR = config.rows.reduce((m, _r, i) => Math.max(m, radii[i] ?? 0), BASE_RADIUS)
       const R = maxR + 46
       const ends: Array<[number, 'arc-range-start' | 'arc-range-end']> = [
-        [Math.PI / 2 + range / 2, 'arc-range-start'],
-        [Math.PI / 2 - range / 2, 'arc-range-end'],
+        [center + range / 2, 'arc-range-start'],
+        [center - range / 2, 'arc-range-end'],
       ]
       for (const [a, kind] of ends) {
         const ex = ox + xDir * R * Math.cos(a)

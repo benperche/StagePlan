@@ -141,6 +141,12 @@ export interface ChartConfig {
   // i.e. a full semicircle. Smaller values draw a narrower arc, useful for
   // ensembles that don't need to span the full front of the stage.
   arcRange: number
+  // Angle the default arc is centred on, in canvas radians. Unset → Math.PI/2
+  // (the apex, straight back from the conductor). Set by Shift/Cmd-dragging a
+  // purple arc-range handle, which rotates the whole default fan — the
+  // chart-wide analogue of Shift-dragging one row's end to slide that row.
+  // Only affects rows that haven't had their own arcStart/arcEnd set.
+  arcCenter?: number
   // Distance between adjacent concentric rows in pixels. Default 70.
   // Larger values give more breathing room between rows; smaller values
   // pack more rows into a tight chart at the cost of stand/number clash.

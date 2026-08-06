@@ -21,6 +21,7 @@ function buildExercisedConfig(): ChartConfig {
   chair.standAfter = true
 
   config.riserStepHeight = 25
+  config.arcCenter = Math.PI / 2 + 0.4   // rotated default arc
 
   // Fixed instrument via the state.ts factory.
   const instrument = makeInstrument('timpani', config.flipped, config.instruments.length, 300)
@@ -83,6 +84,7 @@ describe('encodeToHash / decodeFromHash round-trip', () => {
     expect(decoded.rows[0].chairs[0].noSeat).toBe(true)
     expect(decoded.rows[0].chairs[0].standAfter).toBe(true)
     expect(decoded.riserStepHeight).toBe(25)
+    expect(decoded.arcCenter).toBeCloseTo(Math.PI / 2 + 0.4, 12)
     expect(decoded.instruments).toHaveLength(1)
     expect(decoded.instruments[0].type).toBe('timpani')
     expect(decoded.instruments[0].count).toBe(4)
