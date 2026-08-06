@@ -1218,6 +1218,27 @@ button.danger:hover { background: #fff0f0; }
 }
 #tool-pill-close:hover { background: rgba(37, 99, 235, 0.1); }
 
+/* Layout-tab handle tooltip: follows the pointer while hovering a drag
+   handle and spells out that handle's gestures + modifier keys. Dark pill so
+   it reads over both the white canvas and the grey riser platforms. */
+#handle-tip {
+  position: absolute;
+  z-index: 13;
+  max-width: 320px;
+  padding: 5px 9px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #fff;
+  background: rgba(30, 41, 59, 0.94);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  pointer-events: none;   /* never eat the drag it's describing */
+}
+#handle-tip b {
+  font-weight: 600;
+  color: #bfdbfe;   /* the modifier keys pop out of the sentence */
+}
+
 /* Transient toast: a short-lived non-interactive notice near the bottom of
    the canvas (e.g. "Preset applied — Cmd+Z to undo"). Created lazily by
    showToast() in main.ts; .visible fades it in, removal fades it out. */
@@ -1583,6 +1604,7 @@ body:not(.marquee-capable) .marquee-hint { display: none; }
   .canvas-zoom-controls,
   .canvas-drag-controls,
   #tool-pill,
+  #handle-tip,
   #canvas-toast,
   #tally-overlay,
   #library-drawer,

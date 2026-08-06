@@ -214,6 +214,14 @@ Drawn only in layout mode; recorded in `layoutHandles` (hit-tested by
 - **distance** (blue diamond, per row) → `row.gapBefore`; **span-start/end**
   (blue dots) → `row.arcStart/arcEnd` (arc) or `straightSpacing/straightOffset`
   (straight); **arc-range-start/end** (purple, chart-wide) → `config.arcRange`.
+- **Span-drag modifiers** (`SpanMode` / `spanModeFor`): plain = symmetric
+  widen/narrow about the centre; **Shift** = slide the *whole row* sideways
+  (straight: `straightOffset` follows the pointer, spacing untouched — arc:
+  both ends rotate by the same `dA`, so the span is preserved and no clamping
+  is needed); **Cmd/Ctrl** = move only the grabbed end. Shift used to be the
+  one-end gesture, but testers reached for Shift wanting to shift a whole
+  big-band row and there was no way to do it — so the obvious modifier now
+  does the obvious thing and the niche gesture moved to Cmd.
 - Dragging a **chair** body sets that one chair's `chair.offset` (tangential
   nudge), clamped to `LAYOUT_MIN_SPACING` from its neighbours (`applyChairDrag`).
 - **desk** (teal dot, one per two-chair desk) → drags the whole desk: both
@@ -227,6 +235,15 @@ Drawn only in layout mode; recorded in `layoutHandles` (hit-tested by
   behind and made it easy to grab the wrong desk.) Desk midpoints are captured
   into `deskHandles` while the rows render, then drawn/registered in
   `renderLayoutHandles`. Double-clicking the dot clears both chairs' offsets.
+- **Handle tooltip** (`#handle-tip`, `updateHandleTip`/`handleTipHtml`): hovering
+  any handle in layout mode floats a dark pill by the cursor naming that
+  handle's gestures, with the modifier keys called out in `<b>`. Modifiers are
+  otherwise invisible, and the fix couldn't be more sidebar text (the Layout tab
+  is already a legend) — a tooltip costs nothing until you reach for the handle
+  you're curious about. Mouse-only (`hasFinePointer`), hidden during any drag
+  and on tab change. Positioned below-right of the cursor, flipped/clamped to
+  stay inside `#canvas-area`; `pointer-events: none` so it never eats the drag
+  it's describing.
 
 ## Chair tools & labelling
 

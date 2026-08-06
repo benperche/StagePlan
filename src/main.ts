@@ -362,7 +362,7 @@ import {
   coFl, coOb, coCl, coBsn, coHn, coTpt, coTbn, coTuba,
   coVn1, coVn2, coVa, coVc, coCb, coTimp, coHarp, coPiano,
   toolButtons, chairLabelInput, editChairsHint, labelPanel, clearLabelsBtn, instrumentPanel,
-  marqueeBox, dragOverwriteBtn, toolPill, toolPillText, toolPillClose,
+  marqueeBox, dragOverwriteBtn, handleTip, toolPill, toolPillText, toolPillClose,
   standBulkPanel, stoolBulkPanel, standBulkButtons, stoolBulkButtons,
   instrumentPickerList, labelList, instrumentPickerStatus,
   showTallyBtn, tallyOverlay, tallyBody, tallyTotal, tallyMinimizeBtn, tallyCloseBtn,
@@ -1275,9 +1275,18 @@ function canvasToChart(x: number, y: number): { x: number; y: number } {
 
 const LAYOUT_MIN_SPACING = 34   // px floor so straight-row chairs never overlap
 
+// Which span-drag behaviour a modifier selects. Plain drag is the common case
+// (widen/narrow about the centre); Shift slides the WHOLE row sideways — the
+// thing testers reached for first and couldn't find; Cmd/Ctrl is the niche
+// "drag just this end" (it used to be Shift, which wasted the obvious
+// modifier on the rarest action).
+type SpanMode = 'symmetric' | 'move-row' | 'one-end'
+const spanModeFor = (e: MouseEvent): SpanMode =>
+  e.shiftKey ? 'move-row' : (e.metaKey || e.ctrlKey) ? 'one-end' : 'symmetric'
+
 // Applies the in-progress distance/span drag to the dragged row. Distance is
-// a radial (arc) / vertical (straight) delta from grab point; span moves the
-// row's ends — symmetric by default, Shift moves only the grabbed end.
+// a radial (arc) / vertical (straight) delta from grab point; span reshapes or
+// slides the row depending on the modifier (see SpanMode).
 function applyLayoutDrag(e: MouseEvent) {
   if (!layoutDrag) return
   const cv = pointerCanvasCoords(e)
@@ -1308,7 +1317,12 @@ function applyLayoutDrag(e: MouseEvent) {
     const delta = exOf(x) - exOf(layoutDrag.start.x)
     const halfW0 = ((N - 1) * g.spacing) / 2
     const minHalf = (LAYOUT_MIN_SPACING * (N - 1)) / 2
-    if (e.shiftKey) {
+    const mode = spanModeFor(e)
+    if (mode === 'move-row') {
+      // Slide the whole row sideways — spacing untouched, centre follows the
+      // pointer. (Big-band rows in particular get nudged left/right as a block.)
+      row.straightOffset = g.centerOffset + delta
+    } else if (mode === 'one-end') {
       // Move the grabbed end only; keep the opposite end fixed.
       const grabbingRight = layoutDrag.kind === 'span-end'
       const fixed = g.centerOffset + (grabbingRight ? -halfW0 : halfW0)
@@ -1329,9 +1343,19 @@ function applyLayoutDrag(e: MouseEvent) {
     const angOf = (px: number, py: number) => Math.atan2((py - oy) / yDir, (px - ox) / xDir)
     let dA = angOf(x, y) - angOf(layoutDrag.start.x, layoutDrag.start.y)
     dA = Math.atan2(Math.sin(dA), Math.cos(dA))
+    const mode = spanModeFor(e)
     let start = g.arcStart
     let end = g.arcEnd
-    if (e.shiftKey) {
+    if (mode === 'move-row') {
+      // Slide the whole row along its arc — both ends rotate by the same
+      // angle, so the span is preserved and no clamping is needed. The arc
+      // analogue of nudging a straight row sideways.
+      row.arcStart = g.arcStart + dA
+      row.arcEnd = g.arcEnd + dA
+      renderChart()
+      return
+    }
+    if (mode === 'one-end') {
       if (layoutDrag.kind === 'span-end') end = g.arcEnd + dA
       else start = g.arcStart + dA
     } else if (layoutDrag.kind === 'span-end') {
@@ -1343,9 +1367,9 @@ function applyLayoutDrag(e: MouseEvent) {
     // narrowing until they meet); max ≈ a near-full circle.
     const minSpan = Math.min(Math.PI * 0.98, ((N - 1) * LAYOUT_MIN_SPACING) / g.r)
     const maxSpan = Math.PI * 1.95
-    if (e.shiftKey && layoutDrag.kind === 'span-end') {
+    if (mode === 'one-end' && layoutDrag.kind === 'span-end') {
       end = Math.min(start - minSpan, Math.max(start - maxSpan, end))
-    } else if (e.shiftKey) {
+    } else if (mode === 'one-end') {
       start = Math.max(end + minSpan, Math.min(end + maxSpan, start))
     } else {
       const mid = (start + end) / 2
@@ -1356,6 +1380,61 @@ function applyLayoutDrag(e: MouseEvent) {
     row.arcEnd = end
   }
   renderChart()
+}
+
+// --- Layout-tab handle tooltip ---
+//
+// Hovering a drag handle explains that handle, including its modifier keys.
+// Modifiers are otherwise invisible: a tester wanting to shift a whole big-band
+// row never found the gesture, and the fix can't be "more sidebar text" (the
+// Layout tab is already a legend). A tooltip costs nothing until you reach for
+// the handle you're curious about.
+function handleTipHtml(handle: import('./types').LayoutHandleHit): string {
+  const mod = modKeyLabel()
+  switch (handle.kind) {
+    case 'distance':
+      return 'Drag to move this row in / out · double-click resets'
+    case 'span-start':
+    case 'span-end': {
+      const straight = renderer.layoutRows[handle.rowIndex]?.isStraight
+      const widen = straight ? 'Drag to spread the chairs' : 'Drag to widen the arc'
+      const slide = straight ? 'slide the whole row' : 'slide the row along its arc'
+      return `${widen} · <b>Shift</b>-drag to ${slide} · <b>${mod}</b>-drag this end only`
+    }
+    case 'desk':
+      return 'Drag to slide this desk pair · double-click resets'
+    case 'arc-range-start':
+    case 'arc-range-end':
+      return 'Drag to set the default arc width — moves every row you haven’t adjusted'
+    case 'riser-size':
+      return 'Drag to enlarge this riser platform · double-click resets'
+    default:
+      return ''
+  }
+}
+
+function hideHandleTip() {
+  handleTip.style.display = 'none'
+}
+
+function updateHandleTip(e: MouseEvent) {
+  // Hover is a mouse concept, and the handles only exist in layout mode.
+  if (!layoutMode || !hasFinePointer) { hideHandleTip(); return }
+  const cv = pointerCanvasCoords(e)
+  const { x, y } = canvasToChart(cv.x, cv.y)
+  const handle = renderer.layoutHandleHitTest(x, y)
+  const html = handle ? handleTipHtml(handle) : ''
+  if (!html) { hideHandleTip(); return }
+  if (handleTip.innerHTML !== html) handleTip.innerHTML = html
+  handleTip.style.display = 'block'
+  // Offset below-right of the cursor, flipped/clamped to stay in the canvas.
+  const area = canvasArea.getBoundingClientRect()
+  let left = e.clientX - area.left + 14
+  let top = e.clientY - area.top + 18
+  if (left + handleTip.offsetWidth > area.width - 4) left = Math.max(4, left - handleTip.offsetWidth - 28)
+  if (top + handleTip.offsetHeight > area.height - 4) top = Math.max(4, top - handleTip.offsetHeight - 26)
+  handleTip.style.left = `${left}px`
+  handleTip.style.top = `${top}px`
 }
 
 // A screen-pixel move takes this many riser-pad px — under 1 so the handle
@@ -2568,11 +2647,13 @@ function bindEvents() {
   // under the cursor and their sidebar row control; hovering/focusing a row
   // control highlights the matching chairs on the canvas.
   canvas.addEventListener('pointermove', (e) => {
-    if (!e.isPrimary || anyDragActive()) return
+    if (!e.isPrimary) return
+    if (anyDragActive()) { hideHandleTip(); return }
     if (activeTab !== 'edit' && activeTab !== 'layout') return
+    updateHandleTip(e)
     setHoverChair(chairAtPointer(e))
   })
-  canvas.addEventListener('pointerleave', () => setHoverChair(null))
+  canvas.addEventListener('pointerleave', () => { setHoverChair(null); hideHandleTip() })
   bindRowControlHover(rowsContainer)
   bindRowControlHover(layoutRowList)
 
@@ -2805,6 +2886,7 @@ function bindEvents() {
     setHoverRow(null)         // drop any row-hover highlight when changing tabs
     closeChairLabelEditor()   // don't leave the inline editor floating after a tab change
     closeContextMenu()        // and don't leave a context menu floating either
+    hideHandleTip()           // the layout handles it describes are gone too
     // Export is view-only — drop any instrument selection so its (now
     // non-interactive) handles don't linger on the chart.
     if (tab === 'export' && selectedInstrumentId) { setSelectedInstrument(null); renderChart() }

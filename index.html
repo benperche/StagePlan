@@ -291,7 +291,7 @@
                 <circle cx="7" cy="7" r="6.5" fill="var(--bg)" stroke="var(--border)"/>
                 <circle cx="7" cy="7" r="4" fill="#2563eb" stroke="#fff" stroke-width="1.5"/>
               </svg>
-              <span>Row ends — widen or narrow (Shift = one end only)</span>
+              <span>Row ends — widen, or <strong>Shift</strong>-drag to move the whole row</span>
             </div>
             <div class="layout-legend-row">
               <svg class="layout-legend-glyph" viewBox="0 0 14 14" aria-hidden="true">
@@ -316,7 +316,7 @@
               <span>Riser platform — drag to enlarge</span>
             </div>
           </div>
-          <p class="hint">Drag a chair sideways to nudge it, or drag the title to move it. Double-click any handle to reset it — or use the per-row boxes below.</p>
+          <p class="hint">Drag a chair sideways to nudge it, or drag the title to move it. Double-click any handle to reset it — or use the per-row boxes below. <strong>Hover a handle on the chart</strong> to see what it does.</p>
           <div class="row-controls">
             <button id="tidy-sections-btn" class="secondary">🪄 Tidy string sections</button>
           </div>
@@ -388,6 +388,11 @@
         <button id="tool-pill-close" title="Put down the tool (Esc)">✕</button>
       </div>
       <canvas id="chart-canvas"></canvas>
+      <!-- Layout-tab handle tooltip: follows the pointer when hovering a drag
+           handle and names that handle's gestures (including the Shift / Cmd
+           modifiers), so the shortcuts are discoverable without permanently
+           parking more instructions in the sidebar. -->
+      <div id="handle-tip" style="display:none"></div>
       <!-- Marquee selection box: drawn over the canvas while dragging in the
            Edit tab to bulk-apply the active tool to the chairs inside it. -->
       <div id="marquee-box" style="display:none"></div>
