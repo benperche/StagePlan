@@ -956,6 +956,58 @@ button.danger:hover { background: #fff0f0; }
   line-height: 1.5;
   margin: 0;
 }
+
+/* Keyboard/mouse reference in the About panel. Two columns: the gesture and
+   what it does, with <th> rows acting as group headings. */
+.about-shortcut-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0 0 8px;
+}
+.shortcut-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  text-align: left;
+}
+.shortcut-table th {
+  padding: 12px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+.shortcut-table td {
+  padding: 5px 0;
+  vertical-align: top;
+  line-height: 1.45;
+}
+.shortcut-table td:first-child {
+  width: 42%;
+  padding-right: 12px;
+  color: var(--text);
+}
+.shortcut-table td:last-child { color: var(--text-muted); }
+/* Keeps a single key combo from breaking mid-chord ("Cmd" / "+ Z" on
+   separate lines); the row may still wrap between combos. */
+.keys { white-space: nowrap; }
+kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 5px;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--text);
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+}
 .kofi-btn {
   display: inline-block;
   margin: 6px 0;

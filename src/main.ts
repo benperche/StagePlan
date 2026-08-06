@@ -321,6 +321,11 @@ interface DragState extends DragBase {
   // threshold toggles the instrument's music stand on pointerup; an actual
   // drag still just moves it. Lets you reposition instruments in stand mode.
   toggleStandOnClick?: boolean
+  // Set when Alt/Option-dragging duplicated the instrument: this drag moves
+  // the COPY, and holds the id of the original. If the pointer never actually
+  // moves, the copy sits exactly on top of the original and is useless, so
+  // pointerup deletes it again (see the pointerup handler).
+  duplicatedFrom?: string
 }
 let dragState: DragState | null = null
 
@@ -405,6 +410,7 @@ async function init() {
   bindEvents()
   markSaved()        // baseline for the unsaved-changes guard
   maybeShowIntro()
+  localiseShortcutKeys()
   // setConfig isn't usable here yet (bindEvents hasn't wired things up
   // until after this returns). The default/hash-loaded path is the one
   // case where we mutate config in place and then sync everything below.
@@ -418,6 +424,17 @@ async function init() {
 // harmless. Don't barge in over a shared chart (a hash link) — that visitor
 // asked for a specific chart, not a tour.
 const INTRO_SEEN_KEY = 'stageplan_intro_seen'
+// The About panel's shortcut table is written with Mac key names; swap them
+// for the Windows/Linux equivalents in place so the reference matches the
+// keyboard in front of the user. (The handlers accept both either way.)
+function localiseShortcutKeys() {
+  if (modKeyLabel() === 'Cmd') return
+  for (const el of document.querySelectorAll('.shortcut-table kbd')) {
+    if (el.textContent === 'Cmd') el.textContent = 'Ctrl'
+    else if (el.textContent === 'Alt') el.textContent = 'Alt'   // same on Windows
+  }
+}
+
 function maybeShowIntro() {
   if (location.hash) return
   try {
@@ -1091,6 +1108,37 @@ function setHoverChair(hit: { rowIndex: number; chairIndex: number } | null) {
 }
 
 // True while any canvas drag is in progress, so hover detection stays quiet.
+// Escape mid-gesture aborts it: the config snaps back to the pre-drag
+// snapshot every drag already captures, so you don't have to finish a wrong
+// drag and then undo it. Returns true if something was actually cancelled.
+function cancelActiveDrag(): boolean {
+  const active = dragState ?? rotateState ?? conductorDragState ?? layoutDrag
+    ?? riserSizeDrag ?? chairDrag ?? deskDrag ?? titleDrag ?? arcRangeDrag
+  if (!active && !marqueeState && !panState) return false
+  // Only a drag that got past its threshold has mutated anything (and pushed
+  // history); restoring rolls back both the edit and that history entry.
+  if (active?.moved) {
+    history.undo(config)
+    setConfig(active.preDragConfig)
+  }
+  dragState = null
+  rotateState = null
+  conductorDragState = null
+  layoutDrag = null
+  riserSizeDrag = null
+  chairDrag = null
+  deskDrag = null
+  titleDrag = null
+  arcRangeDrag = null
+  panState = null
+  marqueeState = null
+  marqueeBox.style.display = 'none'
+  canvas.classList.remove('panning')
+  suppressClickAfterPan = true   // don't let the release fire a chair tool
+  renderChart()
+  return true
+}
+
 function anyDragActive(): boolean {
   return !!(titleDrag || arcRangeDrag || layoutDrag || riserSizeDrag || deskDrag || chairDrag
     || marqueeState || panState || conductorDragState || rotateState || dragState)
@@ -1282,6 +1330,13 @@ function canvasToChart(x: number, y: number): { x: number; y: number } {
 // --- Layout-tab handle drags ---
 
 const LAYOUT_MIN_SPACING = 34   // px floor so straight-row chairs never overlap
+// Shift-rotate step for fixed instruments: 15° gives the useful 45°/90° stops.
+const ROTATE_SNAP = Math.PI / 12
+
+// True while the spacebar is held: a canvas drag then pans the zoomed view
+// instead of editing, so you can reposition a magnified chart without hunting
+// for empty background to grab (the Photoshop convention).
+let spaceHeld = false
 
 // Wrap an angle difference into (-π, π]. Arc ends sit near the atan2 ±π seam,
 // where a raw subtraction can jump by 2π and send a drag flying.
@@ -1772,6 +1827,14 @@ canvas.addEventListener('pointerdown', (e) => {
   const cv = pointerCanvasCoords(e)
   const { x, y } = canvasToChart(cv.x, cv.y)
 
+  // Space-drag pans the zoomed view, whatever is under the pointer. Only
+  // meaningful while zoomed in — at fit there's nothing to pan to.
+  if (spaceHeld && viewZoom > 1) {
+    panState = { startX: e.clientX, startY: e.clientY, panX0: viewPanX, panY0: viewPanY, moved: false }
+    canvas.classList.add('panning')
+    return
+  }
+
   // Touch long-press opens the chair/stand context menu (no right-click on
   // touch). If it fires we swallow the tap that would otherwise apply a tool.
   if (e.pointerType === 'touch' && activeTab === 'edit') {
@@ -1835,16 +1898,35 @@ canvas.addEventListener('pointerdown', (e) => {
   }
   const instHit = renderer.instrumentHitTest(x, y)
   if (instHit) {
-    setSelectedInstrument(instHit.id)
+    // Snapshot BEFORE any duplication, so the drag's single history entry
+    // rolls back the copy and its move together.
+    const preDragConfig = cloneConfig(config)
+    let dragId = instHit.id
+    let duplicatedFrom: string | undefined
+    // Alt/Option-drag copies the instrument and drags the copy — the standard
+    // design-tool gesture, and much quicker than a palette trip per extra mic
+    // or music stand.
+    if (e.altKey) {
+      const original = config.instruments.find(i => i.id === instHit.id)
+      if (original) {
+        const copy = { ...original, id: crypto.randomUUID() }
+        config.instruments.push(copy)
+        dragId = copy.id
+        duplicatedFrom = original.id
+      }
+    }
+    setSelectedInstrument(dragId)
     dragState = {
-      instrumentId: instHit.id,
+      instrumentId: dragId,
       offsetX: x - instHit.cx,
       offsetY: y - instHit.cy,
-      preDragConfig: cloneConfig(config),
+      preDragConfig,
       moved: false,
+      duplicatedFrom,
       // Stand tool (in the chair-tool tabs, not Layout): a plain click toggles
       // the stand, but the instrument is still draggable to reposition it.
-      toggleStandOnClick: !layoutMode && activeTool === 'stand',
+      // An Alt-drag is a copy gesture, never a stand toggle.
+      toggleStandOnClick: !layoutMode && activeTool === 'stand' && !duplicatedFrom,
     }
     renderChart()
     return
@@ -2122,7 +2204,9 @@ window.addEventListener('pointermove', (e) => {
       history.push(rot.preDragConfig)
       rot.moved = true
     }
-    inst.rotation = newRotation
+    // Shift snaps to 15° steps — squaring a piano or drum kit to the stage by
+    // eye never quite lands, and 15° also gives the useful 45°/90° stops.
+    inst.rotation = e.shiftKey ? Math.round(newRotation / ROTATE_SNAP) * ROTATE_SNAP : newRotation
     renderChart()
     return
   }
@@ -2179,6 +2263,15 @@ window.addEventListener('pointerup', (e) => {
     }
     marqueeState = null
     marqueeBox.style.display = 'none'
+  }
+  // Alt-drag that never moved: the copy is sitting exactly on top of the
+  // original, so drop it and hand the selection back rather than leaving an
+  // invisible stacked duplicate behind.
+  if (dragState && !dragState.moved && dragState.duplicatedFrom) {
+    const copyId = dragState.instrumentId
+    config.instruments = config.instruments.filter(i => i.id !== copyId)
+    setSelectedInstrument(dragState.duplicatedFrom)
+    renderChart()
   }
   // Stand tool: a press on an instrument that never became a drag toggles its
   // music stand (a real drag just repositioned it instead).
@@ -3307,6 +3400,8 @@ function bindEvents() {
     if (document.activeElement === chairLabelInput) return
     // Close any open modal / drawer on Escape
     if (e.key === 'Escape') {
+      // An in-progress drag wins: abort it before closing anything else.
+      if (cancelActiveDrag()) return
       if (customOrchestraModal.style.display !== 'none') {
         customOrchestraModal.style.display = 'none'
         return
@@ -3335,6 +3430,36 @@ function bindEvents() {
       e.preventDefault()
       const next = history.redo(config)
       if (next) setConfig(next)
+    }
+
+    // Spacebar arms pan-drag (see spaceHeld). Held, not toggled, and never
+    // while typing — and preventDefault stops the sidebar scrolling under it.
+    if (e.code === 'Space') {
+      const t = e.target as HTMLElement
+      if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return
+      // (No cursor change needed: applyViewTransform already puts the grab
+      // cursor on the canvas whenever viewZoom > 1, which is the only time
+      // space-pan does anything.)
+      spaceHeld = true
+      e.preventDefault()
+      return
+    }
+
+    // Cmd/Ctrl + 1-4 jumps between the sidebar tabs.
+    if ((e.metaKey || e.ctrlKey) && ['1', '2', '3', '4'].includes(e.key)) {
+      e.preventDefault()
+      switchTab((['setup', 'edit', 'layout', 'export'])[Number(e.key) - 1])
+    }
+
+    // "?" opens the About panel at its shortcut list. Plain key, so ignore it
+    // while typing — and it needs Shift on most layouts, hence no modifier
+    // check beyond that.
+    if (e.key === '?' && !e.metaKey && !e.ctrlKey) {
+      const t = e.target as HTMLElement
+      if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return
+      e.preventDefault()
+      aboutModal.style.display = 'flex'
+      document.getElementById('about-shortcuts')?.scrollIntoView({ block: 'start' })
     }
 
     // Delete selected instrument (Delete or Backspace) — but only when not
@@ -3381,6 +3506,13 @@ function bindEvents() {
       renderChart()
     }
   })
+
+  // Space is held, not toggled. Also released on blur, so alt-tabbing away
+  // mid-hold doesn't leave the canvas stuck in pan mode.
+  document.addEventListener('keyup', (e) => {
+    if (e.code === 'Space') spaceHeld = false
+  })
+  window.addEventListener('blur', () => { spaceHeld = false })
 
   // Warn before leaving with unsaved edits (relative to the last Save/Load).
   // Flush the autosave synchronously first so the work is recoverable whatever

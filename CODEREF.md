@@ -92,7 +92,11 @@ always render the full chart at full resolution (print CSS forces
   The second finger landing aborts any in-progress single-finger gesture.
 - Pan by dragging empty space while zoomed (`panState`); a non-moving press
   still falls through to the chair `click` handler, and a moved pan sets
-  `suppressClickAfterPan` so it doesn't toggle a chair.
+  `suppressClickAfterPan` so it doesn't toggle a chair. **Holding Space** pans
+  from anywhere on the canvas, not just empty background (`spaceHeld`, gated on
+  `viewZoom > 1` since there's nothing to pan at fit) — dense charts leave very
+  little background to grab. Space is held-not-toggled, ignored while typing,
+  and released on window blur so alt-tabbing can't strand it.
 - Because the zoom is a CSS transform, `getBoundingClientRect()` already
   reflects it, so `pointerCanvasCoords` divides by `rect.width/height` to get
   backing pixels and **all hit-testing keeps working at any zoom** with no
@@ -252,6 +256,30 @@ Drawn only in layout mode; recorded in `layoutHandles` (hit-tested by
   and on tab change. Positioned below-right of the cursor, flipped/clamped to
   stay inside `#canvas-area`; `pointer-events: none` so it never eats the drag
   it's describing.
+
+## Keyboard shortcuts
+
+All registered in the single `document` keydown listener in `bindEvents`, which
+early-returns while the inline chair-label editor has focus, and guards the
+plain-key shortcuts against INPUT/TEXTAREA/contentEditable targets.
+
+- **Cmd/Ctrl+Z**, **Cmd/Ctrl+Shift+Z / +Y** — undo / redo.
+- **Cmd/Ctrl+1…4** — switch sidebar tab (calls the same `switchTab` the tab
+  buttons use).
+- **Escape** — `cancelActiveDrag()` first (see below), then close
+  modal/drawer, then disarm the chair tool.
+- **?** — opens the About panel scrolled to `#about-shortcuts`, the one place
+  every shortcut is written down for users. `localiseShortcutKeys()` rewrites
+  its `<kbd>Cmd</kbd>` labels to Ctrl off-Mac at init.
+- **Space (held)** — arms pan-drag; see the view-zoom section.
+- **Delete/Backspace**, **arrow keys** — act on the selected fixed instrument.
+
+**`cancelActiveDrag()`** aborts a gesture mid-flight: every drag state extends
+`DragBase` (`preDragConfig` + `moved`), so it restores that snapshot and, when
+the drag had already pushed history, pops that entry too (`history.undo`) — so
+Escape leaves no stray undo step. It clears every drag state plus the marquee
+and pan, and sets `suppressClickAfterPan` so the eventual pointerup can't fire
+a chair tool.
 
 ## Chair tools & labelling
 
@@ -430,6 +458,8 @@ for any other silent-but-big action that deserves an undo reminder.
   the old "in front of the conductor" fallback. Positions are stored polar, so
   the renderer's flip mirroring keeps them behind the band when flipped.
 - Drag/rotate handled by `DragState` / `RotateState` in main.ts. Selected instrument shows a green MS-Office-style rotate handle.
+- **Alt/Option-drag duplicates** an instrument: pointerdown snapshots the config *before* copying, pushes the copy, and drags it — so the drag's single history entry rolls back both the copy and its move. `DragState.duplicatedFrom` holds the original's id; if the pointer never crosses the drag threshold the copy would sit invisibly on top of the original, so pointerup deletes it and reselects the original.
+- **Shift while rotating snaps to `ROTATE_SNAP`** (15°, giving the useful 45°/90° stops) — squaring a piano or drum kit to the stage by eye never quite lands.
 - Keyboard on the selected instrument: **Delete/Backspace** removes it; **arrow keys nudge it** 2px (Shift = 10px). The nudge converts the screen-space delta into the stored polar frame (mirror-scaled when flipped) and pushes history once per burst (`lastArrowNudge`: same instrument, <1s apart = one undo step), mirroring the one-push-per-drag rule.
 - A fixed instrument can carry its own music stand (`hasStand`). With the **Stand** chair-tool active (Edit/Setup, not Layout), pressing an instrument always arms a drag (`DragState.toggleStandOnClick`); a press that never crosses `DRAG_THRESHOLD` toggles the stand on `pointerup`, while an actual drag just repositions it. So instruments stay draggable in stand mode instead of every press toggling the stand.
 
