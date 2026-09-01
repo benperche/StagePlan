@@ -507,58 +507,39 @@ export function drawSnareDrum(ctx: CanvasRenderingContext2D): GlyphResult {
 // ---------------------------------------------------------------------------
 export function drawBassDrum(ctx: CanvasRenderingContext2D): GlyphResult {
   const r = 23
-  const armLen = 8, armHalfH = 4
+  const armLen = 8, armHalfW = 4
+  // Cradle arms at the top and bottom (the drum faces the player across the
+  // stage, so the stand's uprights sit fore-and-aft in plan view). Drawn first
+  // so the shell covers their inner ends.
   ctx.fillStyle = '#1a1a1a'
-  ctx.fillRect(-r - armLen + 3, -armHalfH, armLen, armHalfH * 2)
-  ctx.fillRect(r - 3, -armHalfH, armLen, armHalfH * 2)
+  ctx.fillRect(-armHalfW, -r - armLen + 3, armHalfW * 2, armLen)
+  ctx.fillRect(-armHalfW, r - 3, armHalfW * 2, armLen)
 
+  // Black counter-hoop ring around a white head — the white centre is what
+  // reads as the big open drum, and separates it from the snare's filled disc.
   ctx.beginPath()
   ctx.arc(0, 0, r, 0, Math.PI * 2)
   ctx.fill()
-
-  ctx.strokeStyle = '#fff'
-  ctx.lineWidth = 1.4
+  ctx.fillStyle = '#fff'
   ctx.beginPath()
-  ctx.arc(0, 0, r - 3.5, 0, Math.PI * 2)
-  ctx.stroke()
-  ctx.lineWidth = 1
-  ctx.beginPath()
-  ctx.arc(0, 0, r - 8, 0, Math.PI * 2)
-  ctx.stroke()
+  ctx.arc(0, 0, r - 5.5, 0, Math.PI * 2)
+  ctx.fill()
 
   // radius = the shell, not the arms, so an attached stand sits against the
   // drum itself rather than floating off the cradle.
-  return { hw: r + armLen - 3, hh: r, labelInside: false, radius: r }
+  return { hw: r, hh: r + armLen - 3, labelInside: false, radius: r }
 }
 
 // ---------------------------------------------------------------------------
 // Traps table — the small side table a percussionist lays sticks, triangles and
-// tambourines on. Deliberately smaller than the generic rectangle, and carries
-// a few white "items" so it doesn't just read as a shrunken blank box.
+// tambourines on. A plain black rectangle, deliberately smaller than the
+// generic rectangle so the two don't get mistaken for each other.
 // ---------------------------------------------------------------------------
 export function drawTrapTable(ctx: CanvasRenderingContext2D): GlyphResult {
   const hw = 29, hh = 17
-  ctx.fillStyle = '#3a3a3a'      // furniture grey, matching the generic shapes
-  ctx.strokeStyle = '#fff'
-  ctx.lineWidth = 1.5
-  roundRect(ctx, -hw, -hh, hw * 2, hh * 2, 4)
+  ctx.fillStyle = '#1a1a1a'
+  roundRect(ctx, -hw, -hh, hw * 2, hh * 2, 3)
   ctx.fill()
-  ctx.stroke()
-
-  // A pair of sticks…
-  ctx.lineWidth = 1.6
-  ctx.lineCap = 'round'
-  ctx.beginPath()
-  ctx.moveTo(-hw + 7, -5); ctx.lineTo(-hw + 21, -5)
-  ctx.moveTo(-hw + 7, 1); ctx.lineTo(-hw + 21, 1)
-  ctx.stroke()
-  ctx.lineCap = 'butt'
-  // …and a small round item (tambourine / triangle) beside them.
-  ctx.lineWidth = 1.4
-  ctx.beginPath()
-  ctx.arc(hw - 11, -2, 5, 0, Math.PI * 2)
-  ctx.stroke()
-
   return { hw, hh, labelInside: false }
 }
 
