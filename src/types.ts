@@ -86,6 +86,8 @@ export type InstrumentType =
   | 'gong'
   | 'cymbal'
   | 'snare'
+  | 'bass-drum'
+  | 'trap-table'
   | 'chair'
   | 'stand'
   | 'stool'

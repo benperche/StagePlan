@@ -5,7 +5,7 @@ import type {
 } from './types'
 import {
   drawDrumkit, drawPiano, drawAmp, drawTimpani, drawMallet, drawHarp,
-  drawMicrophone, drawGong, drawSuspendedCymbal, drawSnareDrum,
+  drawMicrophone, drawGong, drawSuspendedCymbal, drawSnareDrum, drawBassDrum, drawTrapTable,
   drawSingleChair, drawSingleStand, drawStool, drawGenericRect,
 } from './instrument-glyphs'
 import type { GlyphResult } from './instrument-glyphs'
@@ -1376,6 +1376,7 @@ export class Renderer {
       || inst.type === 'bass-amp' || inst.type === 'stand'
       || inst.type === 'stool' || inst.type === 'microphone'
       || inst.type === 'gong' || inst.type === 'cymbal' || inst.type === 'snare'
+      || inst.type === 'bass-drum'
   }
 
   // Draws one instrument glyph in the current (already translated/rotated)
@@ -1394,6 +1395,8 @@ export class Renderer {
       case 'gong':       return drawGong(ctx)
       case 'cymbal':     return drawSuspendedCymbal(ctx)
       case 'snare':      return drawSnareDrum(ctx)
+      case 'bass-drum':  return drawBassDrum(ctx)
+      case 'trap-table': return drawTrapTable(ctx)
       case 'chair':      return drawSingleChair(ctx)
       case 'stand':      return drawSingleStand(ctx)
       case 'stool':      return drawStool(ctx)
@@ -1521,6 +1524,8 @@ export class Renderer {
       case 'gong':       return 'Gong'
       case 'cymbal':     return 'Susp. Cym.'
       case 'snare':      return 'Snare'
+      case 'bass-drum':  return 'Bass Drum'
+      case 'trap-table': return 'Traps'
       // Single chair / single stand default to no label — they're often
       // used as decorations rather than annotated items. Users can still
       // type a label in the inspector if they want one.

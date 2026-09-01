@@ -499,6 +499,70 @@ export function drawSnareDrum(ctx: CanvasRenderingContext2D): GlyphResult {
 }
 
 // ---------------------------------------------------------------------------
+// Concert bass drum — top-down: the biggest drum on the stage, so a wider disc
+// than the snare, with a counter-hoop ring plus an inner head ring to read as
+// deep. Two short cradle arms poke out either side (drawn first so the shell
+// covers their inner ends) — that's what distinguishes it from a plain snare
+// at a glance, since both are circles.
+// ---------------------------------------------------------------------------
+export function drawBassDrum(ctx: CanvasRenderingContext2D): GlyphResult {
+  const r = 23
+  const armLen = 8, armHalfH = 4
+  ctx.fillStyle = '#1a1a1a'
+  ctx.fillRect(-r - armLen + 3, -armHalfH, armLen, armHalfH * 2)
+  ctx.fillRect(r - 3, -armHalfH, armLen, armHalfH * 2)
+
+  ctx.beginPath()
+  ctx.arc(0, 0, r, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.strokeStyle = '#fff'
+  ctx.lineWidth = 1.4
+  ctx.beginPath()
+  ctx.arc(0, 0, r - 3.5, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.arc(0, 0, r - 8, 0, Math.PI * 2)
+  ctx.stroke()
+
+  // radius = the shell, not the arms, so an attached stand sits against the
+  // drum itself rather than floating off the cradle.
+  return { hw: r + armLen - 3, hh: r, labelInside: false, radius: r }
+}
+
+// ---------------------------------------------------------------------------
+// Traps table — the small side table a percussionist lays sticks, triangles and
+// tambourines on. Deliberately smaller than the generic rectangle, and carries
+// a few white "items" so it doesn't just read as a shrunken blank box.
+// ---------------------------------------------------------------------------
+export function drawTrapTable(ctx: CanvasRenderingContext2D): GlyphResult {
+  const hw = 29, hh = 17
+  ctx.fillStyle = '#3a3a3a'      // furniture grey, matching the generic shapes
+  ctx.strokeStyle = '#fff'
+  ctx.lineWidth = 1.5
+  roundRect(ctx, -hw, -hh, hw * 2, hh * 2, 4)
+  ctx.fill()
+  ctx.stroke()
+
+  // A pair of sticks…
+  ctx.lineWidth = 1.6
+  ctx.lineCap = 'round'
+  ctx.beginPath()
+  ctx.moveTo(-hw + 7, -5); ctx.lineTo(-hw + 21, -5)
+  ctx.moveTo(-hw + 7, 1); ctx.lineTo(-hw + 21, 1)
+  ctx.stroke()
+  ctx.lineCap = 'butt'
+  // …and a small round item (tambourine / triangle) beside them.
+  ctx.lineWidth = 1.4
+  ctx.beginPath()
+  ctx.arc(hw - 11, -2, 5, 0, Math.PI * 2)
+  ctx.stroke()
+
+  return { hw, hh, labelInside: false }
+}
+
+// ---------------------------------------------------------------------------
 // Single chair — same look as in-row chairs (grey square with a darker
 // back rail). Used as a backup for stragglers who don't fit a row
 // (extra player, off-row chair, etc.). At rotation 0 the back rail is

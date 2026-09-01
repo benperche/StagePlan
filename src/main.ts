@@ -1220,6 +1220,8 @@ const INSTRUMENT_LABEL: Record<InstrumentType, string> = {
   'gong': 'Gong',
   'cymbal': 'Suspended Cymbal',
   'snare': 'Snare Drum',
+  'bass-drum': 'Bass Drum',
+  'trap-table': 'Traps Table',
   'chair': 'Chair',
   'stand': 'Music Stand',
   'stool': 'Stool',

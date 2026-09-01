@@ -72,6 +72,13 @@ const INSERT_DEFAULTS: Partial<Record<InstrumentType, { angle: number; pad: numb
   gong:     { angle: -1.75, pad: 120 },
   cymbal:   { angle: -1.62, pad: 115 },
   snare:    { angle: -1.88, pad: 110 },
+  // Concert bass drum sits in the back percussion line; the traps table tucks
+  // in nearer the players, beside the snare where its sticks get picked up.
+  'bass-drum':  { angle: -1.50, pad: 128 },
+  // Kept off the mallet arc (-2.2, where Concert Band stacks glock/xylo/vibes/
+  // marimba) and given a small pad so it sits forward of the back line, which
+  // is where a traps table actually stands — within the player's reach.
+  'trap-table': { angle: -1.72, pad: 88 },
   square:   { angle: -1.40, pad: 100 },
   rectangle: { angle: -1.40, pad: 100 },
   // Rhythm section flanks the band on the left (as in the Big Band preset);
