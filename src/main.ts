@@ -68,6 +68,10 @@ let viewPanX = 0
 let viewPanY = 0
 const VIEW_ZOOM_MIN = 1      // 1 = fit (the canvas already fills the area)
 const VIEW_ZOOM_MAX = 6
+// Zoom per pixel of (normalised) wheel delta, as exp(-delta * this). At 0.003
+// a typical 100px mouse notch is ~1.35x and a trackpad pinch feels responsive
+// across the short 1–6 range; the previous 0.0015 made both a long grind.
+const ZOOM_WHEEL_SENSITIVITY = 0.003
 let panState: { startX: number; startY: number; panX0: number; panY0: number; moved: boolean } | null = null
 let suppressClickAfterPan = false
 // Touch long-press → the chair/stand context menu (touch has no right-click).
@@ -3622,7 +3626,14 @@ function bindEvents() {
   canvas.addEventListener('wheel', (e) => {
     if (!e.ctrlKey && !e.metaKey) return
     e.preventDefault()
-    const factor = Math.exp(-e.deltaY * 0.0015)
+    // deltaY isn't always in pixels: Firefox reports LINES (≈3 per notch) and
+    // some setups report PAGES, either of which makes a pixel-tuned factor
+    // almost imperceptible. Normalise first, then clamp so one outsized event
+    // can't leap the whole 1–6 range in a single step.
+    const px = e.deltaMode === 1 ? e.deltaY * 16
+      : e.deltaMode === 2 ? e.deltaY * 400
+      : e.deltaY
+    const factor = Math.exp(-Math.max(-240, Math.min(240, px)) * ZOOM_WHEEL_SENSITIVITY)
     setZoom(viewZoom * factor, e.clientX, e.clientY)
   }, { passive: false })
   applyViewTransform()

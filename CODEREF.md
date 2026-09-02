@@ -84,7 +84,11 @@ always render the full chart at full resolution (print CSS forces
 `transform: none`). State lives in `viewZoom/viewPanX/viewPanY` in `main.ts`.
 
 - Buttons step by 1.25×; ctrl/cmd + wheel (= trackpad pinch) zooms toward the
-  cursor; clamp `[1, 6]`.
+  cursor; clamp `[1, 6]`. The wheel factor is `exp(-delta * ZOOM_WHEEL_SENSITIVITY)`
+  over a delta first **normalised out of `deltaMode`** — Firefox reports LINES
+  (≈3/notch) and some setups PAGES, either of which makes a pixel-tuned factor
+  imperceptible — then clamped to ±240px so one outsized event can't leap the
+  whole range.
 - **Touch pinch**: the canvas has `touch-action: none`, so two simultaneous
   touch pointers are tracked in `touchPoints`/`pinchState` (main.ts, after the
   pointerup handler) — the view scales about the finger midpoint via the same
