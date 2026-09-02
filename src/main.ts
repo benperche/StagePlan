@@ -280,7 +280,10 @@ const INSTRUMENT_ABBREV: Record<string, string> = {
   Horn: 'Hn', Trumpet: 'Tpt', Cornet: 'Crt', Flugelhorn: 'Flug',
   Trombone: 'Tbn', 'Bass Trombone': 'B Tbn', Baritone: 'Bar', Euphonium: 'Euph',
   // Strings
-  Violin: 'Vn', Viola: 'Va', Cello: 'Vc', 'Double Bass': 'Cb',
+  // 'Vln', not 'Vn', so the picker stamps exactly what the orchestra generator
+  // writes (STR_NAMES in presets.ts) — otherwise a chart mixes both spellings
+  // and the tally lists the generated violins under "Other".
+  Violin: 'Vln', Viola: 'Va', Cello: 'Vc', 'Double Bass': 'Cb',
   // Rhythm and keyboards
   Piano: 'Pno', Keyboard: 'Kbd', Organ: 'Org', Harp: 'Hp', Celeste: 'Cel',
   Guitar: 'Gtr', 'Electric Guitar': 'E Gtr', 'Electric Bass': 'E Bass',
@@ -294,6 +297,13 @@ const INSTRUMENT_ABBREV: Record<string, string> = {
 }
 
 const abbrevInstrument = (name: string): string => INSTRUMENT_ABBREV[name] ?? name
+
+// Abbreviations this app used to stamp. Only the tally reads these, so an
+// existing chart labelled the old way still lands in the right section rather
+// than dropping into "Other" after the spelling changed.
+const LEGACY_ABBREV: Record<string, string> = {
+  Violin: 'Vn',
+}
 
 // Currently selected fixed instrument (for drag/inspector/delete)
 let selectedInstrumentId: string | null = null
@@ -667,6 +677,10 @@ function renderTally() {
     // presets use), so e.g. "Fl 1" lands in Woodwinds, not "Other".
     const ab = INSTRUMENT_ABBREV[item]
     if (ab && ab !== item) matchers.push({ name: ab, section: g.name, orderInSection: idx })
+    // …and any spelling an older version stamped, so charts saved before the
+    // abbreviation was aligned with the presets still classify correctly.
+    const legacy = LEGACY_ABBREV[item]
+    if (legacy) matchers.push({ name: legacy, section: g.name, orderInSection: idx })
   }))
   matchers.sort((a, b) => b.name.length - a.name.length)
 

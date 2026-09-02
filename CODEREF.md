@@ -352,9 +352,13 @@ The five tools (`ChairTool`) and their sub-panels:
   chair box and matches the preset charts. Where a preset uses a short form
   the abbreviation matches it verbatim; the rest use standard score
   abbreviations (every instrument has one except names already short enough —
-  Tuba, Bass, Alto, Solo…). The tally's matcher list includes both full and
-  abbreviated forms so preset/abbreviated labels classify into their section
-  instead of "Other".
+  Tuba, Bass, Alto, Solo…). **The stamped form must match what the orchestra
+  generator writes** (`STR_NAMES`/`WW_NAMES`/`BR_NAMES` in presets.ts) or a
+  chart ends up with two spellings of one part: Violin stamped `Vn` while the
+  generator wrote `Vln 1` meant the generated violins fell through to "Other"
+  in the tally. The tally's matcher list includes the full name, the current
+  abbreviation, and any entry in `LEGACY_ABBREV` (spellings older versions
+  stamped), so charts saved before such a fix still classify correctly.
 
 A one-line `#edit-chairs-hint` (`TOOL_HINTS[tool]`, or `NEUTRAL_HINT` in
 select mode) explains the active tool.
