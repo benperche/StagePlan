@@ -42,7 +42,7 @@ const TOOL_HINTS: Record<ChairTool, string> = {
   label: 'Pick an instrument below to stamp it — or click a chair with nothing selected to type your own (Enter jumps to the next chair). Paste a list below.',
 }
 // Shown when no tool is armed. Must match the default text in index.html.
-const NEUTRAL_HINT = 'No tool picked — click any chair on the chart to open its menu. Or pick a tool above to apply one change to lots of chairs quickly (click it again to put it down).'
+const NEUTRAL_HINT = 'No tool picked — click a chair to open its menu, or drag a box over several to act on them all at once (including moving them to another row). Or pick a tool above to apply one change to lots of chairs quickly (click it again to put it down).'
 
 // True while the Layout tab is active: the canvas shows geometry handles +
 // arc guides and the chair-editing tools / instrument drags are suspended.
@@ -2053,12 +2053,12 @@ canvas.addEventListener('pointerdown', (e) => {
     setSelectedInstrument(null)
     renderChart()
   }
-  // Edit tab at 100% zoom with a tool armed: a mouse/pen drag is a marquee
-  // bulk-select (touch drags never marquee — a finger needs to pan/scroll,
-  // not draw a box; and with no tool armed there's nothing to bulk-apply).
-  // When zoomed in, keep the existing drag-to-pan behaviour instead (no
-  // transform to fight at 100%, so the screen-space box maps 1:1 to the canvas).
-  if (activeTab === 'edit' && viewZoom === 1 && e.pointerType !== 'touch' && activeTool !== null) {
+  // Edit tab at 100% zoom: a mouse/pen drag is a marquee bulk-select (touch
+  // drags never marquee — a finger needs to pan/scroll, not draw a box). With
+  // a tool armed the box applies that tool; with none armed it opens the bulk
+  // chair menu instead. When zoomed in, keep the existing drag-to-pan
+  // behaviour (no transform to fight at 100%, so the box maps 1:1).
+  if (activeTab === 'edit' && viewZoom === 1 && e.pointerType !== 'touch') {
     marqueeState = { startClientX: e.clientX, startClientY: e.clientY, startChart: { x, y }, moved: false }
   } else if (viewZoom > 1) {
     panState = { startX: e.clientX, startY: e.clientY, panX0: viewPanX, panY0: viewPanY, moved: false }
@@ -2260,7 +2260,10 @@ window.addEventListener('pointerup', (e) => {
       const start = marqueeState.startChart
       const refs = renderer.chairsInRect(start.x, start.y, end.x, end.y)
       const centre = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }
-      applyBulkTool(refs, centre)
+      // Tool armed → apply it to the box. No tool (select mode) → offer the
+      // boxed chairs' actions in one menu, "Move to row" included.
+      if (activeTool === null) openBulkChairMenu(refs, e.clientX, e.clientY, centre)
+      else applyBulkTool(refs, centre)
       suppressClickAfterPan = true   // swallow the trailing click
     }
     marqueeState = null
@@ -2481,6 +2484,79 @@ function applyStandToChair(rowChairs: Chair[], i: number, mode: StandMode) {
   else chair.hasStand = true   // no neighbour to desk with → solo
 }
 
+// Move chairs into another row, keeping their labels, colours, stands and seat
+// types. The Edit tab's "Chairs" number box can only append blanks or truncate
+// from the end, so this is the only way to reshape a section across rows —
+// e.g. putting two violin desks side by side in the back row instead of one
+// desk per row. Chairs are appended to the destination; in a tidied string
+// chart the wedge layout re-clusters them with their section-mates by `group`,
+// so they land in the right block without further fiddling.
+//
+// A desk (shared stand) survives the move when BOTH its chairs travel together
+// — they stay adjacent in the destination. When only one half moves, the pair
+// dissolves and each player keeps a stand of their own, which is the least
+// surprising outcome. Returns how many chairs actually moved.
+function moveChairsToRow(targets: { rowIndex: number; chairIndex: number }[], dest: number): number {
+  const destRow = config.rows[dest]
+  if (!destRow) return 0
+
+  const byRow = new Map<number, number[]>()
+  for (const t of targets) {
+    if (t.rowIndex === dest) continue          // already there
+    const list = byRow.get(t.rowIndex) ?? []
+    if (!list.includes(t.chairIndex)) list.push(t.chairIndex)
+    byRow.set(t.rowIndex, list)
+  }
+  if (byRow.size === 0) return 0
+
+  // The exact Chair objects on the move, so a desk whose partner is also
+  // moving can keep its shared stand.
+  const moving = new Set<Chair>()
+  for (const [ri, idxs] of byRow) {
+    for (const i of idxs) {
+      const c = config.rows[ri]?.chairs[i]
+      if (c) moving.add(c)
+    }
+  }
+
+  const moved: Chair[] = []
+  for (const ri of [...byRow.keys()].sort((a, b) => a - b)) {
+    const chairs = config.rows[ri].chairs
+    const idxs = byRow.get(ri)!.sort((a, b) => a - b)
+    // Ascending, so a desk pair stays adjacent (and in order) once appended.
+    for (const i of idxs) moved.push(chairs[i])
+    for (const i of idxs) {
+      const c = chairs[i], next = chairs[i + 1], prev = chairs[i - 1]
+      // c owned a shared stand: keep it only if the partner travels too.
+      if (c.standAfter && (!next || !moving.has(next))) {
+        c.standAfter = false
+        c.hasStand = true
+        if (next) next.hasStand = true
+      }
+      // c was the far half of someone else's desk.
+      if (prev?.standAfter && !moving.has(prev)) {
+        prev.standAfter = false
+        prev.hasStand = true
+        c.hasStand = true
+      }
+    }
+    // Descending so earlier splices don't shift the later indices.
+    for (const i of [...idxs].reverse()) chairs.splice(i, 1)
+  }
+  destRow.chairs.push(...moved)
+  return moved.length
+}
+
+// "Move to row" segment options. A selection sitting entirely in one row can't
+// move to that row, so it's dropped; a selection spanning rows keeps every
+// destination (gathering them all into one row is the point).
+function moveRowOptions(sourceRows: Set<number>, onMove: (dest: number) => void) {
+  return config.rows
+    .map((row, i) => ({ row, i }))
+    .filter(({ i }) => !(sourceRows.size === 1 && sourceRows.has(i)))
+    .map(({ row, i }) => ({ label: row.label || String(i + 1), onClick: () => onMove(i) }))
+}
+
 // --- Right-click / long-press context menu on a chair or stand ---------------
 const CHAIR_SWATCHES = ['#a8d8ea', '#b6e2a1', '#f6d365', '#f4a261', '#e5a1c4', '#cfcfcf', '#ffffff']
 
@@ -2546,22 +2622,128 @@ function openChairContextMenu(clientX: number, clientY: number, x: number, y: nu
         onPick: (c) => mut(() => { chair.color = c }),
         onCustom: () => openChairColorPicker(hit.rowIndex, hit.chairIndex) },
     ]
+    // Relocate this chair to another row (only worth offering with somewhere
+    // to send it). A desk gets a second option that takes both players, so
+    // reshaping a string section doesn't mean moving stands one at a time.
+    const afterMove = () => { renderRowList(); renderLabelList() }
+    if (config.rows.length > 1) {
+      items.push({ kind: 'segment', label: 'Move to row', options: moveRowOptions(
+        new Set([hit.rowIndex]),
+        dest => mut(() => { moveChairsToRow([{ rowIndex: hit.rowIndex, chairIndex: hit.chairIndex }], dest); afterMove() }),
+      ) })
+      const partner = chair.standAfter ? hit.chairIndex + 1
+        : rowChairs[hit.chairIndex - 1]?.standAfter ? hit.chairIndex - 1
+        : null
+      if (partner !== null && rowChairs[partner]) {
+        items.push({ kind: 'segment', label: 'Move desk to row', options: moveRowOptions(
+          new Set([hit.rowIndex]),
+          dest => mut(() => {
+            moveChairsToRow([
+              { rowIndex: hit.rowIndex, chairIndex: Math.min(hit.chairIndex, partner) },
+              { rowIndex: hit.rowIndex, chairIndex: Math.max(hit.chairIndex, partner) },
+            ], dest)
+            afterMove()
+          }),
+        ) })
+      }
+    }
     showContextMenu(clientX, clientY, 'Chair', items)
     return true
   }
   return false
 }
 
+// Bulk version of the chair context menu, opened by marquee-selecting chairs
+// while NO tool is armed. Same actions as the single-chair menu, applied to the
+// whole box in one undo step — the noun-first counterpart to arming a tool and
+// dragging over chairs. "Move to row" is the reason this exists: reshaping a
+// string section means relocating several chairs at once.
+function openBulkChairMenu(
+  refs: { rowIndex: number; chairIndex: number }[],
+  clientX: number, clientY: number,
+  centre: { x: number; y: number },
+): boolean {
+  const chairOf = (r: { rowIndex: number; chairIndex: number }) =>
+    config.rows[r.rowIndex]?.chairs[r.chairIndex]
+  const targets = refs.filter(r => chairOf(r))
+  if (targets.length === 0) return false
+
+  const mut = (fn: () => void) => {
+    history.push(config)
+    fn()
+    renderRowList()
+    renderLabelList()
+    renderChart()
+  }
+  // Show a segment option as active only when every selected chair agrees —
+  // a mixed selection shows none highlighted, which reads honestly.
+  const allAre = <T,>(read: (c: Chair) => T, value: T) => targets.every(r => read(chairOf(r)!) === value)
+  const standOf = (r: { rowIndex: number; chairIndex: number }) =>
+    chairStandMode(config.rows[r.rowIndex].chairs, r.chairIndex)
+  const allStand = (m: StandMode) => targets.every(r => standOf(r) === m)
+  const colours = new Set(targets.map(r => chairOf(r)!.color))
+
+  const items: MenuItem[] = [
+    { kind: 'action', label: 'Edit labels…', onClick: () => openBulkLabelEditor(targets, chartPointToScreen(centre)) },
+    { kind: 'segment', label: 'Visible', options: [
+      { label: 'Show', active: allAre(c => c.enabled, true), onClick: () => mut(() => { for (const r of targets) chairOf(r)!.enabled = true }) },
+      { label: 'Hide', active: allAre(c => c.enabled, false), onClick: () => mut(() => { for (const r of targets) chairOf(r)!.enabled = false }) },
+    ] },
+    { kind: 'segment', label: 'Seat', options: [
+      { label: 'Chair',    active: allAre(chairStoolMode, 'chair'),    onClick: () => mut(() => { for (const r of targets) applyStoolToChair(chairOf(r)!, 'chair') }) },
+      { label: 'Stool',    active: allAre(chairStoolMode, 'stool'),    onClick: () => mut(() => { for (const r of targets) applyStoolToChair(chairOf(r)!, 'stool') }) },
+      { label: 'Standing', active: allAre(chairStoolMode, 'standing'), onClick: () => mut(() => { for (const r of targets) applyStoolToChair(chairOf(r)!, 'standing') }) },
+    ] },
+    { kind: 'segment', label: 'Stand', options: [
+      { label: 'None', active: allStand('remove'), onClick: () => mut(() => applyStandModeToTargets(targets, 'remove')) },
+      { label: 'Solo', active: allStand('solo'),   onClick: () => mut(() => applyStandModeToTargets(targets, 'solo')) },
+      { label: 'Desks', active: allStand('desk'),  onClick: () => mut(() => applyStandModeToTargets(targets, 'desk')) },
+    ] },
+    { kind: 'swatches', label: 'Colour', colors: CHAIR_SWATCHES,
+      current: colours.size === 1 ? [...colours][0] : '',
+      onPick: (c) => mut(() => { for (const r of targets) chairOf(r)!.color = c }),
+      onCustom: () => openBulkColorPicker(targets) },
+  ]
+  if (config.rows.length > 1) {
+    items.push({ kind: 'segment', label: 'Move to row', options: moveRowOptions(
+      new Set(targets.map(r => r.rowIndex)),
+      dest => mut(() => { moveChairsToRow(targets, dest) }),
+    ) })
+  }
+  showContextMenu(clientX, clientY, `${targets.length} chair${targets.length !== 1 ? 's' : ''}`, items)
+  return true
+}
+
+// Custom colour for a whole marquee selection (the bulk menu's "custom").
+function openBulkColorPicker(targets: { rowIndex: number; chairIndex: number }[]) {
+  const first = config.rows[targets[0].rowIndex]?.chairs[targets[0].chairIndex]
+  const input = document.createElement('input')
+  input.type = 'color'
+  input.value = first && /^#[0-9a-fA-F]{6}$/.test(first.color) ? first.color : '#a8d8ea'
+  input.style.cssText = 'position:fixed;left:-9999px;top:0'
+  document.body.appendChild(input)
+  input.addEventListener('change', () => {
+    history.push(config)
+    for (const r of targets) {
+      const c = config.rows[r.rowIndex]?.chairs[r.chairIndex]
+      if (c) c.color = input.value
+    }
+    renderChart()
+    input.remove()
+  })
+  input.click()
+}
+
 // Marquee Stand: 'desk' pairs *consecutive adjacent* selected chairs within each
 // row into shared desks (leftover → solo); solo/remove go per-chair.
-function applyStandModeToTargets(targets: { rowIndex: number; chairIndex: number }[]) {
+function applyStandModeToTargets(targets: { rowIndex: number; chairIndex: number }[], mode: StandMode = standMode) {
   const byRow = new Map<number, number[]>()
   for (const r of targets) (byRow.get(r.rowIndex) ?? byRow.set(r.rowIndex, []).get(r.rowIndex)!).push(r.chairIndex)
   for (const [rowIndex, idxs] of byRow) {
     idxs.sort((a, b) => a - b)
     const rowChairs = config.rows[rowIndex].chairs
-    if (standMode !== 'desk') {
-      for (const i of idxs) applyStandToChair(rowChairs, i, standMode)
+    if (mode !== 'desk') {
+      for (const i of idxs) applyStandToChair(rowChairs, i, mode)
       continue
     }
     // Clear own + incoming pairing across the whole selection first.

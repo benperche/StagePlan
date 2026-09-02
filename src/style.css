@@ -347,9 +347,12 @@ details.panel[open] > .panel-summary::before { transform: rotate(90deg); }
   color: var(--text-muted);
   margin-bottom: 4px;
 }
-.context-menu-seg { display: flex; gap: 4px; }
+/* Wraps so a long option set (e.g. "Move to row" on a 10-row chart) breaks
+   onto a second line instead of squeezing every button into a sliver. */
+.context-menu-seg { display: flex; flex-wrap: wrap; gap: 4px; }
 .context-menu-seg button {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 36px;
   padding: 5px 4px;
   font-size: 12px;
   border: 1px solid var(--border);
