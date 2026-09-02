@@ -8,7 +8,7 @@ import {
 import { saveToJson, loadFromJson, encodeToHash, decodeFromHash, exportToPng } from './serializer'
 import * as library from './library'
 import { showAlert, showConfirm, showPrompt } from './dialog'
-import { showContextMenu, closeContextMenu, type MenuItem } from './context-menu'
+import { showContextMenu, closeContextMenu, contextMenuOpen, type MenuItem } from './context-menu'
 import type { ChartConfig, InstrumentType, Chair } from './types'
 import { RISER_PAD_MAX } from './section-layout'
 
@@ -559,6 +559,11 @@ function isLibraryOpen() {
 
 function renderChart() {
   renderer.hoverPreview = currentHoverPreview()
+  // Selection + drop slots are an Edit-tab, no-tool-armed affordance only.
+  const selectable = activeTab === 'edit' && !layoutMode && activeTool === null
+  renderer.selectedChairs = new Set(
+    selectable ? selectedChairs.map(r => `${r.rowIndex}:${r.chairIndex}`) : [])
+  renderer.showDropPoints = selectable && selectedChairs.length > 0
   resizeCanvas()
   // Hidden seats show their ghost outline while editing, but not in the Export
   // tab preview — that mirrors the PNG/print output, which omits them entirely.
@@ -1335,6 +1340,28 @@ const LAYOUT_MIN_SPACING = 34   // px floor so straight-row chairs never overlap
 // Shift-rotate step for fixed instruments: 15° gives the useful 45°/90° stops.
 const ROTATE_SNAP = Math.PI / 12
 
+// Chairs picked out by a marquee drag while no tool is armed. They stay
+// selected after the bulk menu closes, which is what turns every gap in every
+// row into an orange drop slot — so a block of desks can be placed exactly
+// rather than only appended. Cleared by Escape, a click on empty canvas, a
+// successful drop, or a tab change.
+let selectedChairs: { rowIndex: number; chairIndex: number }[] = []
+// Set when an Escape keypress found a context menu open — see the Escape
+// branch of the keydown handler for why this can't just call contextMenuOpen().
+let escapeClosedMenu = false
+
+function setSelectedChairs(next: { rowIndex: number; chairIndex: number }[]) {
+  selectedChairs = next
+  renderChart()
+}
+
+function clearSelectedChairs(): boolean {
+  if (selectedChairs.length === 0) return false
+  selectedChairs = []
+  renderChart()
+  return true
+}
+
 // True while the spacebar is held: a canvas drag then pans the zoomed view
 // instead of editing, so you can reposition a magnified chart without hunting
 // for empty background to grab (the Photoshop convention).
@@ -1837,6 +1864,22 @@ canvas.addEventListener('pointerdown', (e) => {
     return
   }
 
+  // An orange drop slot wins over everything beneath it — slots sit on chair
+  // edges, and clicking one is the whole point of having a selection.
+  if (selectedChairs.length > 0) {
+    const slot = renderer.dropPointHitTest(x, y)
+    if (slot) {
+      history.push(config)
+      moveChairsToRow(selectedChairs, slot.rowIndex, slot.insertIndex)
+      selectedChairs = []
+      renderRowList()
+      renderLabelList()
+      renderChart()
+      suppressClickAfterPan = true   // don't let the release re-open a menu
+      return
+    }
+  }
+
   // Touch long-press opens the chair/stand context menu (no right-click on
   // touch). If it fires we swallow the tap that would otherwise apply a tool.
   if (e.pointerType === 'touch' && activeTab === 'edit') {
@@ -2262,8 +2305,13 @@ window.addEventListener('pointerup', (e) => {
       const centre = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }
       // Tool armed → apply it to the box. No tool (select mode) → offer the
       // boxed chairs' actions in one menu, "Move to row" included.
-      if (activeTool === null) openBulkChairMenu(refs, e.clientX, e.clientY, centre)
-      else applyBulkTool(refs, centre)
+      if (activeTool === null) {
+        // Keep the box selected after the menu closes, so the orange drop
+        // slots stay available for placing it precisely.
+        const valid = refs.filter(r => config.rows[r.rowIndex]?.chairs[r.chairIndex])
+        setSelectedChairs(valid)
+        if (valid.length > 0) openBulkChairMenu(valid, e.clientX, e.clientY, centre)
+      } else applyBulkTool(refs, centre)
       suppressClickAfterPan = true   // swallow the trailing click
     }
     marqueeState = null
@@ -2496,13 +2544,19 @@ function applyStandToChair(rowChairs: Chair[], i: number, mode: StandMode) {
 // — they stay adjacent in the destination. When only one half moves, the pair
 // dissolves and each player keeps a stand of their own, which is the least
 // surprising outcome. Returns how many chairs actually moved.
-function moveChairsToRow(targets: { rowIndex: number; chairIndex: number }[], dest: number): number {
+function moveChairsToRow(
+  targets: { rowIndex: number; chairIndex: number }[],
+  dest: number,
+  insertIndex?: number,
+): number {
   const destRow = config.rows[dest]
   if (!destRow) return 0
 
   const byRow = new Map<number, number[]>()
   for (const t of targets) {
-    if (t.rowIndex === dest) continue          // already there
+    // Without an explicit slot, moving to the row you're already in is a no-op;
+    // with one, it's a meaningful reorder, so those chairs stay in play.
+    if (insertIndex === undefined && t.rowIndex === dest) continue
     const list = byRow.get(t.rowIndex) ?? []
     if (!list.includes(t.chairIndex)) list.push(t.chairIndex)
     byRow.set(t.rowIndex, list)
@@ -2520,9 +2574,14 @@ function moveChairsToRow(targets: { rowIndex: number; chairIndex: number }[], de
   }
 
   const moved: Chair[] = []
+  // Removing chairs that sat before the target slot shifts it left by that many.
+  let shift = 0
   for (const ri of [...byRow.keys()].sort((a, b) => a - b)) {
     const chairs = config.rows[ri].chairs
     const idxs = byRow.get(ri)!.sort((a, b) => a - b)
+    if (ri === dest && insertIndex !== undefined) {
+      shift = idxs.filter(i => i < insertIndex).length
+    }
     // Ascending, so a desk pair stays adjacent (and in order) once appended.
     for (const i of idxs) moved.push(chairs[i])
     for (const i of idxs) {
@@ -2543,8 +2602,26 @@ function moveChairsToRow(targets: { rowIndex: number; chairIndex: number }[], de
     // Descending so earlier splices don't shift the later indices.
     for (const i of [...idxs].reverse()) chairs.splice(i, 1)
   }
-  destRow.chairs.push(...moved)
+  const at = insertIndex !== undefined
+    ? Math.max(0, Math.min(destRow.chairs.length, insertIndex - shift))
+    : sectionInsertIndex(destRow, moved[0])
+  destRow.chairs.splice(at, 0, ...moved)
   return moved.length
+}
+
+// Where a moved block should land in the destination row when no explicit slot
+// was picked: right after the last chair of the same section, so a violin desk
+// joins the other violins instead of being stranded on the end of the row.
+// Matches on `group` (set by Tidy sections) or the exact label — deliberately
+// NOT normalizeSectionLabel, which strips the part number and would treat
+// "Vln 1" and "Vln 2" as the same section. Falls back to appending.
+function sectionInsertIndex(destRow: typeof config.rows[number], first: Chair | undefined): number {
+  const key = (c: Chair) => (c.group?.trim() || c.label.trim()).toLowerCase()
+  const want = first ? key(first) : ''
+  if (!want) return destRow.chairs.length
+  let last = -1
+  destRow.chairs.forEach((c, i) => { if (key(c) === want) last = i })
+  return last >= 0 ? last + 1 : destRow.chairs.length
 }
 
 // "Move to row" segment options. A selection sitting entirely in one row can't
@@ -2707,7 +2784,7 @@ function openBulkChairMenu(
   if (config.rows.length > 1) {
     items.push({ kind: 'segment', label: 'Move to row', options: moveRowOptions(
       new Set(targets.map(r => r.rowIndex)),
-      dest => mut(() => { moveChairsToRow(targets, dest) }),
+      dest => mut(() => { moveChairsToRow(targets, dest); selectedChairs = [] }),
     ) })
   }
   showContextMenu(clientX, clientY, `${targets.length} chair${targets.length !== 1 ? 's' : ''}`, items)
@@ -2880,7 +2957,10 @@ canvas.addEventListener('click', (e) => {
   // No tool armed (select mode, the default): clicking a chair or stand opens
   // the same menu as a right-click — noun-first editing, no mode to remember.
   if (activeTool === null) {
-    if (activeTab === 'edit') openChairContextMenu(e.clientX, e.clientY, x, y)
+    // Nothing under the pointer → treat it as "deselect".
+    if (activeTab === 'edit' && !openChairContextMenu(e.clientX, e.clientY, x, y)) {
+      clearSelectedChairs()
+    }
     return
   }
 
@@ -2943,6 +3023,13 @@ canvas.addEventListener('click', (e) => {
 // --- Events ---
 
 function bindEvents() {
+  // Registered before any context menu exists, so this capture-phase listener
+  // runs ahead of the menu's own capture-phase Escape handler and can see that
+  // the menu was still open when the key went down.
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && contextMenuOpen()) escapeClosedMenu = true
+  }, true)
+
   for (const el of [titleInput, layoutSelect, notesArea, showNumbersCheck,
     restartNumbersCheck, showRowLabelsCheck, conductorStandCheck, showConductorCheck, flipCheck,
     straightRowsInput, rowCountInput, showArcCheck, arcRangeInput, rowSpacingInput,
@@ -3195,6 +3282,7 @@ function bindEvents() {
     closeChairLabelEditor()   // don't leave the inline editor floating after a tab change
     closeContextMenu()        // and don't leave a context menu floating either
     hideHandleTip()           // the layout handles it describes are gone too
+    selectedChairs = []       // selection + drop slots are Edit-tab only
     // Export is view-only — drop any instrument selection so its (now
     // non-interactive) handles don't linger on the chart.
     if (tab === 'export' && selectedInstrumentId) { setSelectedInstrument(null); renderChart() }
@@ -3586,6 +3674,13 @@ function bindEvents() {
     if (e.key === 'Escape') {
       // An in-progress drag wins: abort it before closing anything else.
       if (cancelActiveDrag()) return
+      // The context menu closes itself from a CAPTURE-phase listener, so by
+      // the time this bubble-phase handler runs it's already gone. escapeClosedMenu
+      // (recorded by our own earlier capture listener) is how we still know
+      // this keypress was spent on the menu — otherwise one Escape would both
+      // close the menu and drop the selection behind it.
+      if (escapeClosedMenu) { escapeClosedMenu = false; return }
+      if (clearSelectedChairs()) return
       if (customOrchestraModal.style.display !== 'none') {
         customOrchestraModal.style.display = 'none'
         return

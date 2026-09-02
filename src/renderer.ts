@@ -1,7 +1,7 @@
 import type {
   ChartConfig, Row, Chair, FixedInstrument,
   HitTarget, ConductorHit, InstrumentHit, RotateHandleHit, ConductorOrigin,
-  LayoutHandleHit, RowGeometry,
+  LayoutHandleHit, RowGeometry, DropPointHit,
 } from './types'
 import {
   drawDrumkit, drawPiano, drawAmp, drawTimpani, drawMallet, drawHarp,
@@ -121,6 +121,11 @@ export class Renderer {
   // dimmed for Hide, the armed label ghosted in. Set by main.ts before each
   // render (null when no previewable tool is armed / not in the Edit tab).
   hoverPreview: HoverPreview | null = null
+  // Chairs currently marquee-selected in the Edit tab, as `${row}:${chair}`
+  // keys. Drawn with an orange outline, and (via showDropPoints) turn every
+  // gap between chairs into a clickable slot to drop the selection into.
+  selectedChairs: Set<string> = new Set()
+  showDropPoints = false
   rotateHandleHit: RotateHandleHit | null = null
   // Same-shape hit-test target for the red ✕ delete button drawn next to
   // the selected instrument.
@@ -150,6 +155,8 @@ export class Renderer {
   // for each riser-size handle, keyed by its owning row (a run's last row).
   // main.ts reads this to convert a pointer position into a new riserPad.
   private riserHandleBaselines: Map<number, { center: { x: number; y: number }; baseDist: number }> = new Map()
+  // Populated each render while showDropPoints is on (see drawDropPoints).
+  private dropPoints: DropPointHit[] = []
 
   render(canvas: HTMLCanvasElement, config: ChartConfig, opts: RenderOptions = {}): void {
     // The backing store is dpr-bigger than the CSS box (see resizeCanvas), so
@@ -180,6 +187,7 @@ export class Renderer {
     this.layoutRows = []
     this.deskHandles = []
     this.riserHandleBaselines = new Map()
+    this.dropPoints = []
     this.conductorHit = null
     this.rotateHandleHit = null
     this.deleteHandleHit = null
@@ -240,6 +248,10 @@ export class Renderer {
 
     // Instruments draw on top so they're always visible & selectable
     this.renderInstruments(ctx, config)
+
+    // Drop slots sit above everything in the chart frame, so they stay
+    // clickable even where they land on a chair's edge.
+    this.drawDropPoints(ctx)
 
     if (scaling) ctx.restore()
 
@@ -990,7 +1002,7 @@ export class Renderer {
     chairs.forEach((chair, chairIndex) => {
       const { cx, cy } = positions[chairIndex]
       if (chair.enabled) {
-        this.drawChair(ctx, chair, cx, cy, ox, oy, row.fontSize, this.isNudged(chair), this.isChairHovered(rowIndex, chairIndex), this.previewFor(rowIndex, chairIndex))
+        this.drawChair(ctx, chair, cx, cy, ox, oy, row.fontSize, this.isNudged(chair), this.isChairHovered(rowIndex, chairIndex), this.previewFor(rowIndex, chairIndex), this.selectedChairs.has(`${rowIndex}:${chairIndex}`))
         if (chair.hasStand) this.drawStandX(ctx, cx, cy, ox, oy, undefined, { rowIndex, chairIndex })
         // Standing players aren't numbered seats — no number drawn, and they
         // don't consume one (so the seated chairs stay sequential).
@@ -1072,7 +1084,7 @@ export class Renderer {
       positions.push({ cx, cy: rowY })
 
       if (chair.enabled) {
-        this.drawChair(ctx, chair, cx, rowY, cx, oy, row.fontSize, this.isNudged(chair), this.isChairHovered(rowIndex, chairIndex), this.previewFor(rowIndex, chairIndex))
+        this.drawChair(ctx, chair, cx, rowY, cx, oy, row.fontSize, this.isNudged(chair), this.isChairHovered(rowIndex, chairIndex), this.previewFor(rowIndex, chairIndex), this.selectedChairs.has(`${rowIndex}:${chairIndex}`))
         if (chair.hasStand) this.drawStandX(ctx, cx, rowY, cx, oy, undefined, { rowIndex, chairIndex })
         // Standing players aren't numbered seats (see semicircle path).
         if (!chair.noSeat) {
@@ -1257,6 +1269,75 @@ export class Renderer {
         cx: d.cx, cy: d.cy, radius: 12,
       })
     }
+  }
+
+  // Every gap in every row becomes an orange slot while chairs are selected, so
+  // a block of desks can be dropped at an exact position instead of only being
+  // appended. Positions come from this frame's chair hit targets, so this works
+  // for arc and straight rows alike without duplicating either row's geometry.
+  private drawDropPoints(ctx: CanvasRenderingContext2D) {
+    if (!this.showDropPoints) return
+    const byRow = new Map<number, HitTarget[]>()
+    for (const t of this.hitTargets) {
+      const list = byRow.get(t.rowIndex) ?? []
+      list.push(t)
+      byRow.set(t.rowIndex, list)
+    }
+    const { ox, oy } = this.conductorOrigin
+
+    for (const [rowIndex, targets] of byRow) {
+      targets.sort((a, b) => a.chairIndex - b.chairIndex)
+      const n = targets.length
+      if (n === 0) continue
+      const sel = (i: number) => this.selectedChairs.has(`${rowIndex}:${i}`)
+
+      for (let g = 0; g <= n; g++) {
+        // A gap buried inside a contiguous run of selected chairs is a no-op —
+        // don't clutter the chart with slots that can't change anything.
+        if (g > 0 && g < n && sel(targets[g - 1].chairIndex) && sel(targets[g].chairIndex)) continue
+
+        let px: number, py: number
+        if (g > 0 && g < n) {
+          px = (targets[g - 1].x + targets[g].x) / 2
+          py = (targets[g - 1].y + targets[g].y) / 2
+        } else if (n >= 2) {
+          // Extrapolate half a seat past the end, along the row's own direction.
+          const [a, b] = g === 0 ? [targets[0], targets[1]] : [targets[n - 1], targets[n - 2]]
+          px = a.x + (a.x - b.x) * 0.5
+          py = a.y + (a.y - b.y) * 0.5
+        } else {
+          // Single chair: the row direction is the tangent at that seat, i.e.
+          // perpendicular to its radius from the conductor.
+          const a = targets[0]
+          const vx = a.x - ox, vy = a.y - oy
+          const len = Math.hypot(vx, vy) || 1
+          const s = g === 0 ? -24 : 24
+          px = a.x + (-vy / len) * s
+          py = a.y + (vx / len) * s
+        }
+        this.drawDropDot(ctx, px, py)
+        this.dropPoints.push({ rowIndex, insertIndex: g, x: px, y: py, radius: 11 })
+      }
+    }
+  }
+
+  private drawDropDot(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
+    ctx.save()
+    ctx.beginPath(); ctx.arc(cx, cy, 5.5, 0, Math.PI * 2)
+    ctx.fillStyle = '#f97316'; ctx.fill()
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke()
+    ctx.restore()
+  }
+
+  dropPointHitTest(x: number, y: number): DropPointHit | null {
+    // Same coarse-pointer allowance as the layout handles.
+    const minScreen = this.coarsePointer ? 22 : 0
+    for (let i = this.dropPoints.length - 1; i >= 0; i--) {
+      const p = this.dropPoints[i]
+      const r = Math.max(p.radius, minScreen / (this.viewScale || 1))
+      if (Math.hypot(x - p.x, y - p.y) <= r) return p
+    }
+    return null
   }
 
   // Group-move handle for a desk pair: a teal disc with a white ring and centre
@@ -1844,6 +1925,7 @@ export class Renderer {
     highlight = false,
     rowHover = false,
     preview: HoverPreview | null = null,
+    selected = false,
   ) {
     const faceAngle = Math.atan2(condY - cy, condX - cx)
 
@@ -1948,6 +2030,20 @@ export class Renderer {
         ctx.strokeRect(-CHAIR_HALF, -CHAIR_HALF, CHAIR_SIZE, CHAIR_SIZE)
       }
       ctx.setLineDash([])
+    }
+
+    // Marquee selection: an orange ring matching the drop slots, so it's
+    // obvious which chairs a slot click is about to move.
+    if (selected) {
+      ctx.strokeStyle = '#f97316'
+      ctx.lineWidth = 2.5
+      if (chair.isStool) {
+        ctx.beginPath()
+        ctx.arc(0, 0, CHAIR_HALF + 2, 0, Math.PI * 2)
+        ctx.stroke()
+      } else {
+        ctx.strokeRect(-CHAIR_HALF - 2.5, -CHAIR_HALF - 2.5, CHAIR_SIZE + 5, CHAIR_SIZE + 5)
+      }
     }
 
     // Layout tab: a nudged chair gets a blue outline so it's obvious which

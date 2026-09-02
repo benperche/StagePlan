@@ -188,6 +188,18 @@ export interface HitTarget {
   radius: number
 }
 
+// One clickable gap in a row while chairs are selected (Edit tab, no tool
+// armed). Clicking it drops the selection into that exact slot, so a block of
+// desks can be placed between existing chairs rather than only appended.
+// `insertIndex` is the position in row.chairs the selection lands at.
+export interface DropPointHit {
+  rowIndex: number
+  insertIndex: number
+  x: number
+  y: number
+  radius: number
+}
+
 // Separate hit rect for the conductor podium
 export interface ConductorHit {
   x: number
