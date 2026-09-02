@@ -1880,13 +1880,15 @@ export class Renderer {
       lines.push(`Risers: ${desc}`)
     }
 
-    const lineHeight = 15
+    // Pure black at 12px, not the old #222/11px: on a printed chart the
+    // summary was quiet enough that people didn't notice it was there.
+    const lineHeight = 16
     const x = w - 12
     const bottomY = h - 24
 
     ctx.save()
-    ctx.fillStyle = '#222'
-    ctx.font = '11px sans-serif'
+    ctx.fillStyle = '#000'
+    ctx.font = '12px sans-serif'
     ctx.textAlign = 'right'
     ctx.textBaseline = 'bottom'
 

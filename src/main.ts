@@ -954,7 +954,7 @@ bindNumber(rowCountInput,
     // instruments around the conductor.
     const target = Math.max(0, Math.min(20, Number.isFinite(v) ? v : 0))
     while (config.rows.length < target) {
-      config.rows.push(makeRow(8, String(config.rows.length + 1)))
+      config.rows.push(makeRow(8, nextRowLabel()))
     }
     while (config.rows.length > target) {
       config.rows.pop()
@@ -2573,6 +2573,8 @@ function moveChairsToRow(
     }
   }
 
+  detachLeavingDesks(byRow, moving)
+
   const moved: Chair[] = []
   // Removing chairs that sat before the target slot shifts it left by that many.
   let shift = 0
@@ -2584,21 +2586,6 @@ function moveChairsToRow(
     }
     // Ascending, so a desk pair stays adjacent (and in order) once appended.
     for (const i of idxs) moved.push(chairs[i])
-    for (const i of idxs) {
-      const c = chairs[i], next = chairs[i + 1], prev = chairs[i - 1]
-      // c owned a shared stand: keep it only if the partner travels too.
-      if (c.standAfter && (!next || !moving.has(next))) {
-        c.standAfter = false
-        c.hasStand = true
-        if (next) next.hasStand = true
-      }
-      // c was the far half of someone else's desk.
-      if (prev?.standAfter && !moving.has(prev)) {
-        prev.standAfter = false
-        prev.hasStand = true
-        c.hasStand = true
-      }
-    }
     // Descending so earlier splices don't shift the later indices.
     for (const i of [...idxs].reverse()) chairs.splice(i, 1)
   }
@@ -2607,6 +2594,69 @@ function moveChairsToRow(
     : sectionInsertIndex(destRow, moved[0])
   destRow.chairs.splice(at, 0, ...moved)
   return moved.length
+}
+
+// Detach the chairs listed in `byRow` from any desk they're half of, so the
+// players left behind keep a stand of their own rather than being orphaned on
+// a shared stand pointing at nothing. A desk whose BOTH halves are leaving is
+// left intact — for a move they stay adjacent in the destination, and for a
+// delete they both vanish anyway. Must run before any splicing, while the
+// indices still line up.
+function detachLeavingDesks(byRow: Map<number, number[]>, leaving: Set<Chair>) {
+  for (const [ri, idxs] of byRow) {
+    const chairs = config.rows[ri]?.chairs
+    if (!chairs) continue
+    for (const i of idxs) {
+      const c = chairs[i], next = chairs[i + 1], prev = chairs[i - 1]
+      if (!c) continue
+      // c owned a shared stand: keep it only if the partner is leaving too.
+      if (c.standAfter && (!next || !leaving.has(next))) {
+        c.standAfter = false
+        c.hasStand = true
+        if (next) next.hasStand = true
+      }
+      // c was the far half of someone else's desk.
+      if (prev?.standAfter && !leaving.has(prev)) {
+        prev.standAfter = false
+        prev.hasStand = true
+        c.hasStand = true
+      }
+    }
+  }
+}
+
+// Group chair refs by row, de-duplicated. Shared by the move and delete paths.
+function chairRefsByRow(targets: { rowIndex: number; chairIndex: number }[]): Map<number, number[]> {
+  const byRow = new Map<number, number[]>()
+  for (const t of targets) {
+    if (!config.rows[t.rowIndex]?.chairs[t.chairIndex]) continue
+    const list = byRow.get(t.rowIndex) ?? []
+    if (!list.includes(t.chairIndex)) list.push(t.chairIndex)
+    byRow.set(t.rowIndex, list)
+  }
+  return byRow
+}
+
+// Remove chairs from the chart entirely — the row shrinks and the remaining
+// chairs re-space. Distinct from Hide, which keeps the seat's place so the row
+// doesn't shift. Returns how many were deleted.
+function deleteChairs(targets: { rowIndex: number; chairIndex: number }[]): number {
+  const byRow = chairRefsByRow(targets)
+  if (byRow.size === 0) return 0
+  const leaving = new Set<Chair>()
+  for (const [ri, idxs] of byRow) {
+    for (const i of idxs) leaving.add(config.rows[ri].chairs[i])
+  }
+  detachLeavingDesks(byRow, leaving)
+  let removed = 0
+  for (const [ri, idxs] of byRow) {
+    const chairs = config.rows[ri].chairs
+    for (const i of [...idxs].sort((a, b) => b - a)) {
+      chairs.splice(i, 1)
+      removed++
+    }
+  }
+  return removed
 }
 
 // Where a moved block should land in the destination row when no explicit slot
@@ -2624,15 +2674,47 @@ function sectionInsertIndex(destRow: typeof config.rows[number], first: Chair | 
   return last >= 0 ? last + 1 : destRow.chairs.length
 }
 
+// The label a newly appended row should take: continue A, B, C… while the
+// chart is lettered (as every preset is), otherwise fall back to the numeric
+// position. Keeps "Add row" and "move to a new row" naming the same way.
+function nextRowLabel(): string {
+  const labels = config.rows.map(r => r.label.trim())
+  if (labels.length > 0 && labels.every(l => /^[A-Z]$/.test(l))) {
+    const max = Math.max(...labels.map(l => l.charCodeAt(0)))
+    if (max < 'Z'.charCodeAt(0)) return String.fromCharCode(max + 1)
+  }
+  return String(config.rows.length + 1)
+}
+
+// Append an empty row at the back and return its index — the destination for
+// "move to a new row".
+function appendEmptyRow(): number {
+  config.rows.push(makeRow(0, nextRowLabel()))
+  // straightRows counts from the BACK, so appending would silently flip the
+  // front-most straight row into an arc row. Bump it so every existing row
+  // keeps rendering exactly as it did, and the new back row continues the
+  // pattern of the one it follows.
+  if (config.straightRows > 0) config.straightRows++
+  return config.rows.length - 1
+}
+
 // "Move to row" segment options. A selection sitting entirely in one row can't
 // move to that row, so it's dropped; a selection spanning rows keeps every
-// destination (gathering them all into one row is the point).
-function moveRowOptions(sourceRows: Set<number>, onMove: (dest: number) => void) {
-  return config.rows
+// destination (gathering them all into one row is the point). The trailing
+// "+ New" option makes a fresh row at the back and moves them there — the
+// quickest way to split a crowded row, or to start the next row back from
+// chairs you've already labelled.
+function moveRowOptions(sourceRows: Set<number>, onMove: (dest: number | 'new') => void) {
+  const options = config.rows
     .map((row, i) => ({ row, i }))
     .filter(({ i }) => !(sourceRows.size === 1 && sourceRows.has(i)))
     .map(({ row, i }) => ({ label: row.label || String(i + 1), onClick: () => onMove(i) }))
+  options.push({ label: '+ New', onClick: () => onMove('new') })
+  return options
 }
+
+// Resolve a "Move to row" destination, creating the row when asked for.
+const resolveMoveDest = (dest: number | 'new') => dest === 'new' ? appendEmptyRow() : dest
 
 // --- Right-click / long-press context menu on a chair or stand ---------------
 const CHAIR_SWATCHES = ['#a8d8ea', '#b6e2a1', '#f6d365', '#f4a261', '#e5a1c4', '#cfcfcf', '#ffffff']
@@ -2706,7 +2788,7 @@ function openChairContextMenu(clientX: number, clientY: number, x: number, y: nu
     if (config.rows.length > 1) {
       items.push({ kind: 'segment', label: 'Move to row', options: moveRowOptions(
         new Set([hit.rowIndex]),
-        dest => mut(() => { moveChairsToRow([{ rowIndex: hit.rowIndex, chairIndex: hit.chairIndex }], dest); afterMove() }),
+        dest => mut(() => { moveChairsToRow([{ rowIndex: hit.rowIndex, chairIndex: hit.chairIndex }], resolveMoveDest(dest)); afterMove() }),
       ) })
       const partner = chair.standAfter ? hit.chairIndex + 1
         : rowChairs[hit.chairIndex - 1]?.standAfter ? hit.chairIndex - 1
@@ -2718,11 +2800,24 @@ function openChairContextMenu(clientX: number, clientY: number, x: number, y: nu
             moveChairsToRow([
               { rowIndex: hit.rowIndex, chairIndex: Math.min(hit.chairIndex, partner) },
               { rowIndex: hit.rowIndex, chairIndex: Math.max(hit.chairIndex, partner) },
-            ], dest)
+            ], resolveMoveDest(dest))
             afterMove()
           }),
         ) })
       }
+    }
+    items.push({ kind: 'action', label: 'Delete chair', danger: true, onClick: () => mut(() => {
+      deleteChairs([{ rowIndex: hit.rowIndex, chairIndex: hit.chairIndex }])
+      afterMove()
+      updateAllInputs()
+    }) })
+    // Clicking a chair selects it as well as opening its menu, so the orange
+    // drop slots appear for a single chair exactly as they do for a marquee —
+    // otherwise "select then place" only works for boxed selections, which is
+    // an arbitrary distinction from the user's side. Only in select mode; with
+    // a tool armed the selection would be invisible (see renderChart's gate).
+    if (activeTool === null) {
+      setSelectedChairs([{ rowIndex: hit.rowIndex, chairIndex: hit.chairIndex }])
     }
     showContextMenu(clientX, clientY, 'Chair', items)
     return true
@@ -2784,9 +2879,11 @@ function openBulkChairMenu(
   if (config.rows.length > 1) {
     items.push({ kind: 'segment', label: 'Move to row', options: moveRowOptions(
       new Set(targets.map(r => r.rowIndex)),
-      dest => mut(() => { moveChairsToRow(targets, dest); selectedChairs = [] }),
+      dest => mut(() => { moveChairsToRow(targets, resolveMoveDest(dest)); selectedChairs = [] }),
     ) })
   }
+  items.push({ kind: 'action', label: `Delete ${targets.length} chair${targets.length !== 1 ? 's' : ''}`,
+    danger: true, onClick: () => mut(() => { deleteChairs(targets); selectedChairs = []; updateAllInputs() }) })
   showContextMenu(clientX, clientY, `${targets.length} chair${targets.length !== 1 ? 's' : ''}`, items)
   return true
 }
@@ -3257,7 +3354,7 @@ function bindEvents() {
 
   addRowBtn.addEventListener('click', () => {
     history.push(config)
-    config.rows.push(makeRow(8, String(config.rows.length + 1)))
+    config.rows.push(makeRow(8, nextRowLabel()))
     updateAllInputs()
     renderChart()
   })
@@ -3739,6 +3836,22 @@ function bindEvents() {
       e.preventDefault()
       aboutModal.style.display = 'flex'
       document.getElementById('about-shortcuts')?.scrollIntoView({ block: 'start' })
+    }
+
+    // Delete selected chairs (Delete or Backspace). Removes the seats outright,
+    // unlike Hide, which keeps their place so the row doesn't shift.
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedChairs.length > 0) {
+      const t = e.target as HTMLElement
+      if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return
+      e.preventDefault()
+      history.push(config)
+      deleteChairs(selectedChairs)
+      selectedChairs = []
+      renderRowList()
+      renderLabelList()
+      updateAllInputs()
+      renderChart()
+      return
     }
 
     // Delete selected instrument (Delete or Backspace) — but only when not
