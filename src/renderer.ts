@@ -66,6 +66,17 @@ interface SectionAnchors {
   justify: Map<string, SectionJustify>
 }
 
+// Per-instrument size multiplier (FixedInstrument.size). Clamped so a
+// hand-edited or shared chart can't smuggle in a glyph big enough to crush the
+// auto-fit scale, or a zero/negative one that draws nothing.
+const INSTRUMENT_SIZE_MIN = 0.5
+const INSTRUMENT_SIZE_MAX = 2.5
+function instrumentScale(inst: FixedInstrument): number {
+  const s = inst.size ?? 1
+  if (!Number.isFinite(s)) return 1
+  return Math.max(INSTRUMENT_SIZE_MIN, Math.min(INSTRUMENT_SIZE_MAX, s))
+}
+
 // What an armed Edit-tab tool would do to the hovered chair — drawn as a
 // ghost on that chair so the click's effect is visible before committing.
 // Only the tools with a single deterministic outcome preview (Hide dims,
@@ -630,7 +641,13 @@ export class Renderer {
     let front = CONDUCTOR_EXTENT    // conductor sits in front
 
     for (const inst of config.instruments ?? []) {
-      const dx = Math.abs(inst.distance * Math.cos(inst.angle)) + 46
+      // The old flat 46px pad assumed every glyph was roughly chair-sized. A
+      // resized one (an XL marimba is ~100px across) would poke outside the
+      // fitted area, so take the glyph's own drawn extent when it's bigger —
+      // the larger of hw/hh, which covers it at any rotation.
+      const dims = this.glyphDims(inst)
+      const pad = Math.max(46, dims.hw, dims.hh)
+      const dx = Math.abs(inst.distance * Math.cos(inst.angle)) + pad
       const dy = inst.distance * Math.sin(inst.angle)
       halfW = Math.max(halfW, dx)
       // Extend only the side the instrument actually sits on (in the unflipped
@@ -638,8 +655,8 @@ export class Renderer {
       // is in front. Counting both sides used to roughly double the natural
       // height for a back instrument (e.g. orchestral timpani) — shrinking the
       // whole chart and reserving dead space in front of the conductor.
-      if (dy < 0) back = Math.max(back, -dy + 46)
-      else        front = Math.max(front, dy + 46)
+      if (dy < 0) back = Math.max(back, -dy + pad)
+      else        front = Math.max(front, dy + pad)
     }
     // Reserve extra behind the back row and sideways so auto-fit doesn't clip
     // a riser platform's bigger-than-the-chairs margins — including however
@@ -1487,13 +1504,16 @@ export class Renderer {
     }
   }
 
-  // Intrinsic half-width/height of an instrument glyph, measured by drawing it
-  // to a throwaway off-screen context (so the exact glyph code defines the size
-  // — no duplicated dimension tables to keep in sync).
+  // Drawn half-width/height of an instrument glyph, measured by drawing it to a
+  // throwaway off-screen context (so the exact glyph code defines the size — no
+  // duplicated dimension tables to keep in sync), then scaled by the
+  // instrument's own size multiplier. Scaling HERE means every consumer
+  // (title clearance, auto-fit extents) accounts for a resized glyph for free.
   private glyphDims(inst: FixedInstrument): { hw: number; hh: number } {
     if (!this.measureCtx) this.measureCtx = document.createElement('canvas').getContext('2d')
     const { hw, hh } = this.drawGlyph(this.measureCtx!, inst)
-    return { hw, hh }
+    const s = instrumentScale(inst)
+    return { hw: hw * s, hh: hh * s }
   }
 
   private renderInstruments(ctx: CanvasRenderingContext2D, config: ChartConfig) {
@@ -1521,7 +1541,22 @@ export class Renderer {
       ctx.translate(cx, cy)
       ctx.rotate(worldRotation)
 
-      const { hw, hh, labelInside, labelOffset, radius } = this.drawGlyph(ctx, inst)
+      // The size multiplier scales the glyph itself, then is unwound so the
+      // selection box keeps a constant stroke/dash weight at any size. Every
+      // dimension the glyph reports back is scaled by hand below.
+      const scale = instrumentScale(inst)
+      ctx.save()
+      if (scale !== 1) ctx.scale(scale, scale)
+      const glyph = this.drawGlyph(ctx, inst)
+      ctx.restore()
+
+      const hw = glyph.hw * scale
+      const hh = glyph.hh * scale
+      const labelInside = glyph.labelInside
+      const radius = glyph.radius == null ? null : glyph.radius * scale
+      const labelOffset = glyph.labelOffset
+        ? { x: glyph.labelOffset.x * scale, y: glyph.labelOffset.y * scale }
+        : undefined
 
       // Selection highlight (still in rotated frame so it tracks the glyph)
       if (isSelected) {

@@ -115,6 +115,13 @@ export interface FixedInstrument {
   // conductor (toggleable by clicking the instrument while the Music
   // Stand tool is active in the Edit tab).
   hasStand?: boolean
+  // Uniform size multiplier for the glyph. Unset = 1 (the drawn size). Picked
+  // from the inspector's S/M/L/XL buttons, because physical size genuinely
+  // varies for the same symbol — a glockenspiel and a marimba are both
+  // "mallets", and a traps table can be a stool-top or a full trunk lid.
+  // Scales the hit box, any attached stand's reach and the auto-fit extents
+  // with it. Clamped by the renderer (see instrumentScale).
+  size?: number
 }
 
 export interface ChartConfig {

@@ -394,7 +394,7 @@ import {
   instrumentPickerList, labelList, instrumentPickerStatus,
   showTallyBtn, tallyOverlay, tallyBody, tallyTotal, tallyMinimizeBtn, tallyCloseBtn,
   addInstrumentButtons, inspector, inspectorType, inspectorLabel,
-  inspectorCountLabel, inspectorCount, inspectorRotateLeft, inspectorRotateRight,
+  inspectorCountLabel, inspectorCount, inspectorSizeButtons, inspectorRotateLeft, inspectorRotateRight,
   inspectorDelete, inspectorMicOptions, inspectorMicStand, inspectorMicWireless,
   inspectorTimpaniOptions, inspectorTimpaniStool,
   setupIntroHint, dismissIntroHintBtn,
@@ -1280,6 +1280,14 @@ function renderInspector() {
   } else {
     inspectorMicOptions.style.display = 'none'
   }
+
+  // Highlight whichever preset size this instrument is on. A chart edited by
+  // hand could hold a value between the presets, in which case none lights up
+  // — honest, and clicking any button snaps it to that size.
+  const size = inst.size ?? 1
+  inspectorSizeButtons.forEach(b => {
+    b.classList.toggle('active', Number(b.dataset['instSize']) === size)
+  })
 }
 
 function setSelectedInstrument(id: string | null) {
@@ -3360,6 +3368,25 @@ function bindEvents() {
   }
   inspectorRotateLeft.addEventListener('click', () => rotateBy(-Math.PI / 12))
   inspectorRotateRight.addEventListener('click', () => rotateBy(Math.PI / 12))
+
+  // Inspector — size. Fixed presets rather than free resizing: a handful of
+  // steps is quicker to hit than a drag, and keeps two marimbas on one chart
+  // the same size as each other.
+  inspectorSizeButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const inst = config.instruments.find(i => i.id === selectedInstrumentId)
+      if (!inst) return
+      const size = Number(btn.dataset['instSize'])
+      if (!Number.isFinite(size)) return
+      history.push(config)
+      // 1 is the drawn size, so leave the field off entirely for it — keeps
+      // default charts free of redundant data in saves and share links.
+      if (size === 1) delete inst.size
+      else inst.size = size
+      renderInspector()
+      renderChart()
+    })
+  })
 
   // Inspector — delete
   inspectorDelete.addEventListener('click', () => {
