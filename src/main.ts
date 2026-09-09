@@ -1,6 +1,7 @@
 import './style.css'
 import { makeDefaultConfig, makeRow, makeInstrument, History, cloneConfig, DEFAULT_CHAIR_COLOR } from './state'
 import { Renderer, type HoverPreview } from './renderer'
+import { sizeOptionsFor } from './instrument-glyphs'
 import {
   PRESETS, buildPreset, parseOrchestraNotation, describeComposition,
   type Preset,
@@ -394,7 +395,7 @@ import {
   instrumentPickerList, labelList, instrumentPickerStatus,
   showTallyBtn, tallyOverlay, tallyBody, tallyTotal, tallyMinimizeBtn, tallyCloseBtn,
   addInstrumentButtons, inspector, inspectorType, inspectorLabel,
-  inspectorCountLabel, inspectorCount, inspectorSizeButtons, inspectorRotateLeft, inspectorRotateRight,
+  inspectorCountLabel, inspectorCount, inspectorSizeOptions, inspectorRotateLeft, inspectorRotateRight,
   inspectorDelete, inspectorMicOptions, inspectorMicStand, inspectorMicWireless,
   inspectorTimpaniOptions, inspectorTimpaniStool,
   setupIntroHint, dismissIntroHintBtn,
@@ -1281,13 +1282,33 @@ function renderInspector() {
     inspectorMicOptions.style.display = 'none'
   }
 
-  // Highlight whichever preset size this instrument is on. A chart edited by
-  // hand could hold a value between the presets, in which case none lights up
-  // — honest, and clicking any button snaps it to that size.
+  // Size buttons are rebuilt per type: the options differ (a traps table has
+  // no XL; mallets are labelled by octaves). The active one is whichever
+  // preset this instrument is on — a hand-edited value between presets lights
+  // none of them, which is honest, and any click snaps it to that size.
   const size = inst.size ?? 1
-  inspectorSizeButtons.forEach(b => {
-    b.classList.toggle('active', Number(b.dataset['instSize']) === size)
-  })
+  inspectorSizeOptions.querySelectorAll('button').forEach(b => b.remove())
+  for (const opt of sizeOptionsFor(inst.type)) {
+    const b = document.createElement('button')
+    b.textContent = opt.label
+    b.title = opt.title
+    if (opt.size === size) b.classList.add('active')
+    b.addEventListener('click', () => applyInstrumentSize(opt.size))
+    inspectorSizeOptions.appendChild(b)
+  }
+}
+
+// Set the selected instrument's size preset.
+function applyInstrumentSize(size: number) {
+  const inst = config.instruments.find(i => i.id === selectedInstrumentId)
+  if (!inst || !Number.isFinite(size)) return
+  history.push(config)
+  // 1 is the drawn size, so leave the field off entirely for it — keeps
+  // default charts free of redundant data in saves and share links.
+  if (size === 1) delete inst.size
+  else inst.size = size
+  renderInspector()
+  renderChart()
 }
 
 function setSelectedInstrument(id: string | null) {
@@ -3368,25 +3389,6 @@ function bindEvents() {
   }
   inspectorRotateLeft.addEventListener('click', () => rotateBy(-Math.PI / 12))
   inspectorRotateRight.addEventListener('click', () => rotateBy(Math.PI / 12))
-
-  // Inspector — size. Fixed presets rather than free resizing: a handful of
-  // steps is quicker to hit than a drag, and keeps two marimbas on one chart
-  // the same size as each other.
-  inspectorSizeButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const inst = config.instruments.find(i => i.id === selectedInstrumentId)
-      if (!inst) return
-      const size = Number(btn.dataset['instSize'])
-      if (!Number.isFinite(size)) return
-      history.push(config)
-      // 1 is the drawn size, so leave the field off entirely for it — keeps
-      // default charts free of redundant data in saves and share links.
-      if (size === 1) delete inst.size
-      else inst.size = size
-      renderInspector()
-      renderChart()
-    })
-  })
 
   // Inspector — delete
   inspectorDelete.addEventListener('click', () => {

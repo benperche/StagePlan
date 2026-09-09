@@ -261,12 +261,11 @@
               <label><input type="checkbox" id="inspector-mic-stand"> On mic stand</label>
               <label><input type="checkbox" id="inspector-mic-wireless"> Wireless</label>
             </div>
+            <!-- Buttons are built per instrument type by renderInspector —
+                 the options differ (a traps table has no XL, mallets add
+                 octaves rather than bulk). -->
             <div class="bulk-actions" id="inspector-size-options">
               <span class="bulk-actions-label">Size</span>
-              <button data-inst-size="0.7" title="Small">S</button>
-              <button data-inst-size="1" class="active" title="Normal size">M</button>
-              <button data-inst-size="1.4" title="Large">L</button>
-              <button data-inst-size="1.9" title="Extra large">XL</button>
             </div>
             <div class="row-controls">
               <button id="inspector-rotate-left" title="Rotate -15°">↺</button>

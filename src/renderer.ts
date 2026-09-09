@@ -7,6 +7,7 @@ import {
   drawDrumkit, drawPiano, drawAmp, drawTimpani, drawMallet, drawHarp,
   drawMicrophone, drawGong, drawSuspendedCymbal, drawSnareDrum, drawBassDrum, drawTrapTable,
   drawSingleChair, drawSingleStand, drawStool, drawGenericRect,
+  glyphHandlesOwnSize,
 } from './instrument-glyphs'
 import type { GlyphResult } from './instrument-glyphs'
 import { BASE_RADIUS, ROW_SPACING_DEFAULT, RISER_STEP_HEIGHT_DEFAULT, RISER_PAD_MAX, rowBaseRadius, computeRowRadii as computeRowRadiiPure } from './section-layout'
@@ -1487,14 +1488,14 @@ export class Renderer {
       case 'guitar-amp': return drawAmp(ctx, 32, 34)
       case 'bass-amp':   return drawAmp(ctx, 40, 42)
       case 'timpani':    return drawTimpani(ctx, inst)
-      case 'mallet':     return drawMallet(ctx)
+      case 'mallet':     return drawMallet(ctx, instrumentScale(inst))
       case 'harp':       return drawHarp(ctx)
       case 'microphone': return drawMicrophone(ctx, inst)
       case 'gong':       return drawGong(ctx)
       case 'cymbal':     return drawSuspendedCymbal(ctx)
       case 'snare':      return drawSnareDrum(ctx)
       case 'bass-drum':  return drawBassDrum(ctx)
-      case 'trap-table': return drawTrapTable(ctx)
+      case 'trap-table': return drawTrapTable(ctx, instrumentScale(inst))
       case 'chair':      return drawSingleChair(ctx)
       case 'stand':      return drawSingleStand(ctx)
       case 'stool':      return drawStool(ctx)
@@ -1512,7 +1513,9 @@ export class Renderer {
   private glyphDims(inst: FixedInstrument): { hw: number; hh: number } {
     if (!this.measureCtx) this.measureCtx = document.createElement('canvas').getContext('2d')
     const { hw, hh } = this.drawGlyph(this.measureCtx!, inst)
-    const s = instrumentScale(inst)
+    // A self-sizing glyph already returns final dimensions — scaling again
+    // would double-count the size.
+    const s = glyphHandlesOwnSize(inst.type) ? 1 : instrumentScale(inst)
     return { hw: hw * s, hh: hh * s }
   }
 
@@ -1544,7 +1547,9 @@ export class Renderer {
       // The size multiplier scales the glyph itself, then is unwound so the
       // selection box keeps a constant stroke/dash weight at any size. Every
       // dimension the glyph reports back is scaled by hand below.
-      const scale = instrumentScale(inst)
+      // A self-sizing glyph (mallet, traps table) reads the size itself and
+      // returns final dimensions; everything else is scaled uniformly here.
+      const scale = glyphHandlesOwnSize(inst.type) ? 1 : instrumentScale(inst)
       ctx.save()
       if (scale !== 1) ctx.scale(scale, scale)
       const glyph = this.drawGlyph(ctx, inst)

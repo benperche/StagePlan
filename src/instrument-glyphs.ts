@@ -1,4 +1,48 @@
-import type { FixedInstrument } from './types'
+import type { FixedInstrument, InstrumentType } from './types'
+
+// ---------------------------------------------------------------------------
+// Size presets
+// ---------------------------------------------------------------------------
+// The steps the inspector offers per instrument, and how each glyph reads them.
+// Most glyphs just get scaled uniformly by the renderer; the two below vary
+// non-uniformly because a uniform scale is the wrong model for them, so they
+// take the size themselves and redraw at the right proportions.
+export interface SizeOption { label: string; size: number; title: string }
+
+const DEFAULT_SIZES: SizeOption[] = [
+  { label: 'S', size: 0.7, title: 'Small' },
+  { label: 'M', size: 1, title: 'Normal size' },
+  { label: 'L', size: 1.4, title: 'Large' },
+  { label: 'XL', size: 1.9, title: 'Extra large' },
+]
+
+// No XL — a percussionist's table doesn't get bigger than a trunk lid.
+const TRAP_TABLE_SIZES: SizeOption[] = [
+  { label: 'S', size: 0.7, title: 'Small — a square stool-top' },
+  { label: 'M', size: 1, title: 'Normal table' },
+  { label: 'L', size: 1.4, title: 'Long table' },
+]
+
+const MALLET_SIZES: SizeOption[] = [
+  { label: 'S', size: 0.7, title: 'Fewer octaves (e.g. glockenspiel)' },
+  { label: 'M', size: 1, title: 'Normal length' },
+  { label: 'L', size: 1.4, title: 'More octaves' },
+  { label: 'XL', size: 1.9, title: 'Most octaves (e.g. 5-octave marimba)' },
+]
+
+export function sizeOptionsFor(type: InstrumentType): SizeOption[] {
+  if (type === 'trap-table') return TRAP_TABLE_SIZES
+  if (type === 'mallet') return MALLET_SIZES
+  return DEFAULT_SIZES
+}
+
+// True when the glyph applies the size itself (redrawing at new proportions)
+// rather than the renderer scaling the whole drawing uniformly. Such a glyph
+// returns dimensions that are ALREADY final, so the renderer must not scale
+// them again.
+export function glyphHandlesOwnSize(type: InstrumentType): boolean {
+  return type === 'mallet' || type === 'trap-table'
+}
 
 /**
  * Each glyph is drawn centred at (0, 0) in the canvas's current (already
@@ -257,10 +301,16 @@ export function drawTimpani(ctx: CanvasRenderingContext2D, inst: FixedInstrument
 // wider low end on the LEFT and the narrower high end on the RIGHT, plus
 // thin white separators suggesting the bars/keys.
 // ---------------------------------------------------------------------------
-export function drawMallet(ctx: CanvasRenderingContext2D): GlyphResult {
+export function drawMallet(ctx: CanvasRenderingContext2D, size = 1): GlyphResult {
   // Wider (taller) end = the low notes. Default orientation puts the low end
   // on the RIGHT, matching how a marimba/xylophone faces the player.
-  const w = 90, leftH = 24, rightH = 36
+  //
+  // Size adds OCTAVES, not bulk: the frame gets longer while its depth stays
+  // put (a 5-octave marimba is longer than a 4-octave, not deeper), and the
+  // key separators multiply with it so key width stays constant. Drawing it
+  // at the new dimensions rather than stretching the canvas also keeps the
+  // outline and separator strokes an even weight at every size.
+  const w = 90 * size, leftH = 24, rightH = 36
   const hw = w / 2
 
   ctx.fillStyle = '#1a1a1a'
@@ -275,8 +325,9 @@ export function drawMallet(ctx: CanvasRenderingContext2D): GlyphResult {
   // Thin white bar separators to suggest keys
   ctx.strokeStyle = '#fff'
   ctx.lineWidth = 0.8
-  for (let i = 1; i < 5; i++) {
-    const t = i / 5
+  const keys = Math.max(2, Math.round(5 * size))
+  for (let i = 1; i < keys; i++) {
+    const t = i / keys
     const x = -hw + t * w
     const yTop = -leftH / 2 + t * (-rightH / 2 - -leftH / 2)
     const yBot = leftH / 2 + t * (rightH / 2 - leftH / 2)
@@ -535,8 +586,14 @@ export function drawBassDrum(ctx: CanvasRenderingContext2D): GlyphResult {
 // tambourines on. A plain black rectangle, deliberately smaller than the
 // generic rectangle so the two don't get mistaken for each other.
 // ---------------------------------------------------------------------------
-export function drawTrapTable(ctx: CanvasRenderingContext2D): GlyphResult {
-  const hw = 29, hh = 17
+export function drawTrapTable(ctx: CanvasRenderingContext2D, size = 1): GlyphResult {
+  // Not a scale factor: a percussionist's *small* table is a square stool-top,
+  // not a shrunken oblong, and a big one gets longer without getting deeper.
+  // So each size is explicit dimensions. Thresholds are deliberately loose —
+  // they only ever see the presets sizeOptionsFor() offers for this type.
+  const { hw, hh } = size <= 0.85 ? { hw: 19, hh: 19 }     // S — square stool-top
+    : size >= 1.2 ? { hw: 41, hh: 17 }                     // L — long table
+    : { hw: 29, hh: 17 }                                   // M
   ctx.fillStyle = '#1a1a1a'
   roundRect(ctx, -hw, -hh, hw * 2, hh * 2, 3)
   ctx.fill()
