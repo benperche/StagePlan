@@ -423,7 +423,6 @@ async function init() {
   updateAllInputs()
   renderInspector()
   bindEvents()
-  markSaved()        // baseline for the unsaved-changes guard
   maybeShowIntro()
   localiseShortcutKeys()
   // setConfig isn't usable here yet (bindEvents hasn't wired things up
@@ -473,16 +472,21 @@ function scheduleAutosave() {
   clearTimeout(autosaveTimer)
   autosaveTimer = window.setTimeout(persistWorkingChart, 500)
 }
-function persistWorkingChart() {
+// How much of the chart the last autosave managed to keep. The unload guard
+// reads this: if everything is safely mirrored there's nothing to warn about.
+type AutosaveResult = 'full' | 'partial' | 'failed'
+function persistWorkingChart(): AutosaveResult {
   try {
     localStorage.setItem(WORKING_KEY, JSON.stringify({ config, currentChartId }))
+    return 'full'
   } catch {
     // Usually the quota, blown by a large background image. Retry without it so
     // at least the layout survives — better than losing everything.
     try {
       const { backgroundImage: _omit, ...rest } = config
       localStorage.setItem(WORKING_KEY, JSON.stringify({ config: rest, currentChartId }))
-    } catch { /* storage unavailable — nothing more we can do */ }
+      return 'partial'   // layout kept, background photo lost
+    } catch { return 'failed' }   // storage unavailable — nothing kept
   }
 }
 function restoreWorkingChart(): { config: ChartConfig; currentChartId: string | null } | null {
@@ -500,15 +504,6 @@ function restoreWorkingChart(): { config: ChartConfig; currentChartId: string | 
   } catch { return null }
 }
 
-// --- Unsaved-changes guard ---
-//
-// Baseline JSON of the chart as it last stood at an explicit Save / Load / New
-// (NOT undo/redo, which are edits). beforeunload warns only when the live chart
-// differs from it, so leaving with genuinely unsaved edits prompts, but a clean
-// reload doesn't nag. Autosave above is the real safety net; this is the belt
-// to its braces.
-let savedSnapshot = ''
-function markSaved() { savedSnapshot = JSON.stringify(config) }
 
 // Make older saved configs forward-compatible with newer schema fields.
 // Fill in any newer fields that an older saved config might be missing,
@@ -851,7 +846,6 @@ async function handleLibraryAction(action: string, id: string | null, folder: st
     if (!chart) return
     setConfig(chart.config)
     currentChartId = id
-    markSaved()        // freshly loaded from the library = clean
     updateLibraryCurrentTitle()
     closeLibrary()
     return
@@ -3991,14 +3985,20 @@ function bindEvents() {
   // Flush the autosave synchronously first so the work is recoverable whatever
   // the user chooses. Browsers show their own generic message, not returnValue.
   window.addEventListener('beforeunload', (e) => {
-    persistWorkingChart()
-    if (JSON.stringify(config) === savedSnapshot) return
+    // Flush synchronously first, so whatever can be kept is kept either way.
+    const kept = persistWorkingChart()
+    // The autosave is restored on the next launch, so closing the tab with
+    // edits in flight costs nothing and shouldn't nag — the app used to prompt
+    // on every close for work that was already safe. Warn ONLY when the
+    // autosave couldn't keep everything: storage blocked (private browsing),
+    // or a background image too big for the quota, which the fallback drops.
+    if (kept === 'full') return
     e.preventDefault()
     e.returnValue = ''
   })
 
   // Save / load
-  saveBtn.addEventListener('click', () => { saveToJson(config); markSaved() })
+  saveBtn.addEventListener('click', () => saveToJson(config))
   loadInput.addEventListener('change', async () => {
     const file = loadInput.files?.[0]
     if (!file) return
@@ -4006,7 +4006,6 @@ function bindEvents() {
       setConfig(await loadFromJson(file))
       // Loaded from disk → no library entry yet. Next Save creates one.
       currentChartId = null
-      markSaved()        // matches the file just loaded = clean
       updateLibraryCurrentTitle()
     } catch {
       void showAlert('Could not load chart file.', { title: "Couldn't load" })
@@ -4108,7 +4107,6 @@ function bindEvents() {
       }
       const id = await library.saveChart(currentChartId, title, folder, config)
       currentChartId = id
-      markSaved()        // persisted to the library = clean
       updateLibraryCurrentTitle()
       await renderLibrary()
     } catch {
@@ -4120,7 +4118,6 @@ function bindEvents() {
     if (currentChartId && !await showConfirm('Discard current chart and start a new blank one? Anything unsaved here will be lost — use Save first if you want to keep it.', { title: 'New blank chart', confirmLabel: 'Discard & start new', danger: true })) return
     setConfig(makeDefaultConfig())
     currentChartId = null
-    markSaved()        // a brand-new blank chart has nothing unsaved yet
     updateLibraryCurrentTitle()
     closeLibrary()
   })
