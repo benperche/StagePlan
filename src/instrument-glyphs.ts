@@ -27,7 +27,7 @@ const MALLET_SIZES: SizeOption[] = [
   { label: 'S', size: 0.7, title: 'Fewer octaves (e.g. glockenspiel)' },
   { label: 'M', size: 1, title: 'Normal length' },
   { label: 'L', size: 1.4, title: 'More octaves' },
-  { label: 'XL', size: 1.9, title: 'Most octaves (e.g. 5-octave marimba)' },
+  { label: 'XL', size: 1.65, title: 'Most octaves (e.g. 5-octave marimba)' },
 ]
 
 export function sizeOptionsFor(type: InstrumentType): SizeOption[] {
@@ -592,7 +592,7 @@ export function drawTrapTable(ctx: CanvasRenderingContext2D, size = 1): GlyphRes
   // So each size is explicit dimensions. Thresholds are deliberately loose —
   // they only ever see the presets sizeOptionsFor() offers for this type.
   const { hw, hh } = size <= 0.85 ? { hw: 19, hh: 19 }     // S — square stool-top
-    : size >= 1.2 ? { hw: 41, hh: 17 }                     // L — long table
+    : size >= 1.2 ? { hw: 40, hh: 23 }                     // L — big table (deeper too, but not square)
     : { hw: 29, hh: 17 }                                   // M
   ctx.fillStyle = '#1a1a1a'
   roundRect(ctx, -hw, -hh, hw * 2, hh * 2, 3)

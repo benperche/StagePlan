@@ -295,7 +295,7 @@ refreshes the canvas tool pill (below).
 
 **`activeTool` is nullable — null (the default) is "select mode"**: no tool
 armed, and clicking a chair/stand opens the same context menu as a right-click
-(`openChairContextMenu`), so single-chair edits are noun-first and need no mode
+(`openCanvasContextMenu`), so single-chair edits are noun-first and need no mode
 at all. A tool arms via its button and **disarms** via a second click on the
 same button, Escape, or the pill's ✕ — every way into a mode is a way out.
 Marquee drags don't start in select mode (nothing to bulk-apply).
@@ -403,6 +403,8 @@ fall through to an "Other" bucket at the bottom.
 ### Marquee bulk-apply (Edit tab)
 
 **Moving chairs between rows** (`moveChairsToRow`): the Edit tab's "Chairs" number box can only append blanks or truncate from the end, so relocating a *labelled* chair needed its own primitive — without it a section's wedge shape is frozen by however the chairs were first distributed, which is exactly what made "Tidy string sections" look broken (it only groups chairs *within* the row they already sit in; it never moves them). Chairs keep label/colour/stand/seat type and are appended to the destination, where the wedge layout re-clusters them by `group`. A desk survives when both its chairs move together (they stay adjacent, so `standAfter` still points at its partner); when only one half moves the pair dissolves and both players keep a stand. Offered as a `segment` in the chair context menu — plus **Move desk to row** when the chair is half of a desk — and in the bulk menu below.
+
+**Right-clicking a fixed instrument** opens its own menu (size presets, music stand toggle, delete) and selects it so the inspector follows. Instruments are checked *first* in `openCanvasContextMenu` since they draw on top of everything. The size presets live here as well as in the inspector because at the bottom of the inspector they're easy to miss entirely.
 
 **Deleting chairs** (`deleteChairs`): "Delete chair" / "Delete N chairs" in the two context menus, and **Delete/Backspace** while chairs are selected. Distinct from Hide — Hide keeps the seat's place so the row doesn't shift, delete removes it and the row closes up. Shares `detachLeavingDesks` with the move path, so a survivor whose desk partner is deleted inherits its own stand instead of being left on a shared stand pointing at nothing.
 

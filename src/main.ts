@@ -1934,7 +1934,7 @@ canvas.addEventListener('pointerdown', (e) => {
     const chartX = x, chartY = y, clientX = e.clientX, clientY = e.clientY
     longPressTimer = window.setTimeout(() => {
       longPressTimer = null
-      if (openChairContextMenu(clientX, clientY, chartX, chartY)) {
+      if (openCanvasContextMenu(clientX, clientY, chartX, chartY)) {
         suppressClickAfterPan = true
         marqueeState = null
         marqueeBox.style.display = 'none'
@@ -2787,8 +2787,35 @@ function openChairColorPicker(rowIndex: number, chairIndex: number) {
 
 // Build + show the context menu for whatever is under (x,y) in chart coords.
 // A stand × takes priority over its chair. Returns false if nothing was hit.
-function openChairContextMenu(clientX: number, clientY: number, x: number, y: number): boolean {
+function openCanvasContextMenu(clientX: number, clientY: number, x: number, y: number): boolean {
   const mut = (fn: () => void) => { history.push(config); fn(); renderChart() }
+
+  // Fixed instruments draw on top of everything, so they get first refusal.
+  // Right-click is where the size presets become discoverable — at the bottom
+  // of the inspector they're easy to miss entirely.
+  const instHit = renderer.instrumentHitTest(x, y)
+  if (instHit) {
+    const inst = config.instruments.find(i => i.id === instHit.id)
+    if (inst) {
+      // Select it too, so the inspector follows for anything not offered here
+      // (label, timpani count, free rotation).
+      setSelectedInstrument(inst.id)
+      renderChart()
+      const size = inst.size ?? 1
+      showContextMenu(clientX, clientY, INSTRUMENT_LABEL[inst.type], [
+        { kind: 'segment', label: 'Size', options: sizeOptionsFor(inst.type).map(o => ({
+          label: o.label, active: o.size === size, onClick: () => applyInstrumentSize(o.size),
+        })) },
+        { kind: 'action', label: inst.hasStand ? 'Remove music stand' : 'Add music stand',
+          onClick: () => mut(() => { inst.hasStand = !inst.hasStand }) },
+        { kind: 'action', label: 'Delete', danger: true, onClick: () => mut(() => {
+          config.instruments = config.instruments.filter(i => i.id !== inst.id)
+          setSelectedInstrument(null)
+        }) },
+      ])
+      return true
+    }
+  }
 
   const standHit = renderer.standHitTest(x, y)
   if (standHit) {
@@ -3074,7 +3101,7 @@ canvas.addEventListener('contextmenu', (e) => {
   e.preventDefault()
   const cv = pointerCanvasCoords(e)
   const { x, y } = canvasToChart(cv.x, cv.y)
-  openChairContextMenu(e.clientX, e.clientY, x, y)
+  openCanvasContextMenu(e.clientX, e.clientY, x, y)
 })
 
 canvas.addEventListener('click', (e) => {
@@ -3102,7 +3129,7 @@ canvas.addEventListener('click', (e) => {
   // the same menu as a right-click — noun-first editing, no mode to remember.
   if (activeTool === null) {
     // Nothing under the pointer → treat it as "deselect".
-    if (activeTab === 'edit' && !openChairContextMenu(e.clientX, e.clientY, x, y)) {
+    if (activeTab === 'edit' && !openCanvasContextMenu(e.clientX, e.clientY, x, y)) {
       clearSelectedChairs()
     }
     return
