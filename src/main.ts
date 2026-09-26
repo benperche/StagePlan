@@ -313,12 +313,15 @@ const LEGACY_ABBREV: Record<string, string> = {
   Violin: 'Vn',
 }
 
-// Currently selected fixed instrument (for drag/inspector/delete)
+// Selected fixed instruments. A group (Shift-click, or the Edit-tab marquee)
+// moves, nudges and deletes together; selectedInstrumentId is set only for a
+// lone selection, which is all the inspector and rotate / ✕ handles act on.
+let selectedInstrumentIds: string[] = []
 let selectedInstrumentId: string | null = null
 
 // Last arrow-key nudge of a selected instrument: one history push per burst
 // of keypresses (same instrument, <1s apart), not one per press.
-let lastArrowNudge: { id: string; time: number } | null = null
+let lastArrowNudge: { key: string; time: number } | null = null
 
 // Every drag tracks a pre-drag config snapshot (pushed to history only if
 // the pointer actually moves, so click-to-select doesn't pollute undo) and
@@ -332,18 +335,22 @@ interface DragBase {
 // on mouseup. Holds the pointer-to-centre offset so the instrument stays
 // under the cursor as you drag.
 interface DragState extends DragBase {
-  instrumentId: string
+  instrumentId: string // the instrument under the pointer; snapping follows it
   offsetX: number      // pointer x minus instrument centre x at drag start
   offsetY: number
+  // Everything moving with this drag — the whole selection when you grab one
+  // of a group — with centres at drag start. The group moves by the grabbed
+  // instrument's (snapped) displacement, so it keeps its shape.
+  group: Array<{ id: string; x: number; y: number }>
   // When the Stand tool is active, a press that never crosses the drag
   // threshold toggles the instrument's music stand on pointerup; an actual
   // drag still just moves it. Lets you reposition instruments in stand mode.
   toggleStandOnClick?: boolean
-  // Set when Alt/Option-dragging duplicated the instrument: this drag moves
-  // the COPY, and holds the id of the original. If the pointer never actually
-  // moves, the copy sits exactly on top of the original and is useless, so
-  // pointerup deletes it again (see the pointerup handler).
-  duplicatedFrom?: string
+  // Set when Alt/Option-dragging duplicated the instrument(s): this drag moves
+  // the COPIES, and holds the originals' ids. If the pointer never actually
+  // moves, the copies sit exactly on top of the originals and are useless, so
+  // pointerup deletes them again (see the pointerup handler).
+  duplicatedFrom?: string[]
 }
 let dragState: DragState | null = null
 
@@ -1351,8 +1358,13 @@ function applyInstrumentSize(size: number) {
 }
 
 function setSelectedInstrument(id: string | null) {
-  selectedInstrumentId = id
-  renderer.selectedInstrumentId = id
+  setSelectedInstruments(id ? [id] : [])
+}
+
+function setSelectedInstruments(ids: string[]) {
+  selectedInstrumentIds = ids
+  selectedInstrumentId = ids.length === 1 ? ids[0] : null
+  renderer.selectedInstrumentIds = new Set(ids)
   renderInspector()
 }
 
@@ -2056,35 +2068,56 @@ canvas.addEventListener('pointerdown', (e) => {
   }
   const instHit = renderer.instrumentHitTest(x, y)
   if (instHit) {
+    const hitSelected = selectedInstrumentIds.includes(instHit.id)
+    // Shift-click adds the instrument to the selection, or takes it back out.
+    if (e.shiftKey) {
+      setSelectedInstruments(hitSelected
+        ? selectedInstrumentIds.filter(id => id !== instHit.id)
+        : [...selectedInstrumentIds, instHit.id])
+      renderChart()
+      return
+    }
     // Snapshot BEFORE any duplication, so the drag's single history entry
-    // rolls back the copy and its move together.
+    // rolls back the copies and their move together.
     const preDragConfig = cloneConfig(config)
-    let dragId = instHit.id
-    let duplicatedFrom: string | undefined
-    // Alt/Option-drag copies the instrument and drags the copy — the standard
-    // design-tool gesture, and much quicker than a palette trip per extra mic
-    // or music stand.
+    // Grabbing one of a selected group moves the lot; anything else selects
+    // just the instrument grabbed.
+    let ids = hitSelected ? selectedInstrumentIds : [instHit.id]
+    let grabId = instHit.id
+    let duplicatedFrom: string[] | undefined
+    // Alt/Option-drag copies the instrument(s) and drags the copies — the
+    // standard design-tool gesture, and much quicker than a palette trip per
+    // extra mic or music stand.
     if (e.altKey) {
-      const original = config.instruments.find(i => i.id === instHit.id)
-      if (original) {
+      const copies = new Map<string, string>()   // original id → copy id
+      for (const id of ids) {
+        const original = config.instruments.find(i => i.id === id)
+        if (!original) continue
         const copy = { ...original, id: crypto.randomUUID() }
         config.instruments.push(copy)
-        dragId = copy.id
-        duplicatedFrom = original.id
+        copies.set(id, copy.id)
       }
+      duplicatedFrom = [...copies.keys()]
+      grabId = copies.get(instHit.id) ?? grabId
+      ids = [...copies.values()]
     }
-    setSelectedInstrument(dragId)
+    setSelectedInstruments(ids)
+    const group = ids.flatMap(id => {
+      const inst = config.instruments.find(i => i.id === id)
+      return inst ? [{ id, ...instrumentCentre(inst) }] : []
+    })
     dragState = {
-      instrumentId: dragId,
+      instrumentId: grabId,
       offsetX: x - instHit.cx,
       offsetY: y - instHit.cy,
+      group,
       preDragConfig,
       moved: false,
       duplicatedFrom,
       // Stand tool (in the chair-tool tabs, not Layout): a plain click toggles
       // the stand, but the instrument is still draggable to reposition it.
       // An Alt-drag is a copy gesture, never a stand toggle.
-      toggleStandOnClick: !layoutMode && activeTool === 'stand' && !duplicatedFrom,
+      toggleStandOnClick: !layoutMode && activeTool === 'stand' && !duplicatedFrom && ids.length === 1,
     }
     renderChart()
     return
@@ -2099,7 +2132,7 @@ canvas.addEventListener('pointerdown', (e) => {
       preDragConfig: cloneConfig(config),
       moved: false,
     }
-    if (selectedInstrumentId) { setSelectedInstrument(null); renderChart() }
+    if (selectedInstrumentIds.length) { setSelectedInstrument(null); renderChart() }
     return
   }
 
@@ -2201,7 +2234,7 @@ canvas.addEventListener('pointerdown', (e) => {
       return
     }
     // Empty space: deselect any instrument, otherwise pan the zoomed view.
-    if (selectedInstrumentId) { setSelectedInstrument(null); renderChart() }
+    if (selectedInstrumentIds.length) { setSelectedInstrument(null); renderChart() }
     else if (viewZoom > 1) {
       panState = { startX: e.clientX, startY: e.clientY, panX0: viewPanX, panY0: viewPanY, moved: false }
     }
@@ -2211,10 +2244,10 @@ canvas.addEventListener('pointerdown', (e) => {
   // Edit / Setup (non-layout). The conductor in Edit isn't movable — a click
   // renames it (handled in the click listener). Chairs are handled there too.
   if (renderer.conductorHitTest(x, y)) {
-    if (selectedInstrumentId) { setSelectedInstrument(null); renderChart() }
+    if (selectedInstrumentIds.length) { setSelectedInstrument(null); renderChart() }
     return
   }
-  if (selectedInstrumentId) {
+  if (selectedInstrumentIds.length) {
     setSelectedInstrument(null)
     renderChart()
   }
@@ -2394,22 +2427,30 @@ window.addEventListener('pointermove', (e) => {
   const newCx = x - drag.offsetX
   const newCy = y - drag.offsetY
 
+  const start = drag.group.find(g => g.id === inst.id) ?? { id: inst.id, ...instrumentCentre(inst) }
+
   // Threshold check: only treat as drag (and push history) once we've
   // moved meaningfully from the original instrument centre.
   if (!drag.moved) {
-    const old = instrumentCentre(inst)
-    if (Math.hypot(newCx - old.x, newCy - old.y) < DRAG_THRESHOLD) return
+    if (Math.hypot(newCx - start.x, newCy - start.y) < DRAG_THRESHOLD) return
     history.push(drag.preDragConfig)
     drag.moved = true
   }
 
-  // Snap to the other instruments, the centre line and the rows, showing a
-  // guide for whatever caught. Cmd/Ctrl held = place freely.
+  // Snap the grabbed instrument to everything outside the moving group — the
+  // other instruments, the centre line and the rows — showing a guide for
+  // whatever caught. Cmd/Ctrl held = place freely.
+  const moving = new Set(drag.group.map(g => g.id))
   const snap = e.metaKey || e.ctrlKey
     ? { x: newCx, y: newCy, guides: [] }
-    : snapPoint({ x: newCx, y: newCy }, instrumentSnapTargets(inst.id), SNAP_PX / chartUnitsToScreen())
+    : snapPoint({ x: newCx, y: newCy }, instrumentSnapTargets(moving), SNAP_PX / chartUnitsToScreen())
   renderer.snapGuides = snap.guides
-  setInstrumentCentre(inst, snap.x, snap.y)
+  const dx = snap.x - start.x
+  const dy = snap.y - start.y
+  for (const g of drag.group) {
+    const member = config.instruments.find(i => i.id === g.id)
+    if (member) setInstrumentCentre(member, g.x + dx, g.y + dy)
+  }
   renderChart()
 })
 
@@ -2438,13 +2479,13 @@ function instrumentCentre(inst: FixedInstrument): { x: number; y: number } {
 // the centre line itself, and each row — arcs for arc rows, horizontal lines
 // for straight ones — plus a virtual next row one row-spacing behind the back
 // row, which is where big back-line instruments go.
-function instrumentSnapTargets(excludeId: string): SnapTargets {
+function instrumentSnapTargets(exclude: ReadonlySet<string>): SnapTargets {
   const { ox, oy, yDir } = renderer.conductorOrigin
   const xs: SnapTargets['xs'] = [{ x: ox }]
   const ys: SnapTargets['ys'] = []
   const arcs: number[] = []
   for (const other of config.instruments) {
-    if (other.id === excludeId) continue
+    if (exclude.has(other.id)) continue
     const c = instrumentCentre(other)
     xs.push({ x: c.x })
     if (Math.abs(c.x - ox) > 1) xs.push({ x: 2 * ox - c.x, mirrorOf: c })
@@ -2494,6 +2535,9 @@ window.addEventListener('pointerup', (e) => {
         // slots stay available for placing it precisely.
         const valid = refs.filter(r => config.rows[r.rowIndex]?.chairs[r.chairIndex])
         setSelectedChairs(valid)
+        // Instruments in the box join the selection too, ready to move as one.
+        setSelectedInstruments(renderer.instrumentsInRect(start.x, start.y, end.x, end.y))
+        renderChart()
         if (valid.length > 0) openBulkChairMenu(valid, e.clientX, e.clientY, centre)
       } else applyBulkTool(refs, centre)
       suppressClickAfterPan = true   // swallow the trailing click
@@ -2505,9 +2549,9 @@ window.addEventListener('pointerup', (e) => {
   // original, so drop it and hand the selection back rather than leaving an
   // invisible stacked duplicate behind.
   if (dragState && !dragState.moved && dragState.duplicatedFrom) {
-    const copyId = dragState.instrumentId
-    config.instruments = config.instruments.filter(i => i.id !== copyId)
-    setSelectedInstrument(dragState.duplicatedFrom)
+    const copies = new Set(dragState.group.map(g => g.id))
+    config.instruments = config.instruments.filter(i => !copies.has(i.id))
+    setSelectedInstruments(dragState.duplicatedFrom)
     renderChart()
   }
   // Stand tool: a press on an instrument that never became a drag toggles its
@@ -2572,7 +2616,10 @@ window.addEventListener('pointermove', (e) => {
   pd.placed = true
   pd.ghost.remove()
   setSelectedInstrument(inst.id)
-  dragState = { instrumentId: inst.id, offsetX: 0, offsetY: 0, preDragConfig: pd.preDragConfig, moved: true }
+  dragState = {
+    instrumentId: inst.id, offsetX: 0, offsetY: 0, group: [{ id: inst.id, x, y }],
+    preDragConfig: pd.preDragConfig, moved: true,
+  }
   renderChart()
 })
 
@@ -3675,7 +3722,7 @@ function bindEvents() {
     selectedChairs = []       // selection + drop slots are Edit-tab only
     // Export is view-only — drop any instrument selection so its (now
     // non-interactive) handles don't linger on the chart.
-    if (tab === 'export' && selectedInstrumentId) { setSelectedInstrument(null); renderChart() }
+    if (tab === 'export' && selectedInstrumentIds.length) { setSelectedInstrument(null); renderChart() }
     tabButtons.forEach(b => b.classList.toggle('active', b.dataset['tab'] === tab))
     tabContents.forEach(c => c.classList.toggle('active', c.dataset['tabContent'] === tab))
     // Scroll the sidebar back to the top so Next/Back doesn't strand the
@@ -4158,12 +4205,13 @@ function bindEvents() {
 
     // Delete selected instrument (Delete or Backspace) — but only when not
     // typing into an input/textarea, so users can still backspace text.
-    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedInstrumentId) {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedInstrumentIds.length) {
       const t = e.target as HTMLElement
       if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return
       e.preventDefault()
       history.push(config)
-      config.instruments = config.instruments.filter(i => i.id !== selectedInstrumentId)
+      const doomed = new Set(selectedInstrumentIds)
+      config.instruments = config.instruments.filter(i => !doomed.has(i.id))
       setSelectedInstrument(null)
       renderChart()
     }
@@ -4173,30 +4221,33 @@ function bindEvents() {
     const ARROW_DELTAS: Record<string, [number, number]> = {
       ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
     }
-    if (ARROW_DELTAS[e.key] && selectedInstrumentId) {
+    if (ARROW_DELTAS[e.key] && selectedInstrumentIds.length) {
       const t = e.target as HTMLElement
       if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return
-      const inst = config.instruments.find(i => i.id === selectedInstrumentId)
-      if (!inst) return
+      const insts = config.instruments.filter(i => selectedInstrumentIds.includes(i.id))
+      if (insts.length === 0) return
       e.preventDefault()
       // One undo step per nudge burst, not per keypress: push history only
-      // when starting on a different instrument or after a pause, so tapping
+      // when starting on a different selection or after a pause, so tapping
       // an arrow 15 times undoes in one go (mirrors the one-push-per-drag rule).
       const now = Date.now()
-      if (lastArrowNudge?.id !== inst.id || now - (lastArrowNudge?.time ?? 0) > 1000) {
+      const key = selectedInstrumentIds.join()
+      if (lastArrowNudge?.key !== key || now - (lastArrowNudge?.time ?? 0) > 1000) {
         history.push(config)
       }
-      lastArrowNudge = { id: inst.id, time: now }
+      lastArrowNudge = { key, time: now }
       const step = e.shiftKey ? 10 : 2
       const [ax, ay] = ARROW_DELTAS[e.key]
       // Stored position is polar around the conductor, mirrored when the chart
       // is flipped (cx = ox + mirror·d·cos a) — so a screen-space nudge maps to
       // a mirror-scaled delta in the stored frame.
       const mirror = config.flipped ? -1 : 1
-      const dx = inst.distance * Math.cos(inst.angle) + mirror * ax * step
-      const dy = inst.distance * Math.sin(inst.angle) + mirror * ay * step
-      inst.angle = Math.atan2(dy, dx)
-      inst.distance = Math.hypot(dx, dy)
+      for (const inst of insts) {
+        const dx = inst.distance * Math.cos(inst.angle) + mirror * ax * step
+        const dy = inst.distance * Math.sin(inst.angle) + mirror * ay * step
+        inst.angle = Math.atan2(dy, dx)
+        inst.distance = Math.hypot(dx, dy)
+      }
       renderChart()
     }
   })
@@ -4277,15 +4328,15 @@ function bindEvents() {
     const ex = document.createElement('canvas')
     ex.width = EXPORT_W
     ex.height = EXPORT_H
-    const savedSel = renderer.selectedInstrumentId
-    renderer.selectedInstrumentId = null
+    const savedSel = renderer.selectedInstrumentIds
+    renderer.selectedInstrumentIds = new Set()
     renderer.hoverRowIndex = null
     renderer.hoverChair = null
     try {
       renderer.render(ex, config, { dpr: 1, showGhosts: false })
       exportToPng(ex, config.title)
     } finally {
-      renderer.selectedInstrumentId = savedSel
+      renderer.selectedInstrumentIds = savedSel
       renderChart()   // restore the on-screen canvas + renderer state
     }
   })
@@ -4297,14 +4348,14 @@ function bindEvents() {
   // canvas at A4-landscape proportions so the chart fills the page (no
   // letterboxing from the screen's aspect ratio); afterprint restores it.
   window.addEventListener('beforeprint', () => {
-    const savedSel = renderer.selectedInstrumentId
-    renderer.selectedInstrumentId = null
+    const savedSel = renderer.selectedInstrumentIds
+    renderer.selectedInstrumentIds = new Set()
     renderer.hoverRowIndex = null
     renderer.hoverChair = null
     canvas.width = EXPORT_W
     canvas.height = EXPORT_H
     renderer.render(canvas, config, { dpr: 1, showGhosts: false })
-    renderer.selectedInstrumentId = savedSel
+    renderer.selectedInstrumentIds = savedSel
   })
   window.addEventListener('afterprint', () => renderChart())
   printBtn.addEventListener('click', () => window.print())

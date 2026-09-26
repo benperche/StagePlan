@@ -520,6 +520,18 @@ for any other silent-but-big action that deserves an undo reminder.
   viewZoom × chartScale). Guides go to `renderer.snapGuides` (drawn pink,
   dashed, in chart space by `drawSnapGuides`) and are cleared by `drawCanvas`
   whenever no `dragState` is live. Cmd/Ctrl held = no snap.
+- **Multi-select**: `selectedInstrumentIds` (main.ts) is the selection;
+  `selectedInstrumentId` is set only when exactly one is selected, and that's
+  all the inspector and the rotate / ✕ handles act on (the renderer draws
+  handles only when `selectedInstrumentIds.size === 1`). Always go through
+  `setSelectedInstruments(ids)` / `setSelectedInstrument(id)`. Shift-click
+  toggles membership; the Edit-tab marquee (no tool armed) also selects
+  instruments whose centre is in the box (`renderer.instrumentsInRect`).
+  Grabbing a selected instrument drags the whole group: `DragState.group`
+  holds every member's start centre, the grabbed one is snapped (against
+  targets excluding the group) and the rest follow by the same displacement.
+  Alt-drag copies the whole group (`duplicatedFrom` = originals' ids). Delete
+  and arrow-key nudges act on the whole selection.
 - Drag/rotate handled by `DragState` / `RotateState` in main.ts. Selected instrument shows a green MS-Office-style rotate handle.
 - **Size** (`FixedInstrument.size`, chosen from per-type presets in the inspector): physical size genuinely varies for one symbol — a glockenspiel and a marimba are both "mallets". Fixed presets rather than free resizing, so two of the same instrument on a chart stay identical. The options per type come from `sizeOptionsFor()` in instrument-glyphs.ts (S/M/L/XL by default), and `renderInspector` rebuilds the buttons on each selection.
   - **Two glyphs size themselves** (`glyphHandlesOwnSize`), because a uniform scale is the wrong model for them. **Mallets** grow in *length only* — the frame lengthens, its depth stays put, and the key separators multiply so key width is constant (more octaves, not more bulk); redrawing at the new dimensions rather than stretching the canvas also keeps stroke weights even. **The traps table** uses explicit dimensions per size: S is a *square* stool-top rather than a shrunken oblong, L is longer at the same depth, and there's no XL. These return final dimensions, so the renderer must not scale them again — hence the `glyphHandlesOwnSize` guard in both `renderInstruments` and `glyphDims`.

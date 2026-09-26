@@ -160,7 +160,9 @@ export class Renderer {
     && !!window.matchMedia?.('(pointer: coarse)')?.matches
   // Throwaway context for measuring glyph sizes without drawing to the canvas.
   private measureCtx: CanvasRenderingContext2D | null = null
-  selectedInstrumentId: string | null = null
+  // Selected fixed instruments (a group moves / nudges / deletes together).
+  // Only a lone selection gets the rotate and ✕ handles.
+  selectedInstrumentIds: ReadonlySet<string> = new Set()
   // Softly highlight chairs on hover, to make it obvious which sidebar row maps
   // to which chairs. hoverRowIndex highlights a whole row (set from the sidebar
   // row controls); hoverChair highlights a single chair (set from canvas hover).
@@ -1545,6 +1547,16 @@ export class Renderer {
     return out
   }
 
+  // Fixed instruments whose centre lies in the box (chart coords) — the Edit
+  // tab marquee selects these alongside chairs.
+  instrumentsInRect(ax: number, ay: number, bx: number, by: number): string[] {
+    const x0 = Math.min(ax, bx), x1 = Math.max(ax, bx)
+    const y0 = Math.min(ay, by), y1 = Math.max(ay, by)
+    return this.instrumentHits
+      .filter(h => h.cx >= x0 && h.cx <= x1 && h.cy >= y0 && h.cy <= y1)
+      .map(h => h.id)
+  }
+
   // ---------------------------------------------------------------------------
   // Fixed instruments (rhythm section, timpani, mallets, etc.)
   // ---------------------------------------------------------------------------
@@ -1618,7 +1630,7 @@ export class Renderer {
       // coords when the chart is flipped — rotating them just looks
       // upside-down for no benefit.
       const worldRotation = inst.rotation + (flipped && !this.keepUpright(inst) ? Math.PI : 0)
-      const isSelected = inst.id === this.selectedInstrumentId
+      const isSelected = this.selectedInstrumentIds.has(inst.id)
 
       // 1) Draw the glyph in the rotated frame (no label!)
       ctx.save()
@@ -1696,8 +1708,8 @@ export class Renderer {
         this.drawStandX(ctx, cx, cy, ox, oy, reach + STAND_GAP + STAND_SIZE)
       }
 
-      // 4) Selection adornments (only on the selected instrument)
-      if (isSelected) {
+      // 4) Selection adornments (only on a lone selected instrument)
+      if (isSelected && this.selectedInstrumentIds.size === 1) {
         this.drawRotateHandle(ctx, cx, cy, hh, worldRotation, inst.id)
         this.drawDeleteHandle(ctx, cx, cy, hw, hh, worldRotation, inst.id)
       }
