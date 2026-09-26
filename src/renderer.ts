@@ -117,6 +117,12 @@ export class Renderer {
   private instrumentHits: InstrumentHit[] = []
   conductorHit: ConductorHit | null = null
   titleHit: ConductorHit | null = null
+  // Seating summary's box (raw canvas px, like titleHit) — Layout-tab drag target.
+  summaryHit: ConductorHit | null = null
+  // The summary offset actually drawn last render, after clamping on-canvas.
+  // main.ts starts a drag from this, so an over-dragged stored offset doesn't
+  // leave a dead zone before the box responds.
+  summaryDrawnOffset = { x: 0, y: 0 }
   conductorOrigin: ConductorOrigin = { ox: 0, oy: 0, yDir: -1, flipped: false }
   // The uniform auto-fit scale applied to the whole canvas on the last render
   // (1 when the chart fits at natural size; < 1 on small canvases / phones).
@@ -224,6 +230,7 @@ export class Renderer {
     this.riserHandleBaselines = new Map()
     this.dropPoints = []
     this.conductorHit = null
+    this.summaryHit = null
     this.rotateHandleHit = null
     this.deleteHandleHit = null
 
@@ -290,7 +297,7 @@ export class Renderer {
 
     if (scaling) ctx.restore()
 
-    this.drawRowSummary(ctx, config, w, h)
+    if (config.showSummary ?? true) this.drawRowSummary(ctx, config, w, h)
     if (config.showCredit ?? true) this.drawCredit(ctx, h)
     ctx.restore()
   }
@@ -1928,7 +1935,7 @@ export class Renderer {
   }
 
   // ---------------------------------------------------------------------------
-  // Row summary — always rendered in bottom-right corner
+  // Row summary — bottom-right corner, plus any Layout-tab drag offset
   // ---------------------------------------------------------------------------
 
   private drawRowSummary(ctx: CanvasRenderingContext2D, config: ChartConfig, w: number, h: number) {
@@ -1981,8 +1988,7 @@ export class Renderer {
     // Pure black at 12px, not the old #222/11px: on a printed chart the
     // summary was quiet enough that people didn't notice it was there.
     const lineHeight = 16
-    const x = w - 12
-    const bottomY = h - 24
+    const PAD = 4
 
     ctx.save()
     ctx.fillStyle = '#000'
@@ -1990,10 +1996,35 @@ export class Renderer {
     ctx.textAlign = 'right'
     ctx.textBaseline = 'bottom'
 
+    // Right-aligned block anchored at its bottom-right corner. The drag offset
+    // is clamped so the block stays fully on the canvas — offsets are canvas px
+    // from the corner, so a smaller canvas (phone, PNG export) could otherwise
+    // push a dragged summary off the edge.
+    const blockW = Math.max(0, ...lines.map(l => ctx.measureText(l).width))
+    const blockH = lines.length * lineHeight
+    const x = Math.min(w - PAD, Math.max(blockW + PAD, w - 12 + (config.summaryOffsetX ?? 0)))
+    const bottomY = Math.min(h - PAD, Math.max(blockH + PAD, h - 24 + (config.summaryOffsetY ?? 0)))
+    this.summaryDrawnOffset = { x: x - (w - 12), y: bottomY - (h - 24) }
+
     lines.forEach((line, i) => {
       ctx.fillText(line, x, bottomY - (lines.length - 1 - i) * lineHeight)
     })
+    if (lines.length) {
+      this.summaryHit = { x: x - blockW - 6, y: bottomY - blockH - 2, w: blockW + 12, h: blockH + 6 }
+      if (this.layoutMode) {
+        const b = this.summaryHit
+        ctx.strokeStyle = '#2563eb'
+        ctx.lineWidth = 1
+        ctx.setLineDash([4, 3])
+        ctx.strokeRect(b.x, b.y, b.w, b.h)
+      }
+    }
     ctx.restore()
+  }
+
+  summaryHitTest(x: number, y: number): boolean {
+    const s = this.summaryHit
+    return !!s && x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h
   }
 
   private drawCredit(ctx: CanvasRenderingContext2D, h: number) {

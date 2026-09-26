@@ -201,7 +201,7 @@ chart below the floating undo/zoom buttons.
 5. Draw stage directions if enabled (left/right edges, light grey)
 6. Dispatch to `renderSemicircle` or `renderStraight` based on `config.layout`
 7. Draw fixed instruments on top (always visible over chairs)
-8. Draw row summary (bottom-right)
+8. Draw row summary (bottom-right) — skipped when `config.showSummary === false` (Setup → Display checkbox; undefined = shown). Optional `summaryOffsetX/Y` (raw canvas px from the corner) set by dragging it in the Layout tab — same `textDrag` state as the title, double-click to reset, cleared by Reset all layout tweaks. The drawn position is clamped fully on-canvas (a smaller export/phone canvas can't push it off), and drags start from that clamped `summaryDrawnOffset` so an over-dragged offset has no dead zone. `summaryHit` is its hit box.
 9. Draw credit (bottom-centre, optional)
 
 Hit tests are populated as a side effect of (6) and (7). `main.ts` calls `renderer.hitTest(x, y)` afterward.

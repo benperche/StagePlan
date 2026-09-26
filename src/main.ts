@@ -181,9 +181,11 @@ let riserSizeDrag: {
 // still stepping (breaks Safari's number-stepper after one click).
 let layoutInputEditing = false
 
-// Active Layout-tab title drag. The title is drawn in raw canvas px (not the
-// chartScale frame), so this works in screen px and stores config.titleOffset.
-let titleDrag: {
+// Active Layout-tab drag of the title or the seating summary. Both are drawn
+// in raw canvas px (not the chartScale frame), so this works in screen px and
+// stores config.titleOffset / config.summaryOffset.
+let textDrag: {
+  target: 'title' | 'summary'
   startX: number; startY: number; x0: number; y0: number
   preDragConfig: ChartConfig; moved: boolean
 } | null = null
@@ -373,7 +375,7 @@ import {
   canvas, canvasArea, tabButtons, tabContents, tabNavButtons,
   titleInput, titleGapInput, layoutSelect, notesArea, showNumbersCheck, restartNumbersCheck,
   showRowLabelsCheck, conductorStandCheck, showConductorCheck, showArcCheck, showStageDirectionsCheck,
-  chartScaleInput, stageTemplateSelect, bgInput, bgClearBtn, bgStatus, bgFitSelect, showCreditCheck,
+  chartScaleInput, stageTemplateSelect, bgInput, bgClearBtn, bgStatus, bgFitSelect, showCreditCheck, showSummaryCheck,
   flipCheck, straightRowsInput, straightRowsLabel, arcRangeInput, arcRangeLabel,
   rowSpacingInput, riserStepHeightInput, rowCountInput, aboutBtn, aboutModal, aboutCloseBtn,
   rowsContainer,
@@ -595,7 +597,7 @@ function renderChart() {
 // so we can skip rebuilding them mid-drag.
 function quietDragMoved(): boolean {
   return !!(chairDrag?.moved || deskDrag?.moved || conductorDragState?.moved || dragState?.moved
-    || rotateState?.moved || titleDrag?.moved)
+    || rotateState?.moved || textDrag?.moved)
 }
 
 function rowHasLayoutTweak(r: typeof config.rows[number]): boolean {
@@ -940,6 +942,7 @@ bindBool(flipCheck, () => config.flipped, v => { config.flipped = v })
 bindBool(showArcCheck, () => config.showArc, v => { config.showArc = v })
 bindBool(showStageDirectionsCheck, () => config.showStageDirections, v => { config.showStageDirections = v })
 bindBool(showCreditCheck, () => config.showCredit, v => { config.showCredit = v })
+bindBool(showSummaryCheck, () => config.showSummary ?? true, v => { config.showSummary = v })
 bindNumber(chartScaleInput,
   () => Math.round(config.chartScale * 100),
   v => { config.chartScale = Math.max(50, Math.min(200, v || 100)) / 100 })
@@ -1145,7 +1148,7 @@ function setHoverChair(hit: { rowIndex: number; chairIndex: number } | null) {
 // drag and then undo it. Returns true if something was actually cancelled.
 function cancelActiveDrag(): boolean {
   const active = dragState ?? rotateState ?? conductorDragState ?? layoutDrag
-    ?? riserSizeDrag ?? chairDrag ?? deskDrag ?? titleDrag ?? arcRangeDrag
+    ?? riserSizeDrag ?? chairDrag ?? deskDrag ?? textDrag ?? arcRangeDrag
   if (!active && !marqueeState && !panState) return false
   // Only a drag that got past its threshold has mutated anything (and pushed
   // history); restoring rolls back both the edit and that history entry.
@@ -1160,7 +1163,7 @@ function cancelActiveDrag(): boolean {
   riserSizeDrag = null
   chairDrag = null
   deskDrag = null
-  titleDrag = null
+  textDrag = null
   arcRangeDrag = null
   panState = null
   marqueeState = null
@@ -1172,7 +1175,7 @@ function cancelActiveDrag(): boolean {
 }
 
 function anyDragActive(): boolean {
-  return !!(titleDrag || arcRangeDrag || layoutDrag || riserSizeDrag || deskDrag || chairDrag
+  return !!(textDrag || arcRangeDrag || layoutDrag || riserSizeDrag || deskDrag || chairDrag
     || marqueeState || panState || conductorDragState || rotateState || dragState)
 }
 
@@ -2047,12 +2050,21 @@ canvas.addEventListener('pointerdown', (e) => {
 
   // Layout tab: row geometry handles / per-chair nudge / pan.
   if (layoutMode) {
-    // Title is draggable here. It's drawn in raw canvas px, so test/drag with
-    // the un-transformed pointer (cv), not the chart-space coords.
+    // Title and seating summary are draggable here. They're drawn in raw
+    // canvas px, so test/drag with the un-transformed pointer (cv), not the
+    // chart-space coords.
     if (renderer.titleHitTest(cv.x, cv.y)) {
-      titleDrag = {
-        startX: cv.x, startY: cv.y,
+      textDrag = {
+        target: 'title', startX: cv.x, startY: cv.y,
         x0: config.titleOffsetX ?? 0, y0: config.titleOffsetY ?? 0,
+        preDragConfig: cloneConfig(config), moved: false,
+      }
+      return
+    }
+    if (renderer.summaryHitTest(cv.x, cv.y)) {
+      textDrag = {
+        target: 'summary', startX: cv.x, startY: cv.y,
+        x0: renderer.summaryDrawnOffset.x, y0: renderer.summaryDrawnOffset.y,
         preDragConfig: cloneConfig(config), moved: false,
       }
       return
@@ -2169,18 +2181,23 @@ window.addEventListener('pointermove', (e) => {
   if (longPressTimer !== null && longPressStart) {
     if (Math.hypot(e.clientX - longPressStart.x, e.clientY - longPressStart.y) > 10) cancelLongPress()
   }
-  // Layout-tab title drag (raw canvas px → config.titleOffset).
-  if (titleDrag) {
+  // Layout-tab title / summary drag (raw canvas px → config.*Offset).
+  if (textDrag) {
     const cv = pointerCanvasCoords(e)
-    const dx = cv.x - titleDrag.startX
-    const dy = cv.y - titleDrag.startY
-    if (!titleDrag.moved) {
+    const dx = cv.x - textDrag.startX
+    const dy = cv.y - textDrag.startY
+    if (!textDrag.moved) {
       if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return
-      history.push(titleDrag.preDragConfig)
-      titleDrag.moved = true
+      history.push(textDrag.preDragConfig)
+      textDrag.moved = true
     }
-    config.titleOffsetX = titleDrag.x0 + dx
-    config.titleOffsetY = titleDrag.y0 + dy
+    if (textDrag.target === 'title') {
+      config.titleOffsetX = textDrag.x0 + dx
+      config.titleOffsetY = textDrag.y0 + dy
+    } else {
+      config.summaryOffsetX = textDrag.x0 + dx
+      config.summaryOffsetY = textDrag.y0 + dy
+    }
     renderChart()
     return
   }
@@ -2402,7 +2419,7 @@ window.addEventListener('pointerup', (e) => {
   riserSizeDrag = null
   chairDrag = null
   deskDrag = null
-  titleDrag = null
+  textDrag = null
   arcRangeDrag = null
   canvas.classList.remove('panning')
   // The per-row boxes are skipped mid-drag; refresh them now the drag is done.
@@ -2434,7 +2451,7 @@ canvas.addEventListener('pointerdown', (e) => {
     cancelLongPress()
     dragState = null; rotateState = null; conductorDragState = null
     panState = null; layoutDrag = null; riserSizeDrag = null
-    chairDrag = null; deskDrag = null; titleDrag = null; arcRangeDrag = null
+    chairDrag = null; deskDrag = null; textDrag = null; arcRangeDrag = null
     marqueeState = null
     marqueeBox.style.display = 'none'
     suppressClickAfterPan = true
@@ -2480,6 +2497,14 @@ canvas.addEventListener('dblclick', (e) => {
     history.push(config)
     delete config.titleOffsetX
     delete config.titleOffsetY
+    renderChart()
+    return
+  }
+  // Same for the seating summary — back to its bottom-right corner.
+  if (renderer.summaryHitTest(cv.x, cv.y) && (config.summaryOffsetX || config.summaryOffsetY)) {
+    history.push(config)
+    delete config.summaryOffsetX
+    delete config.summaryOffsetY
     renderChart()
     return
   }
@@ -3216,7 +3241,7 @@ function bindEvents() {
     restartNumbersCheck, showRowLabelsCheck, conductorStandCheck, showConductorCheck, flipCheck,
     straightRowsInput, rowCountInput, showArcCheck, arcRangeInput, rowSpacingInput,
     riserStepHeightInput, showStageDirectionsCheck, chartScaleInput, stageTemplateSelect,
-    bgFitSelect, showCreditCheck]) {
+    bgFitSelect, showCreditCheck, showSummaryCheck]) {
     el.addEventListener('change', () => { readInputs(); updateAllInputs(); renderChart() })
   }
 
@@ -3726,6 +3751,8 @@ function bindEvents() {
     }
     delete config.titleOffsetX
     delete config.titleOffsetY
+    delete config.summaryOffsetX
+    delete config.summaryOffsetY
     renderChart()
   })
 
@@ -4351,6 +4378,8 @@ function bindEvents() {
       canvas.style.cursor = 'move'
     } else if (renderer.conductorHitTest(x, y)) {
       canvas.style.cursor = 'move'
+    } else if (layoutMode && (renderer.titleHitTest(cv.x, cv.y) || renderer.summaryHitTest(cv.x, cv.y))) {
+      canvas.style.cursor = 'move'   // title / summary drag in raw canvas px
     } else {
       canvas.style.cursor = 'default'
     }

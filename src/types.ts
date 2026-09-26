@@ -142,6 +142,12 @@ export interface ChartConfig {
   // the back row. Set by dragging the title in the Layout tab; (0,0) = auto.
   titleOffsetX?: number
   titleOffsetY?: number
+  // The bottom-right seating summary (row counts, totals, stand key, risers).
+  // undefined = shown. Offset (canvas px) from its corner position is set by
+  // dragging it in the Layout tab; (0,0) = auto.
+  showSummary?: boolean
+  summaryOffsetX?: number
+  summaryOffsetY?: number
   // Extra breathing room (canvas px) between the title and the top of the
   // chart, on top of the built-in gap. Default 0.
   titleGap?: number
