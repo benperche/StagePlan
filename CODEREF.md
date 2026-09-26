@@ -28,6 +28,7 @@ Internal notes for working on the codebase. Not user-facing.
 | `src/state.ts` | Factory functions (`makeChair`, `makeRow`, `makeDefaultConfig`, `makeInstrument`), `cloneConfig`, and the `History` class for undo/redo. Anything that *creates* a domain object. |
 | `src/renderer.ts` | The `Renderer` class. Takes a `ChartConfig`, draws it to a `<canvas>`, exposes hit-test methods. Holds the cached background `Image`. **Zero awareness of DOM/sidebar.** |
 | `src/section-layout.ts` | Pure row-radius/group-layout math shared by the renderer and the orchestra generator: `computeRowRadii`/`rowBaseRadius`/`riserExtraDepth` (cumulative per-row radius from the conductor, incl. `gapBefore` and riser step-back — the single source of truth so the renderer's draw pass and its Layout-tab drag handles can never drift), plus `computeGroupLayout`/`applyGroupedRowRadii` (grouped-wedge spacing for string sections). No DOM/canvas awareness. |
+| `src/snap.ts` | Pure snapping geometry for instrument drags: `snapPoint(p, targets, threshold)` → snapped point + `SnapGuide[]`. Targets are vertical/horizontal lines (optionally mirror lines across the centre) and arcs around the conductor. No DOM/canvas awareness; unit-tested. |
 | `src/instrument-glyphs.ts` | Pure draw functions for each fixed-instrument glyph (drum kit, piano, amp, timpani, mallet, generic rectangle). Each draws at (0, 0) in the current canvas frame and returns its `{ hw, hh, labelInside }` bounding box. No class — just stateless functions. |
 | `src/presets.ts` | The preset library, the Boosey & Hawkes notation parser (`parseOrchestraNotation`, `describeComposition`), and the orchestra-row builder (`buildOrchestraRows`). Self-contained: input shorthand → `Row[]`. |
 | `src/serializer.ts` | Persistence — JSON save/load, URL-hash encode/decode, PNG export. The hash encoder strips `backgroundImage` (too big for a URL) and reports back. |
@@ -507,6 +508,18 @@ for any other silent-but-big action that deserves an undo reminder.
   through `cancelActiveDrag`, which also clears `paletteDrag`. The button's
   trailing click is swallowed (`suppressPaletteClick`); a plain click still
   adds at the `INSERT_DEFAULTS` spot.
+- **Snapping**: every instrument translation drag (palette drops included)
+  runs its new centre through `snapPoint` (snap.ts) with targets from
+  `instrumentSnapTargets()` in main.ts — each other instrument's centre x/y
+  lines and its mirror across the stage centre line, the centre line itself,
+  every row (arc rows → arcs, straight rows → horizontal lines at
+  `oy + yDir·r`), and a virtual next row one `rowSpacing` behind the back row.
+  Lines snap independently; one caught line can pair with an arc (their
+  intersection); otherwise the point is pulled radially onto an arc. The
+  threshold is `SNAP_PX` screen px ÷ `chartUnitsToScreen()` (viewScale ×
+  viewZoom × chartScale). Guides go to `renderer.snapGuides` (drawn pink,
+  dashed, in chart space by `drawSnapGuides`) and are cleared by `drawCanvas`
+  whenever no `dragState` is live. Cmd/Ctrl held = no snap.
 - Drag/rotate handled by `DragState` / `RotateState` in main.ts. Selected instrument shows a green MS-Office-style rotate handle.
 - **Size** (`FixedInstrument.size`, chosen from per-type presets in the inspector): physical size genuinely varies for one symbol — a glockenspiel and a marimba are both "mallets". Fixed presets rather than free resizing, so two of the same instrument on a chart stay identical. The options per type come from `sizeOptionsFor()` in instrument-glyphs.ts (S/M/L/XL by default), and `renderInspector` rebuilds the buttons on each selection.
   - **Two glyphs size themselves** (`glyphHandlesOwnSize`), because a uniform scale is the wrong model for them. **Mallets** grow in *length only* — the frame lengthens, its depth stays put, and the key separators multiply so key width is constant (more octaves, not more bulk); redrawing at the new dimensions rather than stretching the canvas also keeps stroke weights even. **The traps table** uses explicit dimensions per size: S is a *square* stool-top rather than a shrunken oblong, L is longer at the same depth, and there's no XL. These return final dimensions, so the renderer must not scale them again — hence the `glyphHandlesOwnSize` guard in both `renderInstruments` and `glyphDims`.

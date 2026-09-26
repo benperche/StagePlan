@@ -11,7 +11,8 @@ import * as library from './library'
 import { showAlert, showConfirm, showPrompt } from './dialog'
 import { showContextMenu, closeContextMenu, contextMenuOpen, type MenuItem } from './context-menu'
 import type { ChartConfig, InstrumentType, Chair, FixedInstrument } from './types'
-import { RISER_PAD_MAX } from './section-layout'
+import { RISER_PAD_MAX, ROW_SPACING_DEFAULT, computeRowRadii } from './section-layout'
+import { snapPoint, type SnapTargets } from './snap'
 
 // --- App state ---
 let config: ChartConfig = makeDefaultConfig()
@@ -1128,6 +1129,7 @@ function rerenderCanvasOnly() {
 // a time until `gliding` clears.
 let glideFrame = 0
 function drawCanvas() {
+  if (!dragState) renderer.snapGuides = []   // guides live only as long as the drag
   renderer.render(canvas, config, {
     layoutMode, dpr: renderDpr, showGhosts: activeTab !== 'export', freezeView: anyDragActive(),
     avoidRects: overlayRects(),
@@ -2391,26 +2393,73 @@ window.addEventListener('pointermove', (e) => {
   // New instrument centre = pointer minus the grab offset
   const newCx = x - drag.offsetX
   const newCy = y - drag.offsetY
-  const { ox, oy, flipped } = renderer.conductorOrigin
-  // Stored polar (angle, distance) is in the unflipped frame. When the
-  // chart is flipped (180° rotation around the conductor), the rendered
-  // position is the negated polar offset, so we negate the canvas-space
-  // dx/dy before computing the stored angle.
-  const mirror = flipped ? -1 : 1
 
   // Threshold check: only treat as drag (and push history) once we've
   // moved meaningfully from the original instrument centre.
   if (!drag.moved) {
-    const oldCx = ox + mirror * inst.distance * Math.cos(inst.angle)
-    const oldCy = oy + mirror * inst.distance * Math.sin(inst.angle)
-    if (Math.hypot(newCx - oldCx, newCy - oldCy) < DRAG_THRESHOLD) return
+    const old = instrumentCentre(inst)
+    if (Math.hypot(newCx - old.x, newCy - old.y) < DRAG_THRESHOLD) return
     history.push(drag.preDragConfig)
     drag.moved = true
   }
 
-  setInstrumentCentre(inst, newCx, newCy)
+  // Snap to the other instruments, the centre line and the rows, showing a
+  // guide for whatever caught. Cmd/Ctrl held = place freely.
+  const snap = e.metaKey || e.ctrlKey
+    ? { x: newCx, y: newCy, guides: [] }
+    : snapPoint({ x: newCx, y: newCy }, instrumentSnapTargets(inst.id), SNAP_PX / chartUnitsToScreen())
+  renderer.snapGuides = snap.guides
+  setInstrumentCentre(inst, snap.x, snap.y)
   renderChart()
 })
+
+// Pointer distance (screen px) within which an instrument drag snaps.
+const SNAP_PX = 6
+
+// Screen px per chart unit: auto-fit × view zoom × manual chart scale.
+function chartUnitsToScreen(): number {
+  return (renderer.viewScale || 1) * viewZoom * (config.chartScale ?? 1)
+}
+
+// An instrument's centre in chart coords, from its stored polar offset. The
+// stored polar is in the unflipped frame; a flipped chart (180° around the
+// conductor) renders the negated offset.
+function instrumentCentre(inst: FixedInstrument): { x: number; y: number } {
+  const { ox, oy, flipped } = renderer.conductorOrigin
+  const mirror = flipped ? -1 : 1
+  return {
+    x: ox + mirror * inst.distance * Math.cos(inst.angle),
+    y: oy + mirror * inst.distance * Math.sin(inst.angle),
+  }
+}
+
+// What a dragged instrument can snap to (see snap.ts): every other
+// instrument's centre lines and its mirror image across the stage centre line,
+// the centre line itself, and each row — arcs for arc rows, horizontal lines
+// for straight ones — plus a virtual next row one row-spacing behind the back
+// row, which is where big back-line instruments go.
+function instrumentSnapTargets(excludeId: string): SnapTargets {
+  const { ox, oy, yDir } = renderer.conductorOrigin
+  const xs: SnapTargets['xs'] = [{ x: ox }]
+  const ys: SnapTargets['ys'] = []
+  const arcs: number[] = []
+  for (const other of config.instruments) {
+    if (other.id === excludeId) continue
+    const c = instrumentCentre(other)
+    xs.push({ x: c.x })
+    if (Math.abs(c.x - ox) > 1) xs.push({ x: 2 * ox - c.x, mirrorOf: c })
+    ys.push({ y: c.y })
+  }
+  const rowSpacing = config.rowSpacing ?? ROW_SPACING_DEFAULT
+  const radii = computeRowRadii(config.rows, rowSpacing)
+  const n = config.rows.length
+  const straight = (i: number) =>
+    config.layout === 'straight' || (config.rows[i].isStraight ?? (i >= n - config.straightRows))
+  const addRow = (i: number, r: number) => { if (straight(i)) ys.push({ y: oy + yDir * r }); else arcs.push(r) }
+  radii.forEach((r, i) => addRow(i, r))
+  if (n > 0) addRow(n - 1, radii[n - 1] + rowSpacing)
+  return { origin: { x: ox, y: oy }, xs, ys, arcs }
+}
 
 // Store an instrument's centre, given in chart coords, as its polar
 // (angle, distance) from the conductor. The stored polar is in the unflipped

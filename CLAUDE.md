@@ -10,8 +10,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm test` — run the Vitest unit-test suite (pure modules only, no DOM).
 
 `npm test` (Vitest) runs a unit-test suite in `tests/` covering the pure
-modules (`section-layout.ts`, `presets.ts`, `serializer.ts`, `state.ts`'s
-`History`); there's no
+modules (`section-layout.ts`, `presets.ts`, `serializer.ts`, `snap.ts`,
+`state.ts`'s `History`); there's no
 DOM/renderer test coverage and no linter configured. For anything touching
 rendering, "verification" still means running the dev server and checking
 behaviour in the browser. The app is deployed to GitHub Pages
@@ -60,6 +60,8 @@ work. The big picture:
 - **`src/renderer.ts`** — the `Renderer` class. Pure function of a
   `ChartConfig` → pixels on a canvas, plus hit-test methods. **Zero awareness
   of the DOM/sidebar.** Holds the cached background `Image`.
+- **`src/snap.ts`** — pure snapping geometry for instrument drags (lines,
+  mirror lines, arcs → snapped point + guides).
 - **`src/instrument-glyphs.ts`** — stateless draw functions for each fixed
   instrument glyph; each draws at (0,0) and returns its bounding box.
 - **`src/presets.ts`** — preset library + Boosey & Hawkes notation parser

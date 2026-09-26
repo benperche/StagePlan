@@ -3,6 +3,7 @@ import type {
   HitTarget, ConductorHit, InstrumentHit, RotateHandleHit, ConductorOrigin,
   LayoutHandleHit, RowGeometry, DropPointHit,
 } from './types'
+import type { SnapGuide } from './snap'
 import {
   drawDrumkit, drawPiano, drawAmp, drawTimpani, drawMallet, drawHarp,
   drawMicrophone, drawGong, drawSuspendedCymbal, drawSnareDrum, drawBassDrum, drawTrapTable,
@@ -123,6 +124,10 @@ export class Renderer {
   private instrumentHits: InstrumentHit[] = []
   conductorHit: ConductorHit | null = null
   titleHit: ConductorHit | null = null
+  // Snap guides for the instrument drag in progress (chart coords), set by
+  // main.ts on each drag move; empty otherwise. Screen-only by nature — no
+  // drag runs during export/print.
+  snapGuides: SnapGuide[] = []
   // Seating summary's box (raw canvas px, like titleHit) — Layout-tab drag target.
   summaryHit: ConductorHit | null = null
   // The summary offset actually drawn last render, after clamping on-canvas.
@@ -303,6 +308,8 @@ export class Renderer {
     // Drop slots sit above everything in the chart frame, so they stay
     // clickable even where they land on a chair's edge.
     this.drawDropPoints(ctx)
+
+    this.drawSnapGuides(ctx, ox, oy, chartScale, config.flipped)
 
     if (scaling) ctx.restore()
 
@@ -2040,6 +2047,32 @@ export class Renderer {
         ctx.setLineDash([4, 3])
         ctx.strokeRect(b.x, b.y, b.w, b.h)
       }
+    }
+    ctx.restore()
+  }
+
+  // Pink dashed alignment guides (see snap.ts). Lines run well past the canvas
+  // and get clipped; arcs cover the chairs' side of the conductor plus a
+  // little, since that's where anything snaps to them.
+  private drawSnapGuides(ctx: CanvasRenderingContext2D, ox: number, oy: number, chartScale: number, flipped: boolean) {
+    if (this.snapGuides.length === 0) return
+    const px = 1 / ((this.viewScale || 1) * chartScale)   // one CSS px in chart units
+    const FAR = 1e4
+    ctx.save()
+    ctx.strokeStyle = '#db2777'
+    ctx.lineWidth = px
+    ctx.setLineDash([5 * px, 4 * px])
+    for (const g of this.snapGuides) {
+      ctx.beginPath()
+      if (g.kind === 'v') { ctx.moveTo(g.x, -FAR); ctx.lineTo(g.x, FAR) }
+      else if (g.kind === 'h') { ctx.moveTo(-FAR, g.y); ctx.lineTo(FAR, g.y) }
+      else if (g.kind === 'arc') {
+        const [a0, a1] = flipped ? [-0.3, Math.PI + 0.3] : [Math.PI - 0.3, 2 * Math.PI + 0.3]
+        ctx.arc(ox, oy, g.r, a0, a1)
+      } else {
+        ctx.moveTo(g.x1, g.y1); ctx.lineTo(g.x2, g.y2)
+      }
+      ctx.stroke()
     }
     ctx.restore()
   }
