@@ -292,8 +292,9 @@ plain-key shortcuts against INPUT/TEXTAREA/contentEditable targets.
 
 **`cancelActiveDrag()`** aborts a gesture mid-flight: every drag state extends
 `DragBase` (`preDragConfig` + `moved`), so it restores that snapshot and, when
-the drag had already pushed history, pops that entry too (`history.undo`) — so
-Escape leaves no stray undo step. It clears every drag state plus the marquee
+the drag had already pushed history, drops that entry too
+(`history.discardLast()` — not `undo`, which would leave the cancelled drag
+redoable) — so Escape leaves no stray undo or redo step. It clears every drag state plus the marquee
 and pan, and sets `suppressClickAfterPan` so the eventual pointerup can't fire
 a chair tool.
 
@@ -496,6 +497,16 @@ for any other silent-but-big action that deserves an undo reminder.
   amps + harp on the left flank. Small props (mic, stand, chair, stool) keep
   the old "in front of the conductor" fallback. Positions are stored polar, so
   the renderer's flip mirroring keeps them behind the band when flipped.
+- **Palette drag**: pressing an `[data-add-instrument]` button and dragging
+  (mouse/pen only — touch keeps tap-to-add so the sidebar can scroll) shows a
+  `.palette-ghost` chip until the pointer enters `#canvas-area`, then creates
+  the instrument under the pointer (`setInstrumentCentre`) and hands it to an
+  ordinary `dragState` (`moved: true`, history already pushed), so the rest is
+  a normal instrument drag with auto-fit frozen. Releasing off the canvas rolls
+  it back (`history.discardLast()` + `setConfig(preDragConfig)`); Escape goes
+  through `cancelActiveDrag`, which also clears `paletteDrag`. The button's
+  trailing click is swallowed (`suppressPaletteClick`); a plain click still
+  adds at the `INSERT_DEFAULTS` spot.
 - Drag/rotate handled by `DragState` / `RotateState` in main.ts. Selected instrument shows a green MS-Office-style rotate handle.
 - **Size** (`FixedInstrument.size`, chosen from per-type presets in the inspector): physical size genuinely varies for one symbol — a glockenspiel and a marimba are both "mallets". Fixed presets rather than free resizing, so two of the same instrument on a chart stay identical. The options per type come from `sizeOptionsFor()` in instrument-glyphs.ts (S/M/L/XL by default), and `renderInspector` rebuilds the buttons on each selection.
   - **Two glyphs size themselves** (`glyphHandlesOwnSize`), because a uniform scale is the wrong model for them. **Mallets** grow in *length only* — the frame lengthens, its depth stays put, and the key separators multiply so key width is constant (more octaves, not more bulk); redrawing at the new dimensions rather than stretching the canvas also keeps stroke weights even. **The traps table** uses explicit dimensions per size: S is a *square* stool-top rather than a shrunken oblong, L is longer at the same depth, and there's no XL. These return final dimensions, so the renderer must not scale them again — hence the `glyphHandlesOwnSize` guard in both `renderInstruments` and `glyphDims`.

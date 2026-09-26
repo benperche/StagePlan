@@ -10,7 +10,7 @@ import { saveToJson, loadFromJson, encodeToHash, decodeFromHash, exportToPng } f
 import * as library from './library'
 import { showAlert, showConfirm, showPrompt } from './dialog'
 import { showContextMenu, closeContextMenu, contextMenuOpen, type MenuItem } from './context-menu'
-import type { ChartConfig, InstrumentType, Chair } from './types'
+import type { ChartConfig, InstrumentType, Chair, FixedInstrument } from './types'
 import { RISER_PAD_MAX } from './section-layout'
 
 // --- App state ---
@@ -345,6 +345,21 @@ interface DragState extends DragBase {
   duplicatedFrom?: string
 }
 let dragState: DragState | null = null
+
+// Palette drag — pressing an "+ Instrument" button and dragging onto the
+// chart. Nothing is created until the pointer first enters the canvas; a
+// ghost chip follows the pointer until then. On entry the instrument is made
+// under the pointer and handed to dragState, so from there it's an ordinary
+// instrument drag (auto-fit frozen, Escape cancels). Releasing off the canvas
+// cancels the add outright.
+let paletteDrag: {
+  type: InstrumentType; label: string; startX: number; startY: number
+  ghost: HTMLElement | null           // non-null once the drag got going
+  placed: boolean                     // instrument created on the canvas
+  preDragConfig: ChartConfig | null   // snapshot from just before placement
+} | null = null
+// The button's own click follows a palette drag's pointerup; swallow it.
+let suppressPaletteClick = false
 
 // Rotation drag — when the user grabs the green rotate handle. Records the
 // instrument centre and the offset between the initial pointer angle and
@@ -1150,11 +1165,21 @@ function setHoverChair(hit: { rowIndex: number; chairIndex: number } | null) {
 function cancelActiveDrag(): boolean {
   const active = dragState ?? rotateState ?? conductorDragState ?? layoutDrag
     ?? riserSizeDrag ?? chairDrag ?? deskDrag ?? textDrag ?? arcRangeDrag
-  if (!active && !marqueeState && !panState) return false
+  // A palette drag still over the sidebar has created nothing yet — just
+  // drop the ghost. (Once placed it's a dragState, rolled back below.)
+  const pd = paletteDrag
+  if (pd) {
+    pd.ghost?.remove()
+    document.body.classList.remove('palette-dragging')
+    paletteDrag = null
+    suppressPaletteClick = true
+    setTimeout(() => { suppressPaletteClick = false })
+  }
+  if (!active && !marqueeState && !panState) return !!pd
   // Only a drag that got past its threshold has mutated anything (and pushed
   // history); restoring rolls back both the edit and that history entry.
   if (active?.moved) {
-    history.undo(config)
+    history.discardLast()
     setConfig(active.preDragConfig)
   }
   dragState = null
@@ -2383,12 +2408,21 @@ window.addEventListener('pointermove', (e) => {
     drag.moved = true
   }
 
-  const dx = newCx - ox
-  const dy = newCy - oy
-  inst.angle = Math.atan2(mirror * dy, mirror * dx)
-  inst.distance = Math.hypot(dx, dy)
+  setInstrumentCentre(inst, newCx, newCy)
   renderChart()
 })
+
+// Store an instrument's centre, given in chart coords, as its polar
+// (angle, distance) from the conductor. The stored polar is in the unflipped
+// frame; a flipped chart renders the negated offset, so negate dx/dy first.
+function setInstrumentCentre(inst: FixedInstrument, cx: number, cy: number) {
+  const { ox, oy, flipped } = renderer.conductorOrigin
+  const mirror = flipped ? -1 : 1
+  const dx = cx - ox
+  const dy = cy - oy
+  inst.angle = Math.atan2(mirror * dy, mirror * dx)
+  inst.distance = Math.hypot(dx, dy)
+}
 
 window.addEventListener('pointerup', (e) => {
   if (!e.isPrimary) return
@@ -2455,6 +2489,63 @@ window.addEventListener('pointerup', (e) => {
   // Unfreeze auto-fit (see drawCanvas) — glides to fit wherever things landed.
   if (wasDragging) rerenderCanvasOnly()
 })
+
+// --- Palette drag (see paletteDrag) ---
+function pointInCanvasArea(clientX: number, clientY: number): boolean {
+  const r = canvasArea.getBoundingClientRect()
+  return clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom
+}
+
+window.addEventListener('pointermove', (e) => {
+  const pd = paletteDrag
+  if (!pd || !e.isPrimary || pd.placed) return
+  if (!pd.ghost) {
+    if (Math.hypot(e.clientX - pd.startX, e.clientY - pd.startY) < DRAG_THRESHOLD) return
+    pd.ghost = document.createElement('div')
+    pd.ghost.className = 'palette-ghost'
+    pd.ghost.textContent = pd.label
+    document.body.appendChild(pd.ghost)
+    document.body.classList.add('palette-dragging')
+  }
+  pd.ghost.style.left = `${e.clientX + 12}px`
+  pd.ghost.style.top = `${e.clientY + 12}px`
+  if (!pointInCanvasArea(e.clientX, e.clientY)) return
+
+  // Over the chart: make the instrument under the pointer and hand over.
+  pd.preDragConfig = cloneConfig(config)
+  history.push(config)
+  const sameTypeCount = config.instruments.filter(i => i.type === pd.type).length
+  const inst = makeInstrument(pd.type, config.flipped, sameTypeCount, renderer.backRowRadius(config))
+  const cv = pointerCanvasCoords(e)
+  const { x, y } = canvasToChart(cv.x, cv.y)
+  setInstrumentCentre(inst, x, y)
+  config.instruments.push(inst)
+  pd.placed = true
+  pd.ghost.remove()
+  setSelectedInstrument(inst.id)
+  dragState = { instrumentId: inst.id, offsetX: 0, offsetY: 0, preDragConfig: pd.preDragConfig, moved: true }
+  renderChart()
+})
+
+// A drop off the canvas undoes the placement. Keyed on paletteDrag's own
+// state, not dragState, so it doesn't matter whether the main pointerup
+// handler has already run (capture phase just makes that the usual order).
+// Escape clears paletteDrag when it cancels, so nothing is rolled back twice.
+window.addEventListener('pointerup', (e) => {
+  const pd = paletteDrag
+  if (!pd || !e.isPrimary) return
+  paletteDrag = null
+  pd.ghost?.remove()
+  document.body.classList.remove('palette-dragging')
+  if (!pd.ghost) return   // never left the button: a plain click adds it
+  suppressPaletteClick = true
+  setTimeout(() => { suppressPaletteClick = false })   // in case no click follows
+  if (pd.placed && !pointInCanvasArea(e.clientX, e.clientY)) {
+    history.discardLast()
+    dragState = null
+    setConfig(pd.preDragConfig!)
+  }
+}, { capture: true })
 
 // --- Two-finger touch pinch zoom (tablets / phones) ---
 // The canvas has touch-action: none, so the browser hands us raw touch
@@ -3414,9 +3505,24 @@ function bindEvents() {
     tas[e.shiftKey ? cur - 1 : cur + 1]?.focus()
   })
 
-  // Add fixed instrument
+  // Add fixed instrument — a click drops it at its default spot; pressing and
+  // dragging onto the chart places it right where you let go (see paletteDrag).
   addInstrumentButtons.forEach(btn => {
+    btn.addEventListener('pointerdown', (e) => {
+      // Mouse / pen only: on touch the sidebar needs the drag to scroll, and a
+      // tap still adds the instrument.
+      if (e.pointerType === 'touch' || e.button !== 0 || !e.isPrimary) return
+      e.preventDefault()   // no text selection / focus ring while dragging out
+      paletteDrag = {
+        type: btn.dataset['addInstrument'] as InstrumentType,
+        label: btn.textContent!.replace(/^\s*\+\s*/, '').trim(),
+        startX: e.clientX, startY: e.clientY,
+        ghost: null, placed: false, preDragConfig: null,
+      }
+    })
     btn.addEventListener('click', () => {
+      // The trailing click of a palette drag — the drag already did the work.
+      if (suppressPaletteClick) { suppressPaletteClick = false; return }
       const type = btn.dataset['addInstrument'] as InstrumentType
       history.push(config)
       const sameTypeCount = config.instruments.filter(i => i.type === type).length

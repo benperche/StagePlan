@@ -10,7 +10,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm test` — run the Vitest unit-test suite (pure modules only, no DOM).
 
 `npm test` (Vitest) runs a unit-test suite in `tests/` covering the pure
-modules (`section-layout.ts`, `presets.ts`, `serializer.ts`); there's no
+modules (`section-layout.ts`, `presets.ts`, `serializer.ts`, `state.ts`'s
+`History`); there's no
 DOM/renderer test coverage and no linter configured. For anything touching
 rendering, "verification" still means running the dev server and checking
 behaviour in the browser. The app is deployed to GitHub Pages

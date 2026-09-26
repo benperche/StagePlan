@@ -1289,6 +1289,26 @@ kbd {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   pointer-events: none;   /* never eat the drag it's describing */
 }
+/* Chip that follows the pointer while an "+ Instrument" button is dragged
+   toward the chart (see paletteDrag in main.ts); replaced by the real
+   instrument once the pointer reaches the canvas. */
+.palette-ghost {
+  position: fixed;
+  z-index: 1000;
+  padding: 4px 9px;
+  font-size: 12px;
+  color: #fff;
+  background: rgba(30, 41, 59, 0.94);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  white-space: nowrap;
+}
+body.palette-dragging,
+body.palette-dragging * {
+  cursor: grabbing !important;
+  user-select: none;
+}
 #handle-tip b {
   font-weight: 600;
   color: #bfdbfe;   /* the modifier keys pop out of the sentence */

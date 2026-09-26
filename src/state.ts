@@ -153,6 +153,11 @@ export class History {
     return this.future.pop()!
   }
 
+  // Drop the newest undo entry without making it redoable — for a gesture
+  // that pushed history and was then cancelled (Escape mid-drag, a palette
+  // drop released off the chart), which should leave no trace either way.
+  discardLast() { this.past.pop() }
+
   canUndo() { return this.past.length > 0 }
   canRedo() { return this.future.length > 0 }
 }
