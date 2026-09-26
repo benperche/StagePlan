@@ -140,6 +140,18 @@ notes, chart) so the whole drawing fits.
   chart's far-edge depth, so an instrument-heavy back (timpani, percussion)
   packs the chart down toward the conductor instead of floating with empty space
   below it. Both the auto-fit scale and the conductor position then agree.
+- **Frozen mid-drag.** Both read extents via `fitExtents()`, not
+  `contentExtents()` directly. On-screen renders pass
+  `RenderOptions.freezeView = anyDragActive()` (main.ts `drawCanvas`, the one
+  on-screen render call); while it's true, fitting uses the extents of the last
+  unfrozen render. Without this, dragging an instrument outward was a feedback
+  loop: bigger extents → smaller fit → the unmoved pointer maps further out →
+  the instrument follows → the chart ran away from the pointer. On release
+  (pointerup re-renders) `resolveFitExtents` eases from the frozen to the live
+  extents over `GLIDE_MS`; `renderer.gliding` tells `drawCanvas` to keep
+  requesting frames. Export/print renders leave `freezeView` unset, so they
+  always fit live and never touch the freeze state. Only fitting is frozen —
+  the stage template and title still track the live chart.
 - Hit targets are stored in **logical (CSS-space)** coords, so
   `pointerCanvasCoords` divides the incoming pointer by `viewScale * renderDpr`,
   and `chairScreenPos` multiplies by `viewScale` (CSS, no dpr) when placing the

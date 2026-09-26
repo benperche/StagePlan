@@ -103,7 +103,13 @@ export interface RenderOptions {
   // for PNG/print output and the Export-tab preview, where a hidden seat
   // should leave no mark at all. Defaults to true.
   showGhosts?: boolean
+  // Interactive (on-screen) renders only — PNG/print leave it unset. True while
+  // a canvas drag is live: auto-fit is pinned to the pre-drag chart extents (see
+  // fitExtents). Going false again glides to the fresh fit rather than jumping.
+  freezeView?: boolean
 }
+
+type Extents = { halfW: number; back: number; front: number }
 
 export class Renderer {
   private hitTargets: HitTarget[] = []
@@ -116,6 +122,22 @@ export class Renderer {
   // (1 when the chart fits at natural size; < 1 on small canvases / phones).
   // main.ts maps pointer coords through this so hit-testing lines up.
   viewScale = 1
+  // Auto-fit (scale + conductor position) is derived from the chart's extents,
+  // which include every fixed instrument. Mid-drag that is a feedback loop:
+  // dragging a piano past the back row grows the extents, the fit shrinks, the
+  // unmoved pointer now maps further out, the piano follows it... and the chart
+  // runs away from you. So while RenderOptions.freezeView is set, fitting uses
+  // the extents of the last unfrozen render; on release it glides to the live
+  // ones over GLIDE_MS. Only fitting is pinned — the stage template, title etc.
+  // still track the live chart.
+  private lastExtents: Extents | null = null
+  private frozenExtents: Extents | null = null
+  private glide: { from: Extents; start: number } | null = null
+  private frameExtents: Extents | null = null
+  private static readonly GLIDE_MS = 220
+  // True while a post-drag glide is still in progress; main.ts keeps
+  // requesting frames until it clears.
+  gliding = false
   // Touch/pen devices get bigger Layout-handle hit areas (fat-finger slop).
   private coarsePointer = typeof window !== 'undefined'
     && !!window.matchMedia?.('(pointer: coarse)')?.matches
@@ -180,6 +202,7 @@ export class Renderer {
     const dpr = opts.dpr ?? 1
     const cssW = canvas.width / dpr
     const cssH = canvas.height / dpr
+    this.frameExtents = opts.freezeView === undefined ? null : this.resolveFitExtents(config, opts.freezeView)
     const fit = (opts.scale ?? 1) * this.computeFitScale(cssW, cssH, config)
     // viewScale is the CSS-space logical→screen factor (no dpr) that main.ts
     // uses to place the inline label editor and to map pointer coords.
@@ -618,7 +641,7 @@ export class Renderer {
   // chartScale = 1: how far it reaches sideways (halfW), behind the conductor
   // toward the title (back), and in front of it (front). Fixed instruments can
   // sit anywhere (e.g. amps far out), so they widen these too.
-  private contentExtents(config: ChartConfig): { halfW: number; back: number; front: number } {
+  private contentExtents(config: ChartConfig): Extents {
     const rowSpacing = config.rowSpacing ?? ROW_SPACING_DEFAULT
     const radii = this.computeRowRadii(config.rows, rowSpacing)
     const outer = radii.length ? radii[radii.length - 1] : BASE_RADIUS
@@ -670,6 +693,41 @@ export class Renderer {
     return { halfW, back, front }
   }
 
+  // The extents auto-fit should use this frame (see the freeze notes on
+  // lastExtents). Only called for interactive renders; export/print renders
+  // skip it and fit to the live extents without touching the freeze state.
+  private resolveFitExtents(config: ChartConfig, freeze: boolean): Extents {
+    const live = this.contentExtents(config)
+    if (freeze) {
+      this.frozenExtents ??= this.lastExtents ?? live
+      this.glide = null
+      this.gliding = false
+      return this.frozenExtents
+    }
+    if (this.frozenExtents) {
+      const from = this.frozenExtents
+      this.frozenExtents = null
+      if (from.halfW !== live.halfW || from.back !== live.back || from.front !== live.front) {
+        this.glide = { from, start: performance.now() }
+      }
+    }
+    this.lastExtents = live
+    if (!this.glide) { this.gliding = false; return live }
+    const t = Math.min(1, (performance.now() - this.glide.start) / Renderer.GLIDE_MS)
+    const e = 1 - (1 - t) ** 3   // ease-out cubic
+    const from = this.glide.from
+    const mix = (a: number, b: number) => a + (b - a) * e
+    if (t >= 1) this.glide = null
+    this.gliding = t < 1
+    return { halfW: mix(from.halfW, live.halfW), back: mix(from.back, live.back), front: mix(from.front, live.front) }
+  }
+
+  // Extents for fitting: this frame's resolved (possibly frozen/gliding) ones
+  // during an interactive render, else the live chart's.
+  private fitExtents(config: ChartConfig): Extents {
+    return this.frameExtents ?? this.contentExtents(config)
+  }
+
   // Fraction of the canvas the chart fills when auto-sizing. 0.85 keeps the
   // conductor from hugging the bottom edge on narrow/short canvases — 0.93
   // pushed it past 80% down on typical laptop viewports.
@@ -679,7 +737,7 @@ export class Renderer {
   // separately (the inner transform in render), so it is NOT folded in here.
   private computeFitScale(canvasW: number, canvasH: number, config: ChartConfig): number {
     if (config.rows.length === 0 && (config.instruments?.length ?? 0) === 0) return 1
-    const { halfW, back, front } = this.contentExtents(config)
+    const { halfW, back, front } = this.fitExtents(config)
     // Title sits above the back row (drawn at canvas scale), plus any extra
     // user-requested title gap so widening it never pushes the title off-canvas.
     const TITLE_PAD = 44 + (config.titleGap ?? 0)
@@ -748,7 +806,7 @@ export class Renderer {
     // instruments parked behind the chairs, so a chart with e.g. timpani at the
     // back packs down toward the conductor instead of floating with the
     // instruments clipped or crammed against the title.
-    const chartHeight = this.contentExtents(config).back
+    const chartHeight = this.fitExtents(config).back
     // The chart-title side needs extra padding so the title (drawn at y≈14,
     // text ~18px tall) doesn't get tangled with the back-row seat numbers
     // (drawn ~12px above the back chair top). 50px covers both with a

@@ -575,9 +575,7 @@ function renderChart() {
     selectable ? selectedChairs.map(r => `${r.rowIndex}:${r.chairIndex}`) : [])
   renderer.showDropPoints = selectable && selectedChairs.length > 0
   resizeCanvas()
-  // Hidden seats show their ghost outline while editing, but not in the Export
-  // tab preview — that mirrors the PNG/print output, which omits them entirely.
-  renderer.render(canvas, config, { layoutMode, dpr: renderDpr, showGhosts: activeTab !== 'export' })
+  drawCanvas()
   undoBtn.disabled = !history.canUndo()
   redoBtn.disabled = !history.canRedo()
   renderTally()
@@ -1101,7 +1099,23 @@ function currentHoverPreview(): HoverPreview | null {
 
 function rerenderCanvasOnly() {
   renderer.hoverPreview = currentHoverPreview()
-  renderer.render(canvas, config, { layoutMode, dpr: renderDpr, showGhosts: activeTab !== 'export' })
+  drawCanvas()
+}
+
+// The one on-screen render call. Hidden seats show their ghost outline while
+// editing, but not in the Export tab preview — that mirrors the PNG/print
+// output, which omits them entirely. freezeView pins auto-fit while a drag is
+// live, so dragging an instrument outward can't zoom the chart out from under
+// the pointer; after release the renderer glides to the new fit, one frame at
+// a time until `gliding` clears.
+let glideFrame = 0
+function drawCanvas() {
+  renderer.render(canvas, config, {
+    layoutMode, dpr: renderDpr, showGhosts: activeTab !== 'export', freezeView: anyDragActive(),
+  })
+  if (renderer.gliding && !glideFrame) {
+    glideFrame = requestAnimationFrame(() => { glideFrame = 0; rerenderCanvasOnly() })
+  }
 }
 
 // Sidebar → highlight the whole row of chairs.
@@ -2334,6 +2348,7 @@ window.addEventListener('pointermove', (e) => {
 window.addEventListener('pointerup', (e) => {
   if (!e.isPrimary) return
   cancelLongPress()   // a lift before 500ms is a tap, not a long-press
+  const wasDragging = anyDragActive()
   if (panState?.moved) suppressClickAfterPan = true
   // Edit-tab marquee release: apply the active tool to every chair in the box.
   // A box that never moved is just a click — let the click handler do its thing.
@@ -2392,6 +2407,8 @@ window.addEventListener('pointerup', (e) => {
   canvas.classList.remove('panning')
   // The per-row boxes are skipped mid-drag; refresh them now the drag is done.
   if (finishedLayoutDrag && layoutMode) updateLayoutRowList()
+  // Unfreeze auto-fit (see drawCanvas) — glides to fit wherever things landed.
+  if (wasDragging) rerenderCanvasOnly()
 })
 
 // --- Two-finger touch pinch zoom (tablets / phones) ---
