@@ -3,13 +3,13 @@
   "configurations": [
     {
       "name": "dev",
-      "runtimeExecutable": "/usr/local/opt/node@20/bin/node",
+      "runtimeExecutable": "/opt/homebrew/bin/node",
       "runtimeArgs": ["/Users/benperche/Documents/Programming/StagePlan/node_modules/.bin/vite", "--port", "5200"],
       "port": 5200
     },
     {
       "name": "prod-preview",
-      "runtimeExecutable": "/usr/local/opt/node@20/bin/node",
+      "runtimeExecutable": "/opt/homebrew/bin/node",
       "runtimeArgs": ["/Users/benperche/Documents/Programming/StagePlan/node_modules/.bin/vite", "preview", "--port", "5299"],
       "port": 5299
     }
