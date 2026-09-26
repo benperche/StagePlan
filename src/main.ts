@@ -1115,6 +1115,7 @@ let glideFrame = 0
 function drawCanvas() {
   renderer.render(canvas, config, {
     layoutMode, dpr: renderDpr, showGhosts: activeTab !== 'export', freezeView: anyDragActive(),
+    avoidRects: overlayRects(),
   })
   if (renderer.gliding && !glideFrame) {
     glideFrame = requestAnimationFrame(() => { glideFrame = 0; rerenderCanvasOnly() })
@@ -1329,18 +1330,42 @@ function setSelectedInstrument(id: string | null) {
 }
 
 function pointerCanvasCoords(e: MouseEvent): { x: number; y: number } {
-  // getBoundingClientRect already reflects the canvas's CSS zoom/pan
-  // transform, so dividing by rect.width/height back into backing pixels
-  // works at any zoom level without referencing viewZoom directly.
+  // Dividing by viewScale lands us in the chart's logical coord space, where
+  // hit targets live.
+  const p = clientToCanvasCss(e.clientX, e.clientY)
+  const s = renderer.viewScale || 1
+  return { x: p.x / s, y: p.y / s }
+}
+
+// Client (viewport) px → canvas CSS px, before the auto-fit scale.
+// getBoundingClientRect already reflects the canvas's CSS zoom/pan transform,
+// so canvas.width/rect.width converts a CSS delta into backing pixels (folding
+// in dpr and the view-zoom) at any zoom level; ÷ dpr gives CSS px.
+function clientToCanvasCss(clientX: number, clientY: number): { x: number; y: number } {
   const rect = canvas.getBoundingClientRect()
-  // canvas.width/rect.width converts a CSS pointer delta into backing pixels
-  // (this already folds in dpr and the CSS view-zoom). Dividing by viewScale*dpr
-  // then lands us in the chart's logical coord space, where hit targets live.
-  const s = (renderer.viewScale || 1) * renderDpr
   return {
-    x: (e.clientX - rect.left) * (canvas.width / rect.width) / s,
-    y: (e.clientY - rect.top) * (canvas.height / rect.height) / s,
+    x: (clientX - rect.left) * (canvas.width / rect.width) / renderDpr,
+    y: (clientY - rect.top) * (canvas.height / rect.height) / renderDpr,
   }
+}
+
+// Boxes the floating canvas controls cover, in canvas CSS px — handed to the
+// renderer so the seating summary steps out from under them (see avoidRects).
+function overlayRects(): Array<{ x: number; y: number; w: number; h: number }> {
+  const els = [
+    document.querySelector('.canvas-overlay-controls'),
+    document.querySelector('.canvas-zoom-controls'),
+    toolPill, dragOverwriteBtn,
+  ]
+  const rects = []
+  for (const el of els) {
+    if (!(el instanceof HTMLElement) || el.offsetParent === null) continue   // hidden
+    const r = el.getBoundingClientRect()
+    const a = clientToCanvasCss(r.left, r.top)
+    const b = clientToCanvasCss(r.right, r.bottom)
+    rects.push({ x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y })
+  }
+  return rects
 }
 
 // --- View zoom/pan helpers ---
@@ -1580,7 +1605,10 @@ function updateHandleTip(e: MouseEvent) {
   const cv = pointerCanvasCoords(e)
   const { x, y } = canvasToChart(cv.x, cv.y)
   const handle = renderer.layoutHandleHitTest(x, y)
-  const html = handle ? handleTipHtml(handle) : ''
+  const html = handle ? handleTipHtml(handle)
+    : renderer.titleHitTest(cv.x, cv.y) ? 'Drag to move the title · double-click resets'
+    : renderer.summaryHitTest(cv.x, cv.y) ? 'Drag to move the seating summary · double-click resets'
+    : ''
   if (!html) { hideHandleTip(); return }
   if (handleTip.innerHTML !== html) handleTip.innerHTML = html
   handleTip.style.display = 'block'

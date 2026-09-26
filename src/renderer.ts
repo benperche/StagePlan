@@ -107,7 +107,13 @@ export interface RenderOptions {
   // a canvas drag is live: auto-fit is pinned to the pre-drag chart extents (see
   // fitExtents). Going false again glides to the fresh fit rather than jumping.
   freezeView?: boolean
+  // On-screen only: boxes (canvas CSS px, before the auto-fit scale) covered by
+  // the floating DOM controls — undo/zoom, tool pill. The seating summary is
+  // nudged clear of them so it can't be dragged underneath. Exports omit it.
+  avoidRects?: Rect[]
 }
+
+type Rect = { x: number; y: number; w: number; h: number }
 
 type Extents = { halfW: number; back: number; front: number }
 
@@ -183,6 +189,8 @@ export class Renderer {
   // Set per-render from RenderOptions.showGhosts. When false, hidden chairs
   // draw nothing at all (output / export). Defaults to true (editing views).
   private showGhosts = true
+  // Set per-render from RenderOptions.avoidRects.
+  private avoidRects: Rect[] = []
   // Populated each render in layout mode: the draggable handles + the per-row
   // geometry main.ts needs to drive the drags. Empty otherwise.
   private layoutHandles: LayoutHandleHit[] = []
@@ -216,6 +224,7 @@ export class Renderer {
     const scale = fit * dpr   // logical → backing pixels
     this.layoutMode = opts.layoutMode ?? false
     this.showGhosts = opts.showGhosts ?? true
+    this.avoidRects = opts.avoidRects ?? []
     const ctx = canvas.getContext('2d')!
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     ctx.save()
@@ -2002,8 +2011,21 @@ export class Renderer {
     // push a dragged summary off the edge.
     const blockW = Math.max(0, ...lines.map(l => ctx.measureText(l).width))
     const blockH = lines.length * lineHeight
-    const x = Math.min(w - PAD, Math.max(blockW + PAD, w - 12 + (config.summaryOffsetX ?? 0)))
-    const bottomY = Math.min(h - PAD, Math.max(blockH + PAD, h - 24 + (config.summaryOffsetY ?? 0)))
+    let x = Math.min(w - PAD, Math.max(blockW + PAD, w - 12 + (config.summaryOffsetX ?? 0)))
+    let bottomY = Math.min(h - PAD, Math.max(blockH + PAD, h - 24 + (config.summaryOffsetY ?? 0)))
+    // Step out from under any floating control it overlaps: below it if that
+    // still fits on the canvas, else to its right. Two passes so stepping off
+    // one control onto a neighbour (undo → zoom) resolves too.
+    const fit = this.viewScale || 1
+    for (let pass = 0; pass < 2; pass++) {
+      for (const r of this.avoidRects) {
+        const rx = r.x / fit, ry = r.y / fit, rw = r.w / fit, rh = r.h / fit
+        const overlaps = x - blockW < rx + rw && x > rx && bottomY - blockH < ry + rh && bottomY > ry
+        if (!overlaps) continue
+        if (ry + rh + blockH + PAD <= h - PAD) bottomY = ry + rh + PAD + blockH
+        else x = Math.min(w - PAD, rx + rw + PAD + blockW)
+      }
+    }
     this.summaryDrawnOffset = { x: x - (w - 12), y: bottomY - (h - 24) }
 
     lines.forEach((line, i) => {
