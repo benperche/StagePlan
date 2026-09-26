@@ -26,7 +26,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Node 24 ships npm 11 — the major package.json's engines pins and
+          # package-lock.json is written with. npm 10 and 11 disagree on the
+          # lockfile format, so CI and local must share an npm major.
+          node-version: 24
           cache: npm
 
       - run: npm ci

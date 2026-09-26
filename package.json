@@ -2,6 +2,10 @@
   "name": "band-seating-chart",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.19",
+    "npm": ">=11 <12"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
